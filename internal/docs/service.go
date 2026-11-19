@@ -107,9 +107,13 @@ func (s *DocsService) SaveCache(parserVersion string, index json.RawMessage) err
 
 // Rescan is the manual Rescan command (Ctrl+R) and the overflow fallback.
 //
-// TODO(ticket 05, D3): drop the stamps and run a full Scan.
+// It drops the stamps and runs a full Scan, so every file is in Changed. The
+// frontend uses it when the roots changed (Settings) and builds a fresh index.
 func (s *DocsService) Rescan() (ScanResult, error) {
-	return ScanResult{}, errors.New("not implemented")
+	s.mu.Lock()
+	s.stamps = map[string]stamp{}
+	s.mu.Unlock()
+	return s.Scan()
 }
 
 // Scan walks the configured roots and diffs the result against the known stamps.

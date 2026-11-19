@@ -6,6 +6,7 @@
   import { applyTheme, resolvedTheme } from './lib/theme/theme'
   import Tree from './components/Tree.svelte'
   import DocView from './components/DocView.svelte'
+  import SettingsDialog from './components/SettingsDialog.svelte'
 
   let { initial }: { initial: Config | null } = $props()
 
@@ -20,6 +21,11 @@
   let selected = $state<string | null>(null)
   let text = $state<string | null>(null)
   let docError = $state<string | null>(null)
+
+  let settingsOpen = $state(false)
+  let scanInfo = $state.raw<{ count: number; walkMs: number } | null>(null)
+  let toast = $state<string | null>(null)
+  let toastTimer: ReturnType<typeof setTimeout> | undefined
 
   // Panels: the right panel arrives with its own slice (03 spec section 3).
   const rightPanelOpen = false
@@ -44,14 +50,17 @@
   }
 
   /** The thin path: Scan, ReadBatch, buildIndex. Cache and watching come with ticket 05. */
-  async function load() {
+  async function load(full = false) {
     phase = 'loading'
     status = 'Scanning…'
-    const scan = await api.scan()
+    // A root change needs a full Rescan: Scan alone lists only files that differ from
+    // what was already delivered, which would build a partial or empty index.
+    const scan = await (full ? api.rescan() : api.scan())
     status = `Reading ${scan.changed?.length ?? 0} files…`
     const { files: read } = await api.readAll(scan.changed ?? [])
     index = buildIndex(read)
     status = `${scan.count} files`
+    scanInfo = { count: scan.count, walkMs: scan.walkMs }
     phase = 'ready'
   }
 
@@ -69,6 +78,36 @@
       await load()
     } catch (err) {
       problem = err instanceof Error ? err.message : String(err)
+    }
+  }
+
+  function showToast(msg: string) {
+    clearTimeout(toastTimer)
+    toast = msg
+    toastTimer = setTimeout(() => (toast = null), 2200)
+  }
+
+  /** The dialog saved settings.json: apply the theme, rescan after a root change, toast. */
+  async function settingsSaved(next: Config, rescan: boolean) {
+    config = next
+    applyTheme(next.theme)
+    settingsOpen = false
+    showToast('Settings saved')
+    if (rescan && next.repoRoot) {
+      selected = null
+      text = null
+      try {
+        await load(true)
+      } catch (err) {
+        fail(err)
+      }
+    }
+  }
+
+  function onwindowkeydown(e: KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && e.key === ',') {
+      e.preventDefault()
+      if (config) settingsOpen = true
     }
   }
 
@@ -97,7 +136,9 @@
   }
 </script>
 
-<div class="flex h-full flex-col bg-bg text-fg">
+<svelte:window onkeydown={onwindowkeydown} />
+
+<div class="flex h-full flex-col bg-bg text-fg" inert={settingsOpen}>
   <header class="chrome flex h-44 shrink-0 items-center gap-12 border-b border-line bg-side px-14">
     <span class="text-[13.5px] font-semibold tracking-[-0.01em]">Folio</span>
     <ol class="flex min-w-0 flex-1 items-center gap-6 text-sm text-fg2" aria-label="Breadcrumb">
@@ -120,7 +161,8 @@
       type="button"
       class="h-28 rounded-md px-8 text-xs font-medium text-fg2 hover:bg-hover"
       aria-label="Settings"
-      title="Settings (coming with ticket 05)"
+      title="Settings  Ctrl+,"
+      onclick={() => config && (settingsOpen = true)}
     >
       Gear
     </button>
@@ -166,3 +208,16 @@
     {/if}
   </div>
 </div>
+
+{#if settingsOpen && config}
+  <SettingsDialog {config} scan={scanInfo} onclose={() => (settingsOpen = false)} onsaved={settingsSaved} />
+{/if}
+
+{#if toast}
+  <div
+    class="fixed bottom-64 left-1/2 z-30 animate-toast rounded-[9px] bg-fg px-14 py-8 font-mono text-[12px] whitespace-nowrap text-bg shadow-lift [transform:translateX(-50%)]"
+    role="status"
+  >
+    {toast}
+  </div>
+{/if}

@@ -142,8 +142,27 @@ func TestCacheMethodsAreStubs(t *testing.T) {
 	if err := s.SaveCache("v", nil); err == nil {
 		t.Error("SaveCache should be a stub")
 	}
-	if _, err := s.Rescan(); err == nil {
-		t.Error("Rescan should be a stub")
+}
+
+// Rescan forgets what was delivered, so a changed root set rebuilds the whole index.
+func TestRescanReturnsEveryFile(t *testing.T) {
+	s, _ := newTestService(t)
+	first, err := s.Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ReadBatch(first.Changed); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := s.Scan(); len(again.Changed) != 0 {
+		t.Fatalf("a plain Scan after delivery should report nothing: %+v", again)
+	}
+	res, err := s.Rescan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Count == 0 || len(res.Changed) != res.Count || len(res.Removed) != 0 {
+		t.Fatalf("Rescan must list every file as changed: %+v", res)
 	}
 }
 

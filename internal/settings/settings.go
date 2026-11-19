@@ -247,7 +247,7 @@ func Validate(s Settings) error {
 				}
 			}
 			if !found {
-				add("docsRoots", "none of the docs roots exist under "+docs)
+				add("docsRoots", "none of the selected folders exist under "+docs)
 			}
 		}
 	}
@@ -272,6 +272,9 @@ func validateURLTemplate(t string) error {
 	}
 	return nil
 }
+
+// IsRelativeInside is the exported form of isRelativeInside, for the shell service.
+func IsRelativeInside(p string) bool { return isRelativeInside(p) }
 
 // isRelativeInside reports whether p is a non-empty relative path that stays inside its base.
 func isRelativeInside(p string) bool {
