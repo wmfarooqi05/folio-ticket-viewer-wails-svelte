@@ -54,7 +54,7 @@ Reached when:
 | 06 | [Rendering pipeline and file-size budget](issues/06-rendering-and-size-budget.md) | decision | [01](issues/01-wails-shell.md) | — | done — decided Nov 20, 2026 (owner) | — |
 | 07 | [Can WebView2 be tuned well below 240 MB?](issues/07-webview2-tuning.md) | spike | — | — | done — GPU-off flags applied, B is about 160 MB | — |
 | 08 | [Parser passes the fixture oracle](issues/08-parser.md) | build | — | — | done — merged Nov 20, 2026 | — |
-| 09 | [Cache, warm start and live refresh](issues/09-cache-and-live-refresh.md) | build | [08](issues/08-parser.md) | — | open | — |
+| 09 | [Cache, warm start and live refresh](issues/09-cache-and-live-refresh.md) | build | [08](issues/08-parser.md) | — | blocked — merged, waiting on owner (VM timings, live-refresh check) | — |
 | 10 | [Document view: rendering, header card, tree and theme](issues/10-document-view.md) | build | [08](issues/08-parser.md) | — | blocked — merged, waiting on owner exe check | — |
 | 11 | [Right side panel: link targets, fragments and back stack](issues/11-side-panel.md) | build | [10](issues/10-document-view.md) | — | blocked | — |
 | 12 | [Views: Waiting on, Board and Open questions](issues/12-cross-space-views.md) | build | [08](issues/08-parser.md) | — | blocked — merged, waiting on owner UI check | — |
