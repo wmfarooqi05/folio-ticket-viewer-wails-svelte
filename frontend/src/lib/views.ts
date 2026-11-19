@@ -121,7 +121,10 @@ export function questionSpaces(rows: QuestionRow[]): number {
 /** "Where" label: the ticket key, or "space · map.md" for a map. */
 export function questionWhere(rec: DocRecord): string {
   if (rec.key) return rec.key
-  return `${rec.space ?? ''} · ${rec.path.split('/').pop()}`
+  // A nested map shows its path inside the space: "space · step2b/map.md"
+  const prefix = `modules/${rec.space}/`
+  const rel = rec.space && rec.path.startsWith(prefix) ? rec.path.slice(prefix.length) : rec.path
+  return `${rec.space ?? ''} · ${rel}`
 }
 
 // ---- Board ---------------------------------------------------------------------
@@ -148,6 +151,10 @@ export interface BoardData {
   /** dropped and superseded */
   strip: TicketRec[]
   total: number
+  /** blocker chips by ticket path (cards with none have no entry) */
+  blockers: Record<string, Blocker[]>
+  /** header line: "N tickets · N open · N blocked", open = not done, dropped or superseded */
+  summary: { total: number; open: number; blocked: number }
 }
 
 /** The tickets of a map: the files directly in its issues folder. */
@@ -170,17 +177,32 @@ export function boardFor(index: Index, mapPath: string): BoardData {
     cards: tickets.filter((t) => (t.meta.status === 'unknown' ? c.id === 'open' : t.meta.status === c.id)),
   }))
   const strip = tickets.filter((t) => t.meta.status === 'dropped' || t.meta.status === 'superseded')
-  return { columns, strip, total: tickets.length }
+  const blocked = tickets.filter((t) => t.meta.status === 'blocked').length
+  const open = tickets.filter((t) => !isClosed(t.meta.status)).length
+  return {
+    columns,
+    strip,
+    total: tickets.length,
+    blockers: blockersByTicket(index, new Set(tickets.map((t) => t.path))),
+    summary: { total: tickets.length, open, blocked },
+  }
 }
 
-/** Blocker chips for a card: `blocked_by` refs whose target is not closed (spec 3, BoardCard). */
-export function liveBlockers(index: Index, rec: TicketRec): Blocker[] {
-  const out: Blocker[] = []
+/**
+ * Blocker chips per ticket path, from one pass over the edges. A chip is left out when its
+ * target ticket is closed, or when it points at an item (`05#q3`) that is no longer open.
+ */
+function blockersByTicket(index: Index, paths: Set<string>): Record<string, Blocker[]> {
+  const out: Record<string, Blocker[]> = {}
   for (const e of index.edges) {
-    if (e.from !== rec.path || e.field !== 'blocked_by') continue
+    if (e.field !== 'blocked_by' || !paths.has(e.from)) continue
     const target = e.to.path ? index.files[e.to.path] : undefined
     if (target && isTicket(target) && isClosed(target.meta.status)) continue
-    out.push({ ref: e.ref, path: target ? target.path : null })
+    if (target && e.to.itemId) {
+      const item = target.items.find((i) => i.id === e.to.itemId || i.fragments?.includes(e.to.itemId!))
+      if (item && item.state !== 'open') continue
+    }
+    ;(out[e.from] ??= []).push({ ref: e.ref, path: target ? target.path : null })
   }
   return out
 }

@@ -185,7 +185,7 @@
     <aside class="chrome flex w-280 shrink-0 flex-col border-r border-line bg-side">
       {#if phase === 'ready'}
         {#if index}<PinnedViews {index} {view} onview={(v) => (view = v)} />{/if}
-        <Tree {files} {selected} onselect={select} />
+        <Tree {files} selected={view ? null : selected} onselect={select} />
         <footer class="border-t border-line px-12 py-6 text-[11px] text-fg3">{status}</footer>
       {:else}
         <p class="p-12 text-sm text-fg3">{phase === 'loading' ? status || 'Loading…' : ''}</p>

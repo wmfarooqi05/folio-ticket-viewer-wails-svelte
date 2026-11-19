@@ -20,7 +20,7 @@
   ])
 </script>
 
-<div class="chrome flex flex-col gap-2 border-b border-line px-6 py-6" aria-label="Views">
+<nav class="chrome flex flex-col gap-2 border-b border-line px-6 py-6" aria-label="Views">
   {#each rows as r (r.id)}
     <button
       type="button"
@@ -35,4 +35,4 @@
       <span class="font-mono text-xs text-fg3">{r.n}</span>
     </button>
   {/each}
-</div>
+</nav>

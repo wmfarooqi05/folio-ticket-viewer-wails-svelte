@@ -24,12 +24,12 @@ These are the views no single file gives (handoff §7, in order of value). The d
 - [x] **Board per map:** kanban columns Open, In progress, Blocked, In review, Done. Dropped and superseded go in a collapsed strip. Cards show the number, title, type and blocker chips.
 - [x] **Map modes:** Doc, Board and Graph on a `map.md` (03 D5). Graph is a placeholder until 14.
 - [x] **Open questions:** Q items with no Answered marker. Closed tickets are hidden by default, with a toggle (04 D6).
-- [x] Pinned entries in the tree with counts; empty states per the 03 spec.
+- [x] Pinned entries in the tree with counts; empty states per the 03 spec. (Stopgap above the tree; real rows belong to 10.)
 
 ## Done when
 
 - <a id="ac1"></a>**AC1** (met) — The view counts match a hand count over the fixtures, including legacy tickets with inferred `waiting_on` (04 D4).
-- <a id="ac2"></a>**AC2** (met) — Clicking any row or card opens the ticket in the middle pane.
+- <a id="ac2"></a>**AC2** (met in code; not yet checked in a running window) — Clicking any row or card opens the ticket in the middle pane.
 
 ## Outcome
 
@@ -54,8 +54,9 @@ The tree counts come from `pinnedCounts`: 8 waiting, 8 questions.
 **Decisions and gaps**
 - Ages come from `DocRecord.mtime`, which the index already carries, so nothing is stubbed. Tests pin mtimes because checkout time is the disk mtime.
 - `unknown`-status tickets (chw 15, 32, 33, 34, 35, 36) go in the Open column with their raw status note, so no ticket vanishes from a board. The spec has only five columns.
-- Board mode shows for every map, not only `map.kanban` ones (spec G7 recommended kanban-only). Only remove-service-account has `view=kanban`, and "Board per map" is in the To do.
+- Board mode shows for every map, not only `map.kanban` ones. **Open question for the owner:** conventions.md, handoff §7 and spec G7 say the `view=kanban` hint gates the board, but only remove-service-account carries it, and legacy maps never will. Gate it, or show the board everywhere? The code shows it everywhere until decided.
 - Graph is a placeholder text until 14.
 - The tree's pinned rows are ticket 10's. This branch ships `pinnedCounts(index)` and a stopgap `PinnedViews.svelte` above the tree in `App.svelte`; at merge, 10's rows replace it (delete the component and its one line in `App.svelte`).
 - Icons are text glyphs (◔ ? ▶ ←), to be swapped for 10's inline icons.
+- Review fixes: unknown-status cards show a dashed dot and "status unknown" with the raw note; Tree gets `selected={view ? null : selected}`; blocker chips come from one pass over the edges in `boardFor` and skip closed targets and answered or closed items; the chosen map mode is remembered per map; Open questions has "Hide closed tickets" on by default; the board has a map header with "N tickets · N open · N blocked" (open = not done, dropped or superseded) and a progress bar; nested maps are labelled by their path inside the space; one global `button:focus-visible` rule in `app.css`.
 - Not checked in a running window: the app needs Wails bindings, so the components were verified by `svelte-check` and `task build` only.

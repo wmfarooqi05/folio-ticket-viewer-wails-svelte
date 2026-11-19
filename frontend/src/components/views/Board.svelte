@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Index } from '../../lib/parser'
-  import { STATUS_VAR, boardFor, liveBlockers } from '../../lib/views'
+  import { STATUS_VAR, boardFor } from '../../lib/views'
 
   interface Props {
     index: Index
@@ -11,6 +11,7 @@
   let { index, mapPath, onselect }: Props = $props()
 
   const board = $derived(boardFor(index, mapPath))
+  const rec = $derived(index.files[mapPath])
   let stripOpen = $state(false)
 
   const COL_VAR = {
@@ -26,6 +27,24 @@
   {#if board.total === 0}
     <p class="text-md text-fg3">This map has no tickets yet.</p>
   {:else}
+    <header class="mb-14">
+      <p class="m-0 font-mono text-xs text-fg3">{mapPath}</p>
+      <h2 class="m-0 mt-2 text-lg font-semibold">{rec?.title}</h2>
+      <p class="m-0 mt-4 text-sm text-fg2">
+        {board.summary.total}
+        {board.summary.total === 1 ? 'ticket' : 'tickets'} · {board.summary.open} open · {board.summary.blocked} blocked
+      </p>
+      <div class="mt-8 flex h-6 gap-2 overflow-hidden rounded-full" aria-hidden="true">
+        {#each board.columns as col (col.id)}
+          {#if col.cards.length > 0}
+            <span style:flex={col.cards.length} style:background={COL_VAR[col.id]}></span>
+          {/if}
+        {/each}
+        {#if board.strip.length > 0}
+          <span style:flex={board.strip.length} style:background="var(--s-mute)"></span>
+        {/if}
+      </div>
+    </header>
     <div class="grid grid-cols-[repeat(5,minmax(180px,1fr))] gap-10">
       {#each board.columns as col, ci (col.id)}
         <section class="min-h-260 rounded-xl bg-colbg p-8" aria-label={col.label}>
@@ -43,7 +62,7 @@
           {/if}
           <div class="flex flex-col gap-8">
             {#each col.cards as t, i (t.path)}
-              {@const blockers = liveBlockers(index, t)}
+              {@const blockers = board.blockers[t.path] ?? []}
               <button
                 type="button"
                 class="flex animate-rise-card flex-col items-start gap-7 rounded-[9px] border border-line bg-card px-11 py-10 text-left shadow-hair transition-[transform,box-shadow,border-color] duration-[var(--dur-hover)] hover:-translate-y-2 hover:border-line2 hover:shadow-lift"
@@ -56,12 +75,17 @@
                   {#if t.meta.afk}<span class="ml-auto text-[9.5px] tracking-[0.05em]">AFK</span>{/if}
                 </span>
                 <span class="text-base leading-[1.35] font-medium">{t.title}</span>
-                {#if t.meta.status === 'unknown' && t.meta.status_note}
-                  <span class="text-xs text-fg3 italic">{t.meta.status_note}</span>
+                {#if t.meta.status === 'unknown'}
+                  <span class="flex items-center gap-6 text-xs text-fg3">
+                    <span class="size-7 rounded-full border border-dashed border-fg3" aria-hidden="true"></span>
+                    <span>status unknown{t.meta.status_note ? ': ' : ''}<i>{t.meta.status_note ?? ''}</i></span>
+                  </span>
+                {:else}
+                  <span class="sr-only">{t.meta.status}</span>
                 {/if}
                 {#if blockers.length > 0}
                   <span class="flex flex-wrap gap-4">
-                    {#each blockers as b (b.ref)}
+                    {#each blockers as b, bi (b.ref + bi)}
                       <span
                         class="h-19 rounded-full bg-chip px-7 font-mono text-2xs leading-[19px] text-s-block"
                         title="Blocked by {b.ref}">← {b.ref}</span
@@ -82,7 +106,7 @@
     <div class="mt-14 rounded-xl bg-colbg">
       <button
         type="button"
-        class="flex w-full items-center gap-8 px-12 py-10 text-left text-sm font-semibold text-fg2"
+        class="flex w-full items-center gap-8 px-12 py-10 text-left text-xs font-normal text-fg2"
         aria-expanded={stripOpen}
         onclick={() => (stripOpen = !stripOpen)}
       >

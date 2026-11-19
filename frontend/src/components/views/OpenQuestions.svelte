@@ -7,12 +7,17 @@
     onselect: (path: string) => void
     now?: number
   }
-  let { index, onselect, now = Date.now() }: Props = $props()
+  let { index, onselect, now: nowProp }: Props = $props()
+  // Fresh whenever the index changes, so ages do not freeze at mount.
+  const now = $derived.by(() => {
+    void index
+    return nowProp ?? Date.now()
+  })
 
   // 04 D6: Q items of closed tickets are hidden by default, with a toggle.
-  let showClosed = $state(false)
+  let hideClosed = $state(true)
 
-  const rows = $derived(openQuestions(index, showClosed))
+  const rows = $derived(openQuestions(index, !hideClosed))
   const spaces = $derived(questionSpaces(rows))
   const BAR = { block: 'var(--s-block)', rev: 'var(--s-rev)', idle: 'var(--fg3)' } as const
 </script>
@@ -23,7 +28,7 @@
       <h1 class="m-0 mb-6 text-xl font-semibold tracking-[-0.02em]">Open questions</h1>
       <p class="m-0 mb-22 text-md text-fg2">
         {#if rows.length === 0}
-          Nothing is unanswered.
+          <span class="text-fg3">Nothing is unanswered.</span>
         {:else}
           {rows.length} unanswered across {spaces}
           {spaces === 1 ? 'module' : 'modules'}, oldest first.
@@ -31,8 +36,8 @@
       </p>
     </div>
     <label class="mt-6 flex shrink-0 items-center gap-6 text-sm text-fg2">
-      <input type="checkbox" bind:checked={showClosed} class="accent-acc" />
-      Show closed tickets
+      <input type="checkbox" bind:checked={hideClosed} class="accent-acc" />
+      Hide closed tickets
     </label>
   </div>
 

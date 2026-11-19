@@ -8,7 +8,12 @@
     /** injectable for tests; the age is "edited N days ago" from mtime (03 D4) */
     now?: number
   }
-  let { index, onselect, now = Date.now() }: Props = $props()
+  let { index, onselect, now: nowProp }: Props = $props()
+  // Fresh whenever the index changes, so ages do not freeze at mount.
+  const now = $derived.by(() => {
+    void index
+    return nowProp ?? Date.now()
+  })
 
   const groups = $derived(waitingOn(index))
   const total = $derived(groups.reduce((n, g) => n + g.rows.length, 0))
@@ -60,6 +65,7 @@
                   style:background={rec.meta.status === 'unknown' ? 'transparent' : STATUS_VAR[rec.meta.status]}
                   style:border-color={STATUS_VAR[rec.meta.status]}
                 ></span>
+                <span class="sr-only">{rec.meta.status}</span>
                 <span class="font-mono text-xs text-fg3">{rec.key}</span>
               </span>
               <span class="truncate text-base">{rec.title}</span>

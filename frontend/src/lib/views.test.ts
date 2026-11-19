@@ -13,7 +13,6 @@ import {
   ageLabel,
   ageTone,
   boardFor,
-  liveBlockers,
   openQuestions,
   pinnedCounts,
   questionWhere,
@@ -152,21 +151,35 @@ describe('Board', () => {
   })
 
   it('card blockers: only unresolved ones', () => {
-    // 06 is blocked_by 05 (open): chip. Check the closed case on a synthetic ticket below.
-    const t6 = index.files[RSA + 'issues/06-dba-rotate-sql-login.md'] as never
-    const chips = liveBlockers(index, t6)
-    expect(chips.length).toBeGreaterThan(0)
-    expect(chips.every((c) => c.ref.length > 0)).toBe(true)
+    const t6 = RSA + 'issues/06-dba-rotate-sql-login.md'
+    expect(boardFor(index, RSA + 'map.md').blockers[t6].map((c) => c.ref)).toEqual(['05', '05#q3'])
 
     const mk = (n: string, status: string, by: string) => ({
       path: RSA + `issues/${n}-x.md`,
       mtime: 1,
-      text: `---\nstatus: ${status}\nblocked_by: [${by}]\n---\n\n# ${n} — x\n`,
+      text: `---
+status: ${status}
+blocked_by: [${by}]
+---
+
+# ${n} — x
+`,
     })
-    // 01 is done in the fixtures: a blocker on a done ticket is not shown
-    const next = updateIndex(index, [mk('20', 'blocked', '"01"'), mk('21', 'blocked', '"05"')], [])
-    expect(liveBlockers(next, next.files[RSA + 'issues/20-x.md'] as never)).toEqual([])
-    expect(liveBlockers(next, next.files[RSA + 'issues/21-x.md'] as never).map((c) => c.ref)).toEqual(['05'])
+    // 01 is done: no chip. 05 is open: chip. 05#q3 is an open Q: chip. 05#q2 is answered: no chip.
+    // 03#q2 is open but 03 is done: no chip.
+    const next = updateIndex(
+      index,
+      [mk('20', 'blocked', '"01"'), mk('21', 'blocked', '"05"'), mk('22', 'blocked', '"05#q3", "05#q2", "03#q2"')],
+      [],
+    )
+    const b = boardFor(next, RSA + 'map.md').blockers
+    expect(b[RSA + 'issues/20-x.md']).toBeUndefined()
+    expect(b[RSA + 'issues/21-x.md'].map((c) => c.ref)).toEqual(['05'])
+    expect(b[RSA + 'issues/22-x.md'].map((c) => c.ref)).toEqual(['05#q3'])
+  })
+
+  it('summary: tickets, open (not closed) and blocked', () => {
+    expect(boardFor(index, RSA + 'map.md').summary).toEqual({ total: 11, open: 7, blocked: 4 })
   })
 })
 
@@ -210,6 +223,9 @@ describe('Open questions', () => {
   it('labels where it lives: the ticket key, or "space · map.md"', () => {
     expect(questionWhere(index.files[RSA + 'issues/11-vnet-rule.md'])).toBe('remove-service-account 11')
     expect(questionWhere(index.files[RSA + 'map.md'])).toBe('remove-service-account · map.md')
+    expect(questionWhere({ ...index.files[RSA + 'map.md'], space: 'cash-handling-workflow', path: CHW + 'step2b-payment-identification/map.md' })).toBe(
+      'cash-handling-workflow · step2b-payment-identification/map.md',
+    )
   })
 })
 
