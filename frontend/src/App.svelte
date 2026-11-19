@@ -14,7 +14,11 @@
   import { pinnedItems } from './lib/pinned'
   import { pinnedCounts, type ViewId } from './lib/views'
   import * as panelStack from './lib/panel'
-  import { DEFAULT_WIDTH, MAX_WIDTH, MIN_WIDTH, clampWidth, dragWidth, keyWidth, maxWidth } from './lib/resize'
+  import { Layout } from './lib/layout.svelte'
+  import { pickRoot, rootsLabel } from './lib/folder'
+  import { docsRootPath, splitPath } from './lib/path'
+  import Icon from './lib/icons/Icon.svelte'
+  import Divider from './components/Divider.svelte'
 
   let { initial }: { initial: Config | null } = $props()
 
@@ -43,65 +47,17 @@
   // what the panel draws: the last non-empty stack, kept until the close transition ends
   let shownStack = $state.raw<panelStack.PanelStack>([])
   let lastClosed = $state.raw<panelStack.PanelStack>([]) // for `]`
-  let treeOpen = $state(true) // `[`
-  let panelAside = $state<HTMLElement>()
   let mainEl = $state<HTMLElement>()
   let returnFocus: HTMLElement | null = null
 
-  // Tree width (drag-to-resize). sidebarW is the wish; the width drawn is clamped to what fits.
-  let sidebarW = $state(DEFAULT_WIDTH)
-  let bodyW = $state(0) // width of the row that holds the three panes
-  let treeAside = $state<HTMLElement>()
-  let dragging = $state(false)
-  const maxW = $derived(bodyW > 0 ? maxWidth(bodyW, rightPanelOpen) : MAX_WIDTH)
-  const treeW = $derived(clampWidth(sidebarW, maxW))
-  let dragX = 0
-  let dragRaf = 0
-  let saveTimer: ReturnType<typeof setTimeout> | undefined
-
-  function saveWidth() {
-    clearTimeout(saveTimer)
-    api.setSidebarWidth(treeW).catch((err) => console.error('could not save the sidebar width', err))
-  }
-  function dragStart(e: PointerEvent) {
-    if (e.button !== 0 || !treeAside) return
-    e.preventDefault() // no text selection or native drag
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    dragging = true
-  }
-  function dragMove(e: PointerEvent) {
-    if (!dragging || !treeAside) return
-    dragX = e.clientX
-    if (dragRaf) return // one update per frame
-    dragRaf = requestAnimationFrame(() => {
-      dragRaf = 0
-      if (treeAside) sidebarW = dragWidth(dragX, treeAside.getBoundingClientRect().left, maxW)
-    })
-  }
-  function dragEnd(e: PointerEvent) {
-    if (!dragging) return
-    dragging = false
-    cancelAnimationFrame(dragRaf)
-    dragRaf = 0
-    if (treeAside && e.type === 'pointerup') sidebarW = dragWidth(e.clientX, treeAside.getBoundingClientRect().left, maxW)
-    saveWidth() // once, at the end of the drag
-  }
-  function resetWidth() {
-    sidebarW = DEFAULT_WIDTH
-    saveWidth()
-  }
-  function dividerKey(e: KeyboardEvent) {
-    const next = keyWidth(e.key, treeW, maxW)
-    if (next === null) return
-    e.preventDefault()
-    sidebarW = next
-    clearTimeout(saveTimer)
-    saveTimer = setTimeout(saveWidth, 400) // a held key is one save, not many
-  }
+  // Pane widths, both drag dividers and the tree's collapsed flag (lib/layout.svelte.ts).
+  const layout = new Layout(() => rightPanelOpen)
+  const geo = $derived(layout.geo)
 
   $effect(() => {
+    const el = layout.panelEl
     if (panel.length) shownStack = panel
-    else if (panelAside && parseFloat(getComputedStyle(panelAside).transitionDuration) === 0) shownStack = [] // no motion
+    else if (el && parseFloat(getComputedStyle(el).transitionDuration) === 0) shownStack = [] // no motion
   })
 
   function openInPanel(path: string, frag: string | null) {
@@ -138,11 +94,15 @@
     view ? [view === 'waiting' ? 'Waiting on' : 'Open questions'] : selected ? selected.split('/') : [],
   )
   const dark = $derived(resolvedTheme(config?.theme) === 'dark')
+  const docsPath = $derived(config ? docsRootPath(config.repoRoot, config.docsDir) : '')
+  const docsPathParts = $derived(splitPath(docsPath))
+  // the engine says "412 files"; the mockup's footer says "Watching 412 files"
+  const footerText = $derived(/^\d+ files?$/.test(status) ? `Watching ${status}` : status)
 
   onMount(async () => {
     try {
       config = initial ?? (await api.getConfig())
-      sidebarW = clampWidth(config.sidebarWidth) // 0 (never saved) gives the default
+      layout.load(config) // 0 (never saved) gives the defaults
       if (config.repoRoot) await load()
       else phase = 'first-run'
     } catch (err) {
@@ -198,17 +158,59 @@
   async function choose() {
     problem = null
     try {
-      const picked = await api.pickFolder()
-      if (!picked) return // cancelled
-      const check = await api.checkRoot(picked)
-      if (!check.ok) {
-        problem = check.message
+      const res = await pickRoot()
+      if (res.kind === 'cancelled') return
+      if (res.kind === 'no-roots') {
+        problem = res.message
         return
       }
-      config = await api.setConfig({ repoRoot: check.repoRoot, docsDir: check.docsDir })
+      config = await api.setConfig({ repoRoot: res.repoRoot, docsDir: res.docsDir })
       await load()
     } catch (err) {
       problem = err instanceof Error ? err.message : String(err)
+    }
+  }
+
+  // "Change folder" in the tree footer: the same picker as first run and Settings, then the
+  // same root-change path as a Settings save.
+  let changingFolder = $state(false)
+  let folderNotice = $state<{ roots: boolean; message: string } | null>(null)
+
+  async function changeFolder() {
+    if (changingFolder || !config) return
+    changingFolder = true
+    folderNotice = null
+    try {
+      const res = await pickRoot()
+      if (res.kind === 'no-roots') {
+        folderNotice = { roots: true, message: res.message } // the Settings warning; nothing changed
+      } else if (res.kind === 'ok' && (res.repoRoot !== config.repoRoot || res.docsDir !== config.docsDir)) {
+        config = await api.setConfig({ repoRoot: res.repoRoot, docsDir: res.docsDir })
+        showToast('Folder changed')
+        await rootChanged(config)
+      }
+    } catch (err) {
+      folderNotice = { roots: false, message: err instanceof Error ? err.message : String(err) }
+    } finally {
+      changingFolder = false
+    }
+  }
+
+  /** The folder, docs dir or roots changed: drop everything tied to the old one, then rescan. */
+  async function rootChanged(next: Config) {
+    selected = null
+    view = null
+    fragment = null
+    text = null
+    docError = null
+    folderNotice = null
+    panel = panelStack.close()
+    lastClosed = [] // `]` must not bring back a stack from the old folder
+    if (!next.repoRoot) return
+    try {
+      await indexStore.rescan()
+    } catch (err) {
+      fail(err)
     }
   }
 
@@ -224,18 +226,7 @@
     applyTheme(next.theme)
     settingsOpen = false
     showToast('Settings saved')
-    if (rescan && next.repoRoot) {
-      selected = null
-      view = null
-      fragment = null
-      text = null
-      panel = panelStack.close()
-      try {
-        await indexStore.rescan()
-      } catch (err) {
-        fail(err)
-      }
-    }
+    if (rescan) await rootChanged(next)
   }
 
   function onwindowkeydown(e: KeyboardEvent) {
@@ -243,7 +234,7 @@
     const typing = !!t?.closest('input, textarea, select, [contenteditable="true"]')
     if (!settingsOpen && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (e.key === '[') {
-        treeOpen = !treeOpen
+        layout.toggleTree()
         return
       }
       if (e.key === ']') {
@@ -306,9 +297,28 @@
 
 <svelte:window onkeydown={onwindowkeydown} />
 
-<div class="flex h-full flex-col bg-bg text-fg {dragging ? 'cursor-col-resize select-none' : ''}" inert={settingsOpen}>
+<div class="flex h-full flex-col bg-bg text-fg {layout.dragging ? 'cursor-col-resize select-none' : ''}" inert={settingsOpen}>
   <header class="chrome flex h-44 shrink-0 items-center gap-12 border-b border-line bg-side px-14">
+    <button
+      type="button"
+      class="grid h-28 w-28 shrink-0 place-items-center rounded-md text-fg2 hover:bg-hover hover:text-fg"
+      aria-label="Toggle sidebar"
+      aria-expanded={geo.treeVisible}
+      aria-controls="tree-pane"
+      title={geo.treeAutoHidden ? 'Sidebar hidden: the window is too narrow beside the panel  [' : 'Toggle sidebar  ['}
+      onclick={() => layout.toggleTree()}
+    >
+      <Icon name="panel-left" size={15} />
+    </button>
     <span class="text-[13.5px] font-semibold tracking-[-0.01em]">Folio</span>
+    {#if docsPath}
+      <span class="text-fg3">/</span>
+      <!-- middle truncation: the last two segments keep their width, the front gets the ellipsis -->
+      <span class="selectable flex max-w-[40%] min-w-0 shrink font-mono text-[11.5px] text-fg2" title={docsPath} aria-label="Docs folder {docsPath}">
+        <span class="truncate">{docsPathParts.head}</span><span class="shrink-0 whitespace-nowrap">{docsPathParts.tail}</span>
+      </span>
+      {#if crumb.length}<span class="text-fg3">/</span>{/if}
+    {/if}
     <ol class="flex min-w-0 flex-1 items-center gap-6 text-sm text-fg2" aria-label="Breadcrumb">
       {#each crumb as part, i (i)}
         <li class="truncate" class:text-fg={i === crumb.length - 1}>
@@ -336,11 +346,12 @@
     </button>
   </header>
 
-  <div class="flex min-h-0 flex-1" bind:clientWidth={bodyW}>
+  <div class="flex min-h-0 flex-1" bind:clientWidth={layout.bodyW}>
     <aside
-      bind:this={treeAside}
-      style:width="{treeW}px"
-      class="chrome relative shrink-0 flex-col border-r border-line bg-side {dragging ? '' : 'transition-[width] duration-(--dur-hover)'} {!treeOpen ? 'hidden' : rightPanelOpen ? 'hidden min-[1200px]:flex' : 'flex'}"
+      id="tree-pane"
+      bind:this={layout.treeEl}
+      style:width="{geo.treeW}px"
+      class="chrome relative shrink-0 flex-col border-r border-line bg-side {layout.dragging ? '' : 'transition-[width] duration-(--dur-hover)'} {geo.treeVisible ? 'flex' : 'hidden'}"
     >
       {#if phase === 'ready'}
         <Tree
@@ -351,35 +362,41 @@
           activeView={view}
           onview={(v) => (view = v)}
         />
-        <footer class="border-t border-line px-12 py-6 text-[11px] text-fg3">{status}</footer>
+        {#if folderNotice}
+          <!-- the same warning as the Settings dialog, in the sidebar -->
+          <div
+            class="mx-8 mb-8 flex items-start gap-8 rounded-md border border-[color-mix(in_oklab,var(--s-rev)_45%,transparent)] bg-[color-mix(in_oklab,var(--s-rev)_10%,transparent)] px-10 py-8 text-xs motion-safe:animate-rise"
+            role="alert"
+          >
+            <span class="mt-4 size-7 shrink-0 rounded-full bg-s-rev"></span>
+            <span class="min-w-0 flex-1">
+              {#if folderNotice.roots}
+                This folder has none of <span class="font-mono text-[11.5px]">{rootsLabel(config?.docsRoots ?? [])}</span>
+              {:else}
+                {folderNotice.message}
+              {/if}
+            </span>
+            <button type="button" class="shrink-0 rounded-xs px-4 font-medium text-acc" onclick={changeFolder}>
+              {folderNotice.roots ? 'Choose again' : 'Retry'}
+            </button>
+          </div>
+        {/if}
+        <footer class="flex items-center gap-8 border-t border-line px-14 py-8 text-[11px] text-fg3">
+          <span class="size-6 shrink-0 rounded-full bg-s-done"></span>
+          <span class="min-w-0 flex-1 truncate">{footerText}</span>
+          <button
+            type="button"
+            class="shrink-0 rounded-xs text-fg2 transition-colors duration-(--dur-hover) enabled:hover:text-acc disabled:opacity-50"
+            disabled={changingFolder}
+            onclick={changeFolder}
+          >
+            Change folder
+          </button>
+        </footer>
       {:else}
         <p class="p-12 text-sm text-fg3">{phase === 'loading' ? status || 'Loading…' : ''}</p>
       {/if}
-      <!-- the drag handle: a 9px hit area on the tree's right edge, with a 2px accent line -->
-      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize sidebar"
-        aria-valuenow={treeW}
-        aria-valuemin={MIN_WIDTH}
-        aria-valuemax={maxW}
-        tabindex="0"
-        class="group/h absolute inset-y-0 -right-[5px] z-10 w-[9px] cursor-col-resize touch-none outline-none"
-        onpointerdown={dragStart}
-        onpointermove={dragMove}
-        onpointerup={dragEnd}
-        onpointercancel={dragEnd}
-        onlostpointercapture={dragEnd}
-        ondblclick={resetWidth}
-        onkeydown={dividerKey}
-      >
-        <span
-          class="pointer-events-none absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 bg-acc transition-opacity duration-(--dur-hover) {dragging
-            ? 'opacity-100'
-            : 'opacity-0 group-hover/h:opacity-60 group-focus-visible/h:opacity-100'}"
-        ></span>
-      </div>
+      <Divider splitter={layout.tree} label="Resize sidebar" now={geo.treeW} max={geo.treeMax} edge="right" controls="tree-pane" />
     </aside>
 
     <main bind:this={mainEl} tabindex="-1" class="min-w-0 flex-1 overflow-auto bg-bg outline-none">
@@ -417,19 +434,24 @@
       {/if}
     </main>
 
-    <!-- the width animates 0 to 360; the inner box stays 360 wide, so nothing reflows (03 spec 6) -->
+    <!-- the width animates 0 to the panel width (not while dragging); the inner box keeps that
+         width, so nothing reflows (03 spec 6) -->
     <aside
-      bind:this={panelAside}
-      class="chrome shrink-0 overflow-hidden bg-card transition-[width] duration-(--dur) ease-(--ease-pane) {rightPanelOpen
-        ? 'w-360 border-l border-line'
-        : 'w-0 border-l-0'}"
+      id="side-panel"
+      bind:this={layout.panelEl}
+      style:width={rightPanelOpen ? `${geo.panelW}px` : '0px'}
+      class="chrome relative shrink-0 overflow-hidden bg-card {layout.dragging
+        ? ''
+        : 'transition-[width] duration-(--dur) ease-(--ease-pane)'} {rightPanelOpen ? 'border-l border-line' : 'border-l-0'}"
       aria-label="Side panel"
       inert={!rightPanelOpen}
       ontransitionend={(e) => {
-        if (e.target === panelAside && !rightPanelOpen) shownStack = []
+        if (e.target === layout.panelEl && !rightPanelOpen) shownStack = []
       }}
     >
+      <Divider splitter={layout.panel} label="Resize side panel" now={geo.panelW} max={geo.panelMax} edge="left" controls="side-panel" />
       <SidePanel
+        width={geo.panelW}
         stack={panel.length ? panel : shownStack}
         {index}
         {config}

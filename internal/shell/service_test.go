@@ -152,3 +152,65 @@ func TestSidebarWidthRoundTripsAndSurvivesSetConfig(t *testing.T) {
 		t.Fatalf("not persisted: %+v", c)
 	}
 }
+
+func TestPanelWidthAndCollapsedRoundTripAndSurviveSetConfig(t *testing.T) {
+	t.Setenv(EnvRoot, "")
+	repo := t.TempDir()
+	mkdir(t, repo, "docs", "patterns")
+	path := filepath.Join(t.TempDir(), "settings.json")
+	svc := New(path)
+
+	if c, _ := svc.GetConfig(); c.PanelWidth != 0 || c.SidebarCollapsed {
+		t.Fatalf("defaults should be unset: %+v", c)
+	}
+	if got, err := svc.SetPanelWidth(500); err != nil || got != 500 {
+		t.Fatalf("save: %d %v", got, err)
+	}
+	if got, _ := svc.SetPanelWidth(10); got != settings.MinPanelWidth {
+		t.Fatalf("not clamped up: %d", got)
+	}
+	if got, _ := svc.SetPanelWidth(99999); got != settings.MaxPanelWidth {
+		t.Fatalf("not clamped down: %d", got)
+	}
+	if _, err := svc.SetPanelWidth(480); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := svc.SetSidebarCollapsed(true); err != nil || !got {
+		t.Fatalf("collapse: %v %v", got, err)
+	}
+	if _, err := svc.SetSidebarWidth(300); err != nil {
+		t.Fatal(err)
+	}
+
+	// each setter changed only its own field
+	c, _ := svc.GetConfig()
+	if c.PanelWidth != 480 || !c.SidebarCollapsed || c.SidebarWidth != 300 {
+		t.Fatalf("fields leaked into each other: %+v", c)
+	}
+
+	// a hand edit made while the app runs must survive a save
+	data, _ := os.ReadFile(path)
+	edited := strings.Replace(string(data), `"theme": "system"`, `"theme": "dark"`, 1)
+	if err := os.WriteFile(path, []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetSidebarCollapsed(false); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := svc.GetConfig(); c.Theme != settings.ThemeDark || c.PanelWidth != 480 {
+		t.Fatalf("hand edit or width lost: %+v", c)
+	}
+	if _, err := svc.SetSidebarCollapsed(true); err != nil {
+		t.Fatal(err)
+	}
+
+	// SetConfig must keep both
+	auto := settings.DefaultDocsDir
+	got, err := svc.SetConfig(ConfigPatch{RepoRoot: &repo, DocsDir: &auto})
+	if err != nil || got.PanelWidth != 480 || !got.SidebarCollapsed {
+		t.Fatalf("SetConfig lost the UI state: %+v %v", got, err)
+	}
+	if c, _ := New(path).GetConfig(); c.PanelWidth != 480 || !c.SidebarCollapsed || c.RepoRoot != repo {
+		t.Fatalf("not persisted: %+v", c)
+	}
+}
