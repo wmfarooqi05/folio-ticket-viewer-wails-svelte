@@ -40,7 +40,11 @@ func main() {
 			application.NewService(docsSvc),
 			application.NewService(shellSvc),
 		},
-		Assets: application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
+		Assets: application.AssetOptions{
+			Handler: application.AssetFileServerFS(assets),
+			// /doc/<path> serves images from the docs folder (ticket 10, 06 D6).
+			Middleware: shell.DocAssets(func() string { return shell.RootsOf(shellSvc).Docs }),
+		},
 		// WebView2 tuning from ticket 07 (docs/assets/07-findings.md). GPU off is the real
 		// win: about -75 MB private at idle with no CPU cost. The rest is housekeeping.
 		// Extra disabled features must go in DisabledFeatures: Wails emits its own

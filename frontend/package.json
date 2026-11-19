@@ -13,12 +13,15 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@wailsio/runtime": "3.1.0"
+    "@wailsio/runtime": "3.1.0",
+    "markdown-it": "15.0.3"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "7.3.1",
     "@tailwindcss/vite": "4.3.5",
     "@types/node": "26.6.6",
+    "geist": "1.9.2",
+    "happy-dom": "21.0.4",
     "svelte": "5.58.0",
     "svelte-check": "4.7.8",
     "tailwindcss": "4.3.5",

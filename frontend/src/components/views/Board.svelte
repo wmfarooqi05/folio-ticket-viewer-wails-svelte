@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '../../lib/icons/Icon.svelte'
   import type { Index } from '../../lib/parser'
   import { STATUS_VAR, boardFor } from '../../lib/views'
 
@@ -50,7 +51,7 @@
         <section class="min-h-260 rounded-xl bg-colbg p-8" aria-label={col.label}>
           <h3 class="m-0 mb-8 flex items-center gap-6 px-3 text-sm font-semibold">
             <span
-              class="size-7 rounded-full {col.id === 'in-progress' ? 'animate-pulse-dot' : ''}"
+              class="size-7 rounded-full {col.id === 'in-progress' ? 'pulse-dot' : ''}"
               style:background={COL_VAR[col.id]}
               style:color={COL_VAR[col.id]}
             ></span>
@@ -87,8 +88,8 @@
                   <span class="flex flex-wrap gap-4">
                     {#each blockers as b, bi (b.ref + bi)}
                       <span
-                        class="h-19 rounded-full bg-chip px-7 font-mono text-2xs leading-[19px] text-s-block"
-                        title="Blocked by {b.ref}">← {b.ref}</span
+                        class="inline-flex h-19 items-center gap-3 rounded-full bg-chip px-7 font-mono text-2xs leading-[19px] text-s-block"
+                        title="Blocked by {b.ref}"><Icon name="arrow-left" size={9} />{b.ref}</span
                       >
                     {/each}
                   </span>
@@ -111,8 +112,8 @@
         onclick={() => (stripOpen = !stripOpen)}
       >
         <span
-          class="text-[9px] transition-transform duration-[var(--dur)]"
-          style:transform="rotate({stripOpen ? 90 : 0}deg)">▶</span
+          class="grid place-items-center transition-transform duration-[var(--dur)]"
+          style:transform="rotate({stripOpen ? 90 : 0}deg)"><Icon name="chevron-right" size={11} /></span
         >
         Dropped &amp; superseded
         <span class="font-mono text-xs font-normal text-fg3">{board.strip.length}</span>
