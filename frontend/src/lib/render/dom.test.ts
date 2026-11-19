@@ -53,6 +53,19 @@ describe('attachDocHandlers', () => {
     expect(onLink).not.toHaveBeenCalled()
   })
 
+  it('ignores a link inside a Mermaid label: cancelled, never routed', () => {
+    const { root, onLink, onExternal } = setup(
+      '<div class="mermaid-out"><a href="#" data-ext="https://evil.example">x</a><a href="#" data-path="m/a.md">y</a></div>',
+    )
+    for (const a of root.querySelectorAll('a')) {
+      const ev = new MouseEvent('click', { bubbles: true, cancelable: true })
+      a.dispatchEvent(ev)
+      expect(ev.defaultPrevented).toBe(true)
+    }
+    expect(onExternal).not.toHaveBeenCalled()
+    expect(onLink).not.toHaveBeenCalled()
+  })
+
   it('the remover detaches the listeners', () => {
     const { root, onLink, off } = setup('<a href="#" data-path="m/a.md">x</a>')
     off()

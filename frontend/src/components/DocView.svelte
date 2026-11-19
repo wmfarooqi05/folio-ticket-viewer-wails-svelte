@@ -3,6 +3,7 @@
   import * as api from '../lib/api'
   import type { Index, LineRange } from '../lib/parser'
   import { attachDocHandlers, installNavGuard, scrollToAnchor } from '../lib/render/dom'
+  import { enhanceDoc } from '../lib/render/enhance'
   import { renderMarkdown } from '../lib/render/markdown'
   import { makeUrls, type UrlTemplates } from '../lib/render/urls'
   import { editedAgo } from '../lib/status'
@@ -92,6 +93,14 @@
       },
       onExternal: (url) => api.openExternal(url).catch((e) => fail('Could not open the link', e)),
     })
+  })
+
+  // Highlight fences and draw mermaid diagrams once the HTML is in the page (ticket 14). The
+  // mtime is read through a derived so a live refresh of another file does not re-run it.
+  const mtime = $derived(rec?.mtime ?? 0)
+  $effect(() => {
+    if (!body || html === null || !path) return
+    return enhanceDoc(body, { path, mtime })
   })
 
   // Scroll to the top for a new document, or to its fragment. A silent re-render of the

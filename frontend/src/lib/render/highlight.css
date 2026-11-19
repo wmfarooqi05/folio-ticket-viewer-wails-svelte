@@ -1,0 +1,53 @@
+/* Token colours for highlight.js (ticket 14; 06 D4). Only theme tokens, so light and dark
+   follow data-theme and the OS preference with nothing to run. The darker mixes keep the
+   amber and red readable on the light code background. */
+.doc code.hljs {
+  --hl-kw: var(--acc);
+  --hl-str: color-mix(in oklab, var(--s-done) 85%, var(--fg));
+  --hl-num: color-mix(in oklab, var(--s-rev) 55%, var(--fg));
+  --hl-fn: color-mix(in oklab, var(--s-prog) 85%, var(--fg));
+  --hl-type: color-mix(in oklab, var(--s-block) 70%, var(--fg));
+  --hl-com: var(--fg3);
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-operator {
+  color: var(--hl-kw);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-symbol,
+.hljs-template-variable {
+  color: var(--hl-str);
+}
+.hljs-number,
+.hljs-meta,
+.hljs-bullet {
+  color: var(--hl-num);
+}
+.hljs-title,
+.hljs-function,
+.hljs-attr,
+.hljs-attribute,
+.hljs-section {
+  color: var(--hl-fn);
+}
+.hljs-type,
+.hljs-built_in,
+.hljs-class,
+.hljs-variable,
+.hljs-params {
+  color: var(--hl-type);
+}
+.hljs-comment,
+.hljs-quote {
+  color: var(--hl-com);
+  font-style: italic;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}

@@ -28,6 +28,17 @@ export default defineConfig(async () => ({
   },
   define: { __PARSER_VERSION__: JSON.stringify(await parserVersion()) },
   plugins: [
+    {
+      // Mermaid registers the ELK layout by default, and elkjs is 466 KB gzip on its own (ticket 14,
+      // AC2). Diagrams use dagre (mermaid.ts pins it); a stub keeps the elk chunk to a few bytes.
+      name: 'folio-no-elk',
+      enforce: 'pre',
+      resolveId: (id) => (id === 'elkjs/lib/elk.bundled.js' ? '\0folio-elk-stub' : null),
+      load: (id) =>
+        id === '\0folio-elk-stub'
+          ? "export default class ELK { constructor() { throw new Error('the ELK layout is not bundled') } }"
+          : null,
+    },
     tailwindcss(),
     svelte(),
     wails('./bindings'),

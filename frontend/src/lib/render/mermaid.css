@@ -1,0 +1,19 @@
+/* A rendered Mermaid diagram sits in the same card as a code block (ticket 14). */
+.doc .code[data-mermaid] .mermaid-out {
+  padding: 14px 16px;
+  overflow-x: auto;
+  text-align: center;
+  /* a label cannot paint or lay out outside its card (CSS overlay tricks) */
+  contain: layout paint;
+}
+.doc .code[data-mermaid] .mermaid-out svg {
+  display: inline-block;
+  max-width: 100%;
+  height: auto;
+}
+.doc .mermaid-err {
+  margin: 0;
+  padding: 8px 12px 0;
+  font-size: 12px;
+  color: var(--s-block);
+}

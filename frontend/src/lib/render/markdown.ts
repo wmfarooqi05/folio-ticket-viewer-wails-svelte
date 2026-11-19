@@ -218,8 +218,9 @@ md.renderer.rules.fence = (tokens, idx) => {
   const lang = /^[\w+#.-]+$/.exec(t.info.trim().split(/\s+/)[0] ?? '')?.[0] ?? ''
   const code = escapeHtml(t.content)
   if (lang.toLowerCase() === 'mermaid') {
-    // ticket 14 swaps this for the diagram; until then the source is shown
-    return `<div class="code mermaid-ph" data-mermaid><div class="code-head"><span>mermaid</span></div><pre><code>${code}</code></pre></div>\n`
+    // enhance.ts draws the diagram (ticket 14); data-line, the fence's file line, keys its cache
+    // because a fragment view (the side panel) renders only some of the file's fences
+    return `<div class="code mermaid-ph" data-mermaid data-line="${(t.map?.[0] ?? -1) + 1}"><div class="code-head"><span>mermaid</span></div><pre><code>${code}</code></pre></div>\n`
   }
   const cls = lang ? ` class="language-${escapeHtml(lang)}"` : ''
   return `<div class="code"><div class="code-head"><span>${escapeHtml(lang || 'text')}</span><button type="button" class="copy" data-copy>copy</button></div><pre><code${cls}>${code}</code></pre></div>\n`

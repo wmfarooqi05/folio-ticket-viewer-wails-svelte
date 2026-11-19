@@ -51,7 +51,12 @@
 {#if mode === 'board'}
   <Board {index} mapPath={path} {onselect} />
 {:else if mode === 'graph'}
-  <p class="chrome mx-auto max-w-[900px] px-40 pt-26 text-md text-fg3">The dependency graph arrives with ticket 14.</p>
+  <!-- lazy: the layout, the SVG and the node styles stay out of the initial chunk (06 D3) -->
+  {#await import('./Graph.svelte') then g}
+    <g.default {index} mapPath={path} {onselect} />
+  {:catch}
+    <p class="chrome mx-auto max-w-[900px] px-40 pt-26 text-md text-s-block" role="alert">The graph could not be loaded.</p>
+  {/await}
 {:else}
   {@render doc()}
 {/if}
