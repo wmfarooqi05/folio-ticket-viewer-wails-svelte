@@ -23,8 +23,10 @@
     onpopto: (depth: number) => void
     /** Ctrl-click or middle-click inside the panel: the middle pane */
     onnavigate: (path: string, fragment: string | null) => void
+    /** the panel's width in px: the inner box keeps it while the outer one animates */
+    width?: number
   }
-  let { stack, index, config = null, onback, onpromote, onclose, onpush, onpopto, onnavigate }: Props = $props()
+  let { stack, index, config = null, width = 360, onback, onpromote, onclose, onpush, onpopto, onnavigate }: Props = $props()
 
   const entry = $derived(top(stack))
   const rec = $derived(entry && index ? (index.files[entry.path] ?? null) : null)
@@ -100,7 +102,7 @@
 </script>
 
 {#if entry}
-  <div class="flex h-full w-360 flex-col">
+  <div class="flex h-full flex-col" style:width="{width}px">
     <header class="flex h-44 shrink-0 items-center gap-6 border-b border-line px-8">
       <button
         bind:this={backBtn}

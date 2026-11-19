@@ -29,6 +29,10 @@ export const getConfig = (): Promise<Config> => ShellService.GetConfig()
 export const setConfig = (patch: ConfigPatch): Promise<Config> => ShellService.SetConfig(patch)
 /** UI state, saved once when a resize ends. Returns the width Go stored (clamped). */
 export const setSidebarWidth = (width: number): Promise<number> => ShellService.SetSidebarWidth(width)
+/** UI state, saved once when a panel resize ends. Returns the width Go stored (clamped). */
+export const setPanelWidth = (width: number): Promise<number> => ShellService.SetPanelWidth(width)
+/** UI state, saved when the tree is hidden or shown. */
+export const setSidebarCollapsed = (collapsed: boolean): Promise<boolean> => ShellService.SetSidebarCollapsed(collapsed)
 export const pickFolder =(): Promise<string> => ShellService.PickFolder()
 export const checkRoot = (abs: string): Promise<RootCheck> => ShellService.CheckRoot(abs)
 export const checkDocs = (repoRoot: string, docsDir: string, roots: string[]): Promise<RootCheck> =>
