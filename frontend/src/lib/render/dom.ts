@@ -6,7 +6,9 @@ import { imagePlaceholder } from './markdown'
 
 export interface DocHandlers {
   /** an internal link: open `path` (and scroll to `frag`). `middle` is Ctrl-click or middle-click. */
-  onLink(path: string, frag: string | null, middle: boolean): void
+  onLink(path: string, frag: string | null, middle: boolean, broken?: boolean): void
+  /** a `#fragment` link whose target is not in this container (the panel shows one item only) */
+  onLocal?(frag: string): void
   /** an external http(s) link: hand it to the OS browser */
   onExternal(url: string): void
 }
@@ -43,13 +45,16 @@ function onClick(root: HTMLElement, h: DocHandlers, e: MouseEvent): void {
   // the webview must never navigate away from the app, so every anchor is cancelled
   e.preventDefault()
   if (a.getAttribute('aria-disabled') === 'true') return
-  const { path, frag, ext } = a.dataset
+  const { path, frag, ext, broken } = a.dataset
   if (ext) {
     if (e.type === 'click' || e.button === 1) h.onExternal(ext)
   } else if (path) {
-    h.onLink(path, frag ?? null, e.ctrlKey || e.metaKey || e.button === 1)
+    // a broken link opens the panel to say why (03 spec G1); it never goes to the middle pane
+    if (broken) {
+      if (e.type === 'click') h.onLink(path, frag ?? null, false, true)
+    } else h.onLink(path, frag ?? null, e.ctrlKey || e.metaKey || e.button === 1)
   } else if (frag) {
-    scrollToAnchor(root, frag)
+    if (!scrollToAnchor(root, frag)) h.onLocal?.(frag)
   }
 }
 

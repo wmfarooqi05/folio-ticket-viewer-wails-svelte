@@ -26,6 +26,8 @@ export interface RenderOptions {
   urls?: UrlHelpers
   /** drop the first H1 (the header card shows the title) */
   skipTitle?: boolean
+  /** render only these 1-based file lines (a fragment, from extractFragment); the rest is blanked */
+  range?: { start: number; end: number } | null
 }
 
 interface RenderEnv extends Env {
@@ -115,6 +117,11 @@ function linkTags(r: Resolved, href: string): [string, string] {
         : r.problem === 'bad-ref'
           ? `Not a valid reference: ${href}`
           : `Not found: ${r.path ?? href}`
+    if (r.path && (r.problem === 'no-file' || r.problem === 'no-anchor')) {
+      // clickable: the panel explains it (03 spec G1). Never navigates; the click is cancelled in dom.ts.
+      const f = r.fragment ? ` data-frag="${escapeHtml(r.fragment)}"` : ''
+      return [tag('lk lk-broken', ` href="#" data-broken="${r.problem}" data-path="${escapeHtml(r.path)}"${f}`, title), A]
+    }
     return [tag('lk lk-broken', ' aria-disabled="true"', title), A]
   }
   const frag = r.itemId ?? r.fragment
@@ -381,6 +388,8 @@ function autolink(state: StateCore, kids: Token[], env: RenderEnv): Token[] {
 
 md.core.ruler.push('folio', folio)
 
+const LINK_DEF = /^ {0,3}\[[^\]]+\]:\s/
+
 /** Renders one document body to an HTML string. */
 export function renderMarkdown(text: string, o: RenderOptions): string {
   const env: RenderEnv = {
@@ -390,5 +399,22 @@ export function renderMarkdown(text: string, o: RenderOptions): string {
     urls: o.urls ?? makeUrls(null),
     closers: [],
   }
-  return md.render(prepare(text, o.rec, o.skipTitle ?? false), env)
+  let src = prepare(text, o.rec, o.skipTitle ?? false)
+  if (o.range) {
+    // blank, never cut, so token.map still gives file lines for headings, items and markers
+    const { start, end } = o.range
+    // Reference definitions outside the range are kept, moved to the end behind a blank line
+    // (they print nothing, and there they cannot be read as a paragraph's continuation).
+    const defs: string[] = []
+    src =
+      src
+        .split('\n')
+        .map((l, i) => {
+          if (i + 1 >= start && i + 1 <= end) return l
+          if (LINK_DEF.test(l)) defs.push(l)
+          return ''
+        })
+        .join('\n') + (defs.length ? '\n\n' + defs.join('\n') : '')
+  }
+  return md.render(src, env)
 }

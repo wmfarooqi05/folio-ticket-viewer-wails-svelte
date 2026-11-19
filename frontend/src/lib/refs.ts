@@ -35,6 +35,39 @@ export function chipFor(edge: Edge, index: Index, fromSpace: string | null): Chi
   }
 }
 
+function statusOf(rec: DocRecord | undefined): Status | null {
+  return rec?.kind === 'ticket' && rec.meta && 'status' in rec.meta ? (rec.meta.status as Status) : null
+}
+
+/** Documents that name `rec` in blocked_by, related or superseded_by ("used by"), one chip each. */
+export function usedBy(rec: DocRecord, index: Index): ChipModel[] {
+  const seen = new Set<string>()
+  const out: ChipModel[] = []
+  for (const e of index.edges) {
+    if (e.to.path !== rec.path || !e.to.ok || e.from === rec.path || seen.has(e.from)) continue
+    seen.add(e.from)
+    const from = index.files[e.from]
+    if (!from) continue
+    out.push({
+      label: from.space === rec.space ? (from.num ?? from.key ?? from.path) : (from.key ?? from.path),
+      title: from.title ?? from.path,
+      path: from.path,
+      fragment: null,
+      ok: true,
+      status: statusOf(from),
+      resolved: false,
+    })
+  }
+  return out
+}
+
+/** The document's own question items, as chips that open that item. */
+export function questionChips(rec: DocRecord): ChipModel[] {
+  return rec.items
+    .filter((i) => i.kind === 'Q')
+    .map((i) => ({ label: `Q${i.n}`, title: i.title, path: rec.path, fragment: i.id, ok: true, status: null, resolved: i.state !== 'open' }))
+}
+
 /** The chips for one frontmatter field of one document. */
 export function chipsFor(rec: DocRecord, field: Edge['field'], index: Index): ChipModel[] {
   return index.edges.filter((e) => e.from === rec.path && e.field === field).map((e) => chipFor(e, index, rec.space))
