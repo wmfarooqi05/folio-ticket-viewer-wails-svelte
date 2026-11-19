@@ -26,6 +26,8 @@ export interface RenderOptions {
   urls?: UrlHelpers
   /** drop the first H1 (the header card shows the title) */
   skipTitle?: boolean
+  /** render only these 1-based file lines (a fragment, from extractFragment); the rest is blanked */
+  range?: { start: number; end: number } | null
 }
 
 interface RenderEnv extends Env {
@@ -390,5 +392,14 @@ export function renderMarkdown(text: string, o: RenderOptions): string {
     urls: o.urls ?? makeUrls(null),
     closers: [],
   }
-  return md.render(prepare(text, o.rec, o.skipTitle ?? false), env)
+  let src = prepare(text, o.rec, o.skipTitle ?? false)
+  if (o.range) {
+    // blank, never cut, so token.map still gives file lines for headings, items and markers
+    const { start, end } = o.range
+    src = src
+      .split('\n')
+      .map((l, i) => (i + 1 < start || i + 1 > end ? '' : l))
+      .join('\n')
+  }
+  return md.render(src, env)
 }

@@ -7,11 +7,13 @@
   import Tree from './components/Tree.svelte'
   import DocView from './components/DocView.svelte'
   import SettingsDialog from './components/SettingsDialog.svelte'
+  import SidePanel from './components/SidePanel.svelte'
   import WaitingOn from './components/views/WaitingOn.svelte'
   import OpenQuestions from './components/views/OpenQuestions.svelte'
   import MapModes from './components/views/MapModes.svelte'
   import { pinnedItems } from './lib/pinned'
   import { pinnedCounts, type ViewId } from './lib/views'
+  import * as panelStack from './lib/panel'
 
   let { initial }: { initial: Config | null } = $props()
 
@@ -34,8 +36,15 @@
   let toast = $state<string | null>(null)
   let toastTimer: ReturnType<typeof setTimeout> | undefined
 
-  // Panels: the right panel arrives with its own slice (03 spec section 3).
-  const rightPanelOpen = false
+  // The right panel (ticket 11): a back stack of {path, fragment}; empty means closed.
+  let panel = $state.raw<panelStack.PanelStack>([])
+  const rightPanelOpen = $derived(panel.length > 0)
+  const openInPanel = (path: string, frag: string | null) => (panel = panelStack.push(panel, { path, fragment: frag }))
+  function promotePanel() {
+    const { entry, stack } = panelStack.promote(panel)
+    panel = stack
+    if (entry) void select(entry.path, entry.fragment)
+  }
 
   const files = $derived(index ? Object.values(index.files) : [])
   const crumb = $derived(
@@ -105,6 +114,7 @@
     if (rescan && next.repoRoot) {
       selected = null
       text = null
+      panel = panelStack.close()
       try {
         await load(true)
       } catch (err) {
@@ -114,6 +124,17 @@
   }
 
   function onwindowkeydown(e: KeyboardEvent) {
+    if (rightPanelOpen && !settingsOpen) {
+      if (e.key === 'Escape') {
+        panel = panelStack.close()
+        return
+      }
+      if (e.altKey && e.key === 'ArrowLeft') {
+        e.preventDefault()
+        panel = panelStack.back(panel)
+        return
+      }
+    }
     if ((e.ctrlKey || e.metaKey) && e.key === ',') {
       e.preventDefault()
       if (config) settingsOpen = true
@@ -148,7 +169,7 @@
 </script>
 
 {#snippet docView()}
-  <DocView path={selected} {text} error={docError} {index} {config} {fragment} onnavigate={select} />
+  <DocView path={selected} {text} error={docError} {index} {config} {fragment} onnavigate={select} onpanel={openInPanel} />
 {/snippet}
 
 <svelte:window onkeydown={onwindowkeydown} />
@@ -184,7 +205,9 @@
   </header>
 
   <div class="flex min-h-0 flex-1">
-    <aside class="chrome flex w-280 shrink-0 flex-col border-r border-line bg-side">
+    <aside
+      class="chrome w-280 shrink-0 flex-col border-r border-line bg-side {rightPanelOpen ? 'hidden min-[1200px]:flex' : 'flex'}"
+    >
       {#if phase === 'ready'}
         <Tree
           {files}
@@ -235,9 +258,26 @@
       {/if}
     </main>
 
-    {#if rightPanelOpen}
-      <aside class="chrome w-360 shrink-0 border-l border-line bg-card"></aside>
-    {/if}
+    <!-- the width animates 0 to 360; the inner box stays 360 wide, so nothing reflows (03 spec 6) -->
+    <aside
+      class="chrome shrink-0 overflow-hidden bg-card transition-[width] duration-(--dur) ease-(--ease-pane) {rightPanelOpen
+        ? 'w-360 border-l border-line'
+        : 'w-0 border-l border-transparent'}"
+      aria-label="Side panel"
+      inert={!rightPanelOpen}
+    >
+      <SidePanel
+        stack={panel}
+        {index}
+        {config}
+        onback={() => (panel = panelStack.back(panel))}
+        onpromote={promotePanel}
+        onclose={() => (panel = panelStack.close())}
+        onpush={openInPanel}
+        onpopto={(i) => (panel = panelStack.popTo(panel, i))}
+        onnavigate={select}
+      />
+    </aside>
   </div>
 </div>
 
