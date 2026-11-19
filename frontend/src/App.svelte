@@ -4,6 +4,7 @@
   import type { Config } from './lib/api'
   import { indexStore } from './lib/index-store.svelte'
   import { applyTheme, resolvedTheme } from './lib/theme/theme'
+  import Logo from './components/Logo.svelte'
   import Tree from './components/Tree.svelte'
   import DocView from './components/DocView.svelte'
   import SettingsDialog from './components/SettingsDialog.svelte'
@@ -310,7 +311,7 @@
     >
       <Icon name="panel-left" size={15} />
     </button>
-    <span class="text-[13.5px] font-semibold tracking-[-0.01em]">Folio</span>
+    <Logo />
     {#if docsPath}
       <span class="text-fg3">/</span>
       <!-- middle truncation: the last two segments keep their width, the front gets the ellipsis -->
