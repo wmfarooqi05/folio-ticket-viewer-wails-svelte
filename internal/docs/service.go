@@ -128,7 +128,15 @@ var errSuperseded = errors.New("scan superseded by a newer one")
 // With no stamps, every file is in Changed. It also (re)starts the watcher, before
 // the walk, so no change can fall between the two.
 func (s *DocsService) Scan() (ScanResult, error) {
-	return s.scan(false)
+	// A scan started by the watcher's error recovery can overlap this one. The newer
+	// generation wins, so a superseded frontend scan is simply run again: errSuperseded
+	// never reaches the frontend.
+	for attempt := 0; ; attempt++ {
+		res, err := s.scan(false)
+		if !errors.Is(err, errSuperseded) || attempt >= 3 {
+			return res, err
+		}
+	}
 }
 
 // scan is Scan. With announce set (the rescan after a watcher error) it also records

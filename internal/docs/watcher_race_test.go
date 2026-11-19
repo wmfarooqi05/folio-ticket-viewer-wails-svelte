@@ -93,7 +93,7 @@ func TestScanSupersededByRootChange(t *testing.T) {
 		}
 		return Roots{Docs: docs, Roots: []string{"patterns"}} // changed after the walk began
 	}
-	if _, err := r.s.Scan(); !errors.Is(err, errSuperseded) {
+	if _, err := r.s.scan(false); !errors.Is(err, errSuperseded) {
 		t.Fatalf("want errSuperseded, got %v", err)
 	}
 	r.s.mu.Lock()
@@ -101,5 +101,31 @@ func TestScanSupersededByRootChange(t *testing.T) {
 	r.s.mu.Unlock()
 	if before != after || before == 0 {
 		t.Fatalf("stamps changed: %d -> %d", before, after)
+	}
+}
+
+// An overflow recovery scanning while the frontend calls Scan (a checkout at warm
+// start, Ctrl+R mid-checkout) must never turn into an error for the frontend.
+func TestFrontendScanSurvivesOverlappingRecovery(t *testing.T) {
+	r := newWatchRig(t, "modules/a/01.md", "modules/a/02.md")
+	stop := make(chan struct{})
+	go func() { // keep the event channel drained
+		for {
+			select {
+			case <-r.got:
+			case <-stop:
+				return
+			}
+		}
+	}()
+	defer close(stop)
+	for i := 0; i < 40; i++ {
+		r.s.mu.Lock()
+		w := r.s.watch
+		r.s.mu.Unlock()
+		go r.s.rescanAfterError(w)
+		if _, err := r.s.Scan(); err != nil {
+			t.Fatalf("iteration %d: the frontend Scan got an error: %v", i, err)
+		}
 	}
 }

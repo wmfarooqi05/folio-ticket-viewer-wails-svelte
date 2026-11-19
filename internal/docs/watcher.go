@@ -322,8 +322,14 @@ func (s *DocsService) knownUnder(dir string) []string {
 func (s *DocsService) judge(paths map[string]struct{}) ChangeSet {
 	cs := ChangeSet{Changed: []string{}, Removed: []string{}}
 	docs := s.roots().Docs
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// All the file system work happens before the lock, so a big flush cannot block
+	// Scan, ReadBatch or shutdown.
+	type probe struct {
+		path string
+		gone bool
+		cur  stamp
+	}
+	probes := make([]probe, 0, len(paths))
 	for p := range paths {
 		full, err := ResolveMarkdown(docs, p)
 		if err != nil {
@@ -331,6 +337,19 @@ func (s *DocsService) judge(paths map[string]struct{}) ChangeSet {
 		}
 		st, err := os.Stat(full)
 		if errors.Is(err, fs.ErrNotExist) {
+			probes = append(probes, probe{path: p, gone: true})
+			continue
+		}
+		if err != nil || st.IsDir() {
+			continue
+		}
+		probes = append(probes, probe{path: p, cur: stamp{Mtime: st.ModTime().UnixMilli(), Size: st.Size()}})
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, pr := range probes {
+		p, cur := pr.path, pr.cur
+		if pr.gone {
 			_, delivered := s.stamps[p]
 			_, announced := s.announced[p]
 			if delivered || announced {
@@ -340,10 +359,6 @@ func (s *DocsService) judge(paths map[string]struct{}) ChangeSet {
 			}
 			continue
 		}
-		if err != nil || st.IsDir() {
-			continue
-		}
-		cur := stamp{Mtime: st.ModTime().UnixMilli(), Size: st.Size()}
 		if old, ok := s.stamps[p]; ok && old == cur {
 			continue
 		}
