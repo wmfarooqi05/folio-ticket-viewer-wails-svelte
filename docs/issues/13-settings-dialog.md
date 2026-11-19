@@ -16,7 +16,7 @@ afk: true
 
 ## Why
 
-05 D4: an in-app Settings dialog behind the gear button, designed in [05-settings-dialog.png](../assets/05-settings-dialog.png). The gear does nothing today. The first-run "Choose folder…" path exists, but nobody has tested it through the UI.
+05 D4: an in-app Settings dialog behind the gear button, designed in [05-settings-dialog.png](../assets/05-settings-dialog.png). All five states are in the exported mockup [13-settings-mockup.html](../assets/13-settings-mockup.html) (open in a browser; state switcher at the top). Its unpacked source, with the exact CSS values, is [13-settings-mockup.src.html](../assets/13-settings-mockup.src.html). The gear does nothing today. The first-run "Choose folder…" path exists, but nobody has tested it through the UI.
 
 ## To do
 
