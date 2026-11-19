@@ -1,0 +1,244 @@
+/* Folio design tokens: Indigo theme, light and dark.
+   Source: docs/assets/03-design-spec.md sections 1 and 6, amended by ticket 03.
+   Light is the default. Dark applies when the user picked it (data-theme="dark"),
+   or when the user picked nothing ("system") and the OS prefers dark. */
+
+:root {
+  --bg: #fafaf8;
+  --side: #f3f3f0;
+  --card: #ffffff;
+  --colbg: rgba(30, 30, 20, 0.03);
+  --hover: rgba(30, 30, 20, 0.05);
+  --line: rgba(30, 30, 20, 0.08);
+  --line2: rgba(30, 30, 20, 0.15);
+  --fg: #1c1c1a;
+  --fg2: #585850;
+  --fg3: #8b8b83;
+  --chip: rgba(30, 30, 20, 0.05);
+  --code: #f5f5f2;
+  --shadow: 0 1px 2px rgba(30, 30, 20, 0.05);
+  --shadow2: 0 10px 30px -12px rgba(30, 30, 20, 0.25);
+
+  --s-open: #8b8b85;
+  --s-prog: oklch(0.6 0.14 245);
+  --s-block: oklch(0.58 0.17 27);
+  --s-rev: oklch(0.73 0.14 75);
+  --s-done: oklch(0.62 0.12 152);
+  --s-mute: #b5b5ae;
+
+  --acc: oklch(0.54 0.15 268);
+  --acc-ink: #ffffff;
+  --sel-pct: 9%;
+  --sel: color-mix(in oklab, var(--acc) var(--sel-pct), transparent);
+
+  /* Motion tokens (spec 6.4) */
+  --dur: 0.26s;
+  --dur-hover: 0.16s;
+  --dur-press: 0.15s;
+  --dur-theme: 0.3s;
+  --ease-enter: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-pane: cubic-bezier(0.3, 0.7, 0.2, 1);
+  --stagger-card: 45ms;
+  --stagger-row: 35ms;
+  --stagger-level: 90ms;
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #151514;
+  --side: #1a1a19;
+  --card: #1f1f1d;
+  --colbg: rgba(255, 255, 240, 0.025);
+  --hover: rgba(255, 255, 240, 0.05);
+  --line: rgba(255, 255, 240, 0.075);
+  --line2: rgba(255, 255, 240, 0.15);
+  --fg: #ecece7;
+  --fg2: #a9a9a1;
+  --fg3: #77776f;
+  --chip: rgba(255, 255, 240, 0.06);
+  --code: #1a1a18;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow2: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+
+  --s-open: #8f8f88;
+  --s-prog: oklch(0.72 0.13 245);
+  --s-block: oklch(0.68 0.16 27);
+  --s-rev: oklch(0.8 0.13 80);
+  --s-done: oklch(0.73 0.12 152);
+  --s-mute: #5f5f59;
+
+  --acc: oklch(0.74 0.12 268);
+  --acc-ink: #151514;
+  --sel-pct: 16%;
+
+  color-scheme: dark;
+}
+
+/* Follow the OS unless the user picked a theme. This repeats the dark block. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
+    --bg: #151514;
+    --side: #1a1a19;
+    --card: #1f1f1d;
+    --colbg: rgba(255, 255, 240, 0.025);
+    --hover: rgba(255, 255, 240, 0.05);
+    --line: rgba(255, 255, 240, 0.075);
+    --line2: rgba(255, 255, 240, 0.15);
+    --fg: #ecece7;
+    --fg2: #a9a9a1;
+    --fg3: #77776f;
+    --chip: rgba(255, 255, 240, 0.06);
+    --code: #1a1a18;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow2: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+
+    --s-open: #8f8f88;
+    --s-prog: oklch(0.72 0.13 245);
+    --s-block: oklch(0.68 0.16 27);
+    --s-rev: oklch(0.8 0.13 80);
+    --s-done: oklch(0.73 0.12 152);
+    --s-mute: #5f5f59;
+
+    --acc: oklch(0.74 0.12 268);
+    --acc-ink: #151514;
+    --sel-pct: 16%;
+
+    color-scheme: dark;
+  }
+}
+
+/* Tailwind v4 utilities backed by the variables above (so they follow the theme). */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-side: var(--side);
+  --color-card: var(--card);
+  --color-colbg: var(--colbg);
+  --color-hover: var(--hover);
+  --color-line: var(--line);
+  --color-line2: var(--line2);
+  --color-fg: var(--fg);
+  --color-fg2: var(--fg2);
+  --color-fg3: var(--fg3);
+  --color-chip: var(--chip);
+  --color-code: var(--code);
+  --color-sel: var(--sel);
+  --color-acc: var(--acc);
+  --color-acc-ink: var(--acc-ink);
+  --color-s-open: var(--s-open);
+  --color-s-prog: var(--s-prog);
+  --color-s-block: var(--s-block);
+  --color-s-rev: var(--s-rev);
+  --color-s-done: var(--s-done);
+  --color-s-mute: var(--s-mute);
+  --shadow-hair: var(--shadow);
+  --shadow-lift: var(--shadow2);
+}
+
+@theme {
+  --font-sans: 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, Menlo, monospace;
+  --text-2xs: 10.5px;
+  --text-xs: 11.5px;
+  --text-sm: 12.5px;
+  --text-base: 13px;
+  --text-md: 14.5px;
+  --text-lg: 16px;
+  --text-xl: 23px;
+  --text-2xl: 28px;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  /* The mockup uses odd pixel sizes (26, 22, 9), so p-9 reads as 9px. */
+  --spacing: 1px;
+
+  --ease-enter: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-pane: cubic-bezier(0.3, 0.7, 0.2, 1);
+  --animate-rise: rise 0.35s var(--ease-enter) backwards;
+  --animate-rise-card: rise 0.4s var(--ease-enter) backwards;
+  --animate-rise-node: rise 0.45s var(--ease-enter) backwards;
+  --animate-rise-row: rise 0.35s ease backwards;
+  --animate-grow: grow 0.7s var(--ease-enter) backwards;
+  --animate-draw: draw 0.7s ease backwards;
+  --animate-march: march 1.1s linear infinite;
+  --animate-pulse-dot: pulse 2.2s ease-out infinite;
+  --animate-breathe: breathe 3.2s ease-in-out infinite;
+  --animate-toast: toast 0.2s ease backwards;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes pulse {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 60%, transparent);
+    }
+    70%,
+    100% {
+      box-shadow: 0 0 0 6px transparent;
+    }
+  }
+  @keyframes draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  @keyframes march {
+    to {
+      stroke-dashoffset: -18;
+    }
+  }
+  @keyframes grow {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+  @keyframes breathe {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-5px);
+    }
+  }
+  @keyframes toast {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 8px);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+  }
+}
+
+/* Reduced motion (added by 03; the mockup has none). The theme colour fade stays:
+   it is not movement. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur: 0s;
+    --dur-hover: 0s;
+    --dur-press: 0s;
+  }
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+  }
+}
