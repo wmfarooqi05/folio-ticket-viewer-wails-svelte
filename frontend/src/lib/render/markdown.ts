@@ -33,7 +33,6 @@ interface RenderEnv extends Env {
   rec: DocRecord
   index: Index
   urls: UrlHelpers
-  anchorOpen: number
   /** close tags for open links, innermost last */
   closers: string[]
 }
@@ -41,6 +40,8 @@ interface RenderEnv extends Env {
 // ---- preparing the source ----------------------------------------------------
 
 const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/
+/** The parser's legacy metadata line (parser LEGACY_LINE). */
+const LEGACY_LINE = /^\s*(?:\*\*)?(Status|Type|Blocked by)(?:\*\*)?\s*:\s*(?:\*\*)?\s*(.*?)\s*$/i
 
 /**
  * Splits the text into lines and blanks the ones that must not reach markdown-it:
@@ -53,6 +54,9 @@ export function prepare(text: string, rec: DocRecord, skipTitle: boolean): strin
   const start = Math.max(0, rec.bodyLine - 1)
   for (let i = 0; i < Math.min(start, lines.length); i++) lines[i] = ''
   let fence: { ch: string; len: number } | null = null
+  // legacy tickets: the Status, Type and Blocked by lines the parser read are shown by the
+  // header card, so they are blanked (first of each label, before the first "## " heading)
+  const legacyLeft = rec.legacy && rec.kind === 'ticket' ? new Set(['status', 'type', 'blocked by']) : null
   for (let i = start; i < lines.length; i++) {
     const f = FENCE.exec(lines[i])
     if (fence) {
@@ -64,6 +68,11 @@ export function prepare(text: string, rec: DocRecord, skipTitle: boolean): strin
       continue
     }
     if (ANCHOR_LINE.test(lines[i])) lines[i] = ''
+    if (legacyLeft) {
+      if (/^##\s/.test(lines[i])) legacyLeft.clear()
+      const m = LEGACY_LINE.exec(lines[i])
+      if (m && legacyLeft.delete(m[1].toLowerCase())) lines[i] = ''
+    }
   }
   if (skipTitle) {
     const h1 = rec.headings.find((h) => h.level === 1)
@@ -162,14 +171,8 @@ const md = new MarkdownIt({ html: true, linkify: true, typographer: false })
 // bare https:// URLs only: "README.md" must not become a link to the .md domain
 md.linkify.set({ fuzzyLink: false, fuzzyEmail: false, fuzzyIP: false })
 
-md.renderer.rules.html_inline = (tokens, idx, _o, e) => {
-  const env = e as RenderEnv
-  const t = tokens[idx]
-  const state = { inHeading: !!t.meta?.inHeading, anchorOpen: env.anchorOpen }
-  const out = renderInlineHtml(t.content, state)
-  env.anchorOpen = state.anchorOpen
-  return out
-}
+md.renderer.rules.html_inline = (tokens, idx) =>
+  renderInlineHtml(tokens[idx].content, { inHeading: !!tokens[idx].meta?.inHeading })
 md.renderer.rules.html_block = (tokens, idx) => renderHtmlBlock(tokens[idx].content)
 
 md.renderer.rules.link_open = (tokens, idx, _o, e) => {
@@ -385,7 +388,6 @@ export function renderMarkdown(text: string, o: RenderOptions): string {
     rec: o.rec,
     index: o.index,
     urls: o.urls ?? makeUrls(null),
-    anchorOpen: 0,
     closers: [],
   }
   return md.render(prepare(text, o.rec, o.skipTitle ?? false), env)

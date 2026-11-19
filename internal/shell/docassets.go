@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/docs"
@@ -52,7 +53,14 @@ func DocAssets(root func() string) func(http.Handler) http.Handler {
 				http.NotFound(w, r)
 				return
 			}
-			f, err := os.Open(full)
+			// the file must resolve, and resolve to somewhere inside the root (symlinks, junctions)
+			realFull, err := filepath.EvalSymlinks(full)
+			realRoot, rerr := filepath.EvalSymlinks(root())
+			if err != nil || rerr != nil || !within(realRoot, realFull) {
+				http.NotFound(w, r)
+				return
+			}
+			f, err := os.Open(realFull)
 			if err != nil {
 				http.NotFound(w, r)
 				return
@@ -72,4 +80,9 @@ func DocAssets(root func() string) func(http.Handler) http.Handler {
 			http.ServeContent(w, r, "", st.ModTime(), f)
 		})
 	}
+}
+
+func within(root, p string) bool {
+	rel, err := filepath.Rel(root, p)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }

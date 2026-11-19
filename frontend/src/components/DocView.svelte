@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte'
+  import { tick, untrack } from 'svelte'
   import * as api from '../lib/api'
   import type { Index } from '../lib/parser'
   import { attachDocHandlers, installNavGuard, scrollToAnchor } from '../lib/render/dom'
@@ -26,9 +26,19 @@
   const rec = $derived(path && index ? (index.files[path] ?? null) : null)
   const urls = $derived(makeUrls(config))
   const isTicket = $derived(rec?.kind === 'ticket' && rec.meta !== null)
-  const html = $derived(
-    text !== null && rec && index ? renderMarkdown(text, { path: rec.path, rec, index, urls, skipTitle: isTicket }) : null,
-  )
+  // The render is keyed on the record's mtime, the text and the link templates, not on `index`:
+  // a live refresh swaps the index on every disk change, and the open document must not be
+  // re-rendered (and lose its scroll) for an edit to some other file. Link states (a broken
+  // link that now resolves) refresh the next time the document is shown.
+  let cache: { key: string; text: string; html: string } | null = null
+  const html = $derived.by(() => {
+    if (text === null || !rec) return null
+    const key = [rec.path, rec.mtime, isTicket, config?.adoWorkItemUrl ?? '', config?.adoPrUrl ?? ''].join('|')
+    if (cache && cache.key === key && cache.text === text) return cache.html
+    const out = untrack(() => renderMarkdown(text, { path: rec.path, rec, index: index!, urls, skipTitle: isTicket }))
+    cache = { key, text, html: out }
+    return out
+  })
 
   let article = $state<HTMLElement>()
   let body = $state<HTMLElement>()
@@ -39,7 +49,15 @@
     setTimeout(() => (notice = null), 4000)
   }
 
-  const open = (p: string, frag: string | null) => onnavigate?.(p, frag)
+  const open = (p: string, frag: string | null) => {
+    // a link to this very document scrolls; it never reloads the file
+    if (p === path) {
+      if (frag && body && scrollToAnchor(body, frag)) return
+      if (!frag && article?.parentElement) article.parentElement.scrollTop = 0
+      return
+    }
+    onnavigate?.(p, frag)
+  }
 
   $effect(() => {
     installNavGuard()

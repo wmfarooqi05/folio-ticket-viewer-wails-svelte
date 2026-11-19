@@ -68,12 +68,12 @@ Built on branch `worktree-agent-a9105567b2c93a48e`.
   - The sanitiser (`sanitize.ts`) is an allowlist: `<a id>` re-serialised from the captured id, `</a>` only to close one we opened, a bare `<br>`, everything else escaped.
 - **Go**: `internal/shell/docassets.go`, a middleware for `/doc/<path>`: GET and HEAD only, image extensions only, `docs.SafeJoin` (no `..`, no absolute path, no escaping symlink), `nosniff` and a sandbox CSP header. Wired in `main.go` with one option.
 - **UI**: `DocView`, `HeaderCard`, `StatusDot`, `StatusPill`, `RefChip` (header card per 03 spec plus D6: `status_note`, `blocked_note`, `superseded_by`, LEGACY badge and "inferred", unknown-status pill with raw text, PR and ADO chips, Open in VS Code, "edited N days ago" from mtime). `Tree` has status dots, open-count badges, folding, the `/` filter, `_templates` hidden, and the pinned views rows fed by `pinnedCounts(index)`.
-- **Theme and assets**: Geist and Geist Mono latin, variable cut to weights 400 to 600 (22.5 KB + 23.9 KB = 46.5 KB, from the `geist` npm package, OFL kept beside them). 16 inline Lucide icons in `lib/icons`. CSP meta tag in `index.html`. Motion tokens and `prefers-reduced-motion` were already in `tokens.css`; the pulse runs only on the header pill.
+- **Theme and assets**: Geist and Geist Mono latin, variable cut to weights 400 to 600 (22.5 KB + 23.9 KB = 46.5 KB, from the `geist` npm package, OFL licence shipped as `dist/licenses/OFL-Geist.txt` from `frontend/public/licenses`). 16 inline Lucide icons in `lib/icons`. CSP meta tag in `index.html`. Motion tokens and `prefers-reduced-motion` were already in `tokens.css`; the pulse runs only on the header pill.
 
 ### Checks
-- `go test ./...`, `go vet ./...`, `npx vitest run` (265 tests), `npm run check` (0 errors) and `task build` are green.
+- `go test ./...`, `go vet ./...`, `npx vitest run` (273 tests, including happy-dom tests for the click and image-error handlers), `npm run check` (0 errors) and `task build` are green.
 - Renderer tests cover every AC1 trap against the real fixtures: both anchor-above forms, the duplicate Q35 headings, broken links, the missing image, autolinked plain-text refs, `order 51234` and `invoice 90817` not linked, the sanitiser allowlist, and every fixture rendering with no `id=`, `<script>` or `onerror=`.
-- **AC3: initial JS is 94.6 KB gzip** (247.7 KB min), under the 120 KB target. CSS is 8.6 KB gzip. Fonts 46.5 KB.
+- **AC3: initial JS is 94.8 KB gzip** (248.1 KB min), under the 120 KB target. CSS is 8.6 KB gzip. Fonts 46.5 KB.
 
 ### AC4: GPU-off screenshots
 Taken with Edge (the WebView2 engine) in headless mode with `--disable-gpu --disable-gpu-compositing`, against the dev harness (`frontend/harness`, run with `npx vite --config vite.harness.config.ts`), not inside the Wails window:
@@ -81,6 +81,16 @@ Taken with Edge (the WebView2 engine) in headless mode with `--disable-gpu --dis
 - [legacy light](../assets/10-legacy-light.png) and [legacy dark](../assets/10-legacy-dark.png): a legacy ticket with the LEGACY badge, a task list and a mermaid source block (cash-handling-workflow 04)
 
 No glitches seen (no missing glyphs, no clipped borders, no blank regions). Still for a human: look at the real Wails exe once with the GPU flags from `main.go`, and check the pulse on an in-progress ticket and the theme toggle fade. The long-scroll case was not driven through the app.
+
+### Review fixes (Opus review)
+- An `<a id>` is now emitted as a closed, empty `<a data-anchor="x"></a>` and every `</a>` emits nothing, so an unclosed anchor cannot wrap the rest of the document. The `anchorOpen` state is gone. The repro is a test.
+- `docs.SafeJoin` refuses any `EvalSymlinks` error other than not-exist, refuses `:` in a path (NTFS alternate data streams), and refuses junctions: Go's `EvalSymlinks` does not follow them, so each folder on the way is checked with `Lstat` for the irregular-file mode. `DocAssets` also requires `EvalSymlinks(full)` to succeed and stay inside `EvalSymlinks(root)`. Junction tests (`mklink /J`, no admin) run and pass on Windows in both packages; they fail rather than skip if the junction cannot be made.
+- DocView renders keyed on the record's path and mtime, the text and the ADO and PR templates, not on `index`, so a live refresh of another file does not re-render the open document.
+- A link to the document that is already open scrolls to the fragment instead of reloading the file.
+- Legacy tickets: the first Status, Type and Blocked by line before the first `##` heading is blanked, since the header card shows them. Screenshots re-taken.
+- The in-progress pulse is a `::after` ring animating transform and opacity (`.pulse-dot` in `tokens.css`); ticket 12's Board column header uses the same class now.
+- The comment regex no longer hides text between two comments on one line.
+- CSP: `data:` is gone from `img-src` and the websocket entries are gone from `connect-src`; a dev-only Vite plugin adds the loopback websocket when serving.
 
 ### Deviations
 - HTML comments render as nothing (D2 says "everything else is escaped"); the generated map block has `<!-- tickets:begin -->` markers that should not show.

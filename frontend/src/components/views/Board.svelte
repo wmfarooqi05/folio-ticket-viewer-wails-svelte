@@ -51,7 +51,7 @@
         <section class="min-h-260 rounded-xl bg-colbg p-8" aria-label={col.label}>
           <h3 class="m-0 mb-8 flex items-center gap-6 px-3 text-sm font-semibold">
             <span
-              class="size-7 rounded-full {col.id === 'in-progress' ? 'animate-pulse-dot' : ''}"
+              class="size-7 rounded-full {col.id === 'in-progress' ? 'pulse-dot' : ''}"
               style:background={COL_VAR[col.id]}
               style:color={COL_VAR[col.id]}
             ></span>

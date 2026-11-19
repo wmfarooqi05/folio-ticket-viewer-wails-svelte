@@ -18,7 +18,7 @@
 
 <span
   class="inline-block shrink-0 rounded-full box-border"
-  class:animate-pulse-dot={pulse && status === 'in-progress'}
+  class:pulse-dot={pulse && status === 'in-progress'}
   class:unknown={color === null}
   style:width="{size}px"
   style:height="{size}px"

@@ -272,6 +272,16 @@ describe('AC1: tables, task lists, items, code', () => {
     expect(html).not.toMatch(/\sid="/)
   })
 
+  it('a legacy ticket does not repeat Status, Type and Blocked by in the body', () => {
+    const html = render(CHW + 'issues/04-build-movecash.md')
+    expect(html).not.toMatch(/Status:|Type: build|Blocked by:/)
+    expect(html).toContain('Why')
+    // only the first of each label before the first "##" is blanked
+    const later = renderText('# T\n\nStatus: open\nType: build\n\n## Notes\n\nStatus: shown later\n', CHW + 'issues/98-legacy.md')
+    expect(later).toContain('Status: shown later')
+    expect(later).not.toContain('Type: build')
+  })
+
   it('the first H1 is dropped for the header card, others stay', () => {
     const path = RSA + '05-grill-uat-schedule.md'
     expect(render(path)).toContain('<h1')
@@ -306,22 +316,28 @@ describe('AC1: tables, task lists, items, code', () => {
 })
 
 describe('sanitiser allowlist', () => {
-  const st = () => ({ inHeading: false, anchorOpen: 0 })
+  const st = () => ({ inHeading: false })
 
-  it('re-serialises <a id> from the captured id and lowercases it', () => {
-    expect(renderInlineHtml('<a id="Q1">', st())).toBe('<a data-anchor="q1">')
-    expect(renderInlineHtml("<a id='x.y-z_1'>", st())).toBe('<a data-anchor="x.y-z_1">')
+  it('re-serialises <a id> from the captured id as a closed, empty anchor', () => {
+    expect(renderInlineHtml('<a id="Q1">', st())).toBe('<a data-anchor="q1"></a>')
+    expect(renderInlineHtml("<a id='x.y-z_1'>", st())).toBe('<a data-anchor="x.y-z_1"></a>')
   })
 
   it('an <a id> inside a heading emits nothing (the heading carries data-anchor)', () => {
-    const s = { inHeading: true, anchorOpen: 0 }
-    expect(renderInlineHtml('<a id="q1">', s)).toBe('')
-    expect(renderInlineHtml('</a>', s)).toBe('')
-    expect(s.anchorOpen).toBe(0)
+    expect(renderInlineHtml('<a id="q1">', { inHeading: true })).toBe('')
+    expect(renderInlineHtml('</a>', { inHeading: true })).toBe('')
   })
 
-  it('</a> closes only an anchor we opened; a stray one is shown as text', () => {
-    expect(renderInlineHtml('</a>', st())).toBe('&lt;/a&gt;')
+  it('every </a> emits nothing', () => {
+    expect(renderInlineHtml('</a>', st())).toBe('')
+    expect(renderInlineHtml('</A >', st())).toBe('')
+  })
+
+  it('an unclosed <a id> cannot wrap the rest of the document', () => {
+    const html = renderText('<a id="q9">unclosed\n\n# Heading\n\npara\n\n- item\n')
+    expect(html).toContain('<a data-anchor="q9"></a>unclosed')
+    expect(html.match(/<a\b/g)).toHaveLength(1)
+    expect(html.match(/<\/a>/g)).toHaveLength(1)
   })
 
   it('an <a> with anything else is escaped: href, onclick, extra attributes, odd ids', () => {
@@ -352,6 +368,14 @@ describe('sanitiser allowlist', () => {
     }
     expect(renderHtmlBlock('<div onclick="x">hi</div>')).toBe('<p class="raw-html">&lt;div onclick=&quot;x&quot;&gt;hi&lt;/div&gt;</p>\n')
     expect(renderHtmlBlock('<script>alert(1)</script>')).not.toContain('<script')
+  })
+
+  it('text between two comments on one line survives', () => {
+    const html = renderText('a <!-- one --> visible <!-- two --> b')
+    expect(html).toContain('visible')
+    expect(html).not.toContain('one')
+    expect(html).not.toContain('two')
+    expect(renderInlineHtml('<!-- a --> x <!-- b -->', { inHeading: false })).not.toBe('')
   })
 
   it('HTML comments vanish', () => {
