@@ -56,7 +56,7 @@ Reached when:
 | 08 | [Parser passes the fixture oracle](issues/08-parser.md) | build | — | — | done — merged Nov 20, 2026 | — |
 | 09 | [Cache, warm start and live refresh](issues/09-cache-and-live-refresh.md) | build | [08](issues/08-parser.md) | — | blocked — merged, waiting on owner (VM timings, live-refresh check) | — |
 | 10 | [Document view: rendering, header card, tree and theme](issues/10-document-view.md) | build | [08](issues/08-parser.md) | — | blocked — merged, waiting on owner exe check | — |
-| 11 | [Right side panel: link targets, fragments and back stack](issues/11-side-panel.md) | build | [10](issues/10-document-view.md) | — | blocked | — |
+| 11 | [Right side panel: link targets, fragments and back stack](issues/11-side-panel.md) | build | [10](issues/10-document-view.md) | — | blocked — merged, waiting on owner UI check | — |
 | 12 | [Views: Waiting on, Board and Open questions](issues/12-cross-space-views.md) | build | [08](issues/08-parser.md) | — | blocked — merged, waiting on owner UI check | — |
 | 13 | [Settings dialog and first-run flow](issues/13-settings-dialog.md) | build | — | — | blocked — merged, waiting on owner UI check | — |
 | 14 | [Dependency graph, Mermaid and syntax highlighting](issues/14-graph-mermaid-highlight.md) | build | [10](issues/10-document-view.md), [12](issues/12-cross-space-views.md) | — | blocked | — |

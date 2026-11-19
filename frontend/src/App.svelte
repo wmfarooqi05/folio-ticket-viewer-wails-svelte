@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte'
+  import { onMount, tick, untrack } from 'svelte'
   import * as api from './lib/api'
   import type { Config } from './lib/api'
   import { indexStore } from './lib/index-store.svelte'
@@ -7,11 +7,13 @@
   import Tree from './components/Tree.svelte'
   import DocView from './components/DocView.svelte'
   import SettingsDialog from './components/SettingsDialog.svelte'
+  import SidePanel from './components/SidePanel.svelte'
   import WaitingOn from './components/views/WaitingOn.svelte'
   import OpenQuestions from './components/views/OpenQuestions.svelte'
   import MapModes from './components/views/MapModes.svelte'
   import { pinnedItems } from './lib/pinned'
   import { pinnedCounts, type ViewId } from './lib/views'
+  import * as panelStack from './lib/panel'
 
   let { initial }: { initial: Config | null } = $props()
 
@@ -34,8 +36,50 @@
   let toast = $state<string | null>(null)
   let toastTimer: ReturnType<typeof setTimeout> | undefined
 
-  // Panels: the right panel arrives with its own slice (03 spec section 3).
-  const rightPanelOpen = false
+  // The right panel (ticket 11): a back stack of {path, fragment}; empty means closed.
+  let panel = $state.raw<panelStack.PanelStack>([])
+  const rightPanelOpen = $derived(panel.length > 0)
+  // what the panel draws: the last non-empty stack, kept until the close transition ends
+  let shownStack = $state.raw<panelStack.PanelStack>([])
+  let lastClosed = $state.raw<panelStack.PanelStack>([]) // for `]`
+  let treeOpen = $state(true) // `[`
+  let panelAside = $state<HTMLElement>()
+  let mainEl = $state<HTMLElement>()
+  let returnFocus: HTMLElement | null = null
+
+  $effect(() => {
+    if (panel.length) shownStack = panel
+    else if (panelAside && parseFloat(getComputedStyle(panelAside).transitionDuration) === 0) shownStack = [] // no motion
+  })
+
+  function openInPanel(path: string, frag: string | null) {
+    if (panel.length === 0) {
+      const a = document.activeElement
+      returnFocus = a instanceof HTMLElement && a !== document.body ? a : null
+    }
+    panel = panelStack.push(panel, { path, fragment: frag })
+  }
+  /** Closes the panel and puts focus back where the first push came from, or on the middle pane. */
+  function leavePanel() {
+    const target = returnFocus?.isConnected ? returnFocus : mainEl
+    returnFocus = null
+    void tick().then(() => target?.focus({ preventScroll: true }))
+  }
+  function closePanel() {
+    if (panel.length === 0) return
+    ;({ stack: panel, lastClosed } = panelStack.toggle(panel, lastClosed))
+    leavePanel()
+  }
+  function promotePanel() {
+    const { entry, stack } = panelStack.promote(panel)
+    panel = stack
+    if (entry) void select(entry.path, entry.fragment)
+    leavePanel()
+  }
+  function togglePanel() {
+    if (panel.length > 0) closePanel()
+    else ({ stack: panel, lastClosed } = panelStack.toggle(panel, lastClosed))
+  }
 
   const files = $derived(index ? Object.values(index.files) : [])
   const crumb = $derived(
@@ -132,6 +176,7 @@
       view = null
       fragment = null
       text = null
+      panel = panelStack.close()
       try {
         await indexStore.rescan()
       } catch (err) {
@@ -141,6 +186,29 @@
   }
 
   function onwindowkeydown(e: KeyboardEvent) {
+    const t = e.target as HTMLElement | null
+    const typing = !!t?.closest('input, textarea, select, [contenteditable="true"]')
+    if (!settingsOpen && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (e.key === '[') {
+        treeOpen = !treeOpen
+        return
+      }
+      if (e.key === ']') {
+        togglePanel()
+        return
+      }
+    }
+    if (rightPanelOpen && !settingsOpen) {
+      if (e.key === 'Escape' && !typing) {
+        closePanel()
+        return
+      }
+      if (e.altKey && e.key === 'ArrowLeft') {
+        e.preventDefault()
+        panel = panelStack.back(panel)
+        return
+      }
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') {
       e.preventDefault() // never reload the webview; rescan instead
       if (phase === 'ready') indexStore.rescan().catch(fail)
@@ -180,7 +248,7 @@
 </script>
 
 {#snippet docView()}
-  <DocView path={selected} {text} error={docError} {index} {config} {fragment} onnavigate={select} />
+  <DocView path={selected} {text} error={docError} {index} {config} {fragment} onnavigate={select} onpanel={openInPanel} />
 {/snippet}
 
 <svelte:window onkeydown={onwindowkeydown} />
@@ -216,7 +284,9 @@
   </header>
 
   <div class="flex min-h-0 flex-1">
-    <aside class="chrome flex w-280 shrink-0 flex-col border-r border-line bg-side">
+    <aside
+      class="chrome w-280 shrink-0 flex-col border-r border-line bg-side {!treeOpen ? 'hidden' : rightPanelOpen ? 'hidden min-[1200px]:flex' : 'flex'}"
+    >
       {#if phase === 'ready'}
         <Tree
           {files}
@@ -232,7 +302,7 @@
       {/if}
     </aside>
 
-    <main class="min-w-0 flex-1 overflow-auto bg-bg">
+    <main bind:this={mainEl} tabindex="-1" class="min-w-0 flex-1 overflow-auto bg-bg outline-none">
       {#if phase === 'first-run'}
         <section class="mx-auto flex max-w-[520px] animate-rise flex-col items-start gap-14 px-40 pt-120">
           <h1 class="text-2xl font-semibold tracking-[-0.025em]">Choose your docs folder</h1>
@@ -267,9 +337,30 @@
       {/if}
     </main>
 
-    {#if rightPanelOpen}
-      <aside class="chrome w-360 shrink-0 border-l border-line bg-card"></aside>
-    {/if}
+    <!-- the width animates 0 to 360; the inner box stays 360 wide, so nothing reflows (03 spec 6) -->
+    <aside
+      bind:this={panelAside}
+      class="chrome shrink-0 overflow-hidden bg-card transition-[width] duration-(--dur) ease-(--ease-pane) {rightPanelOpen
+        ? 'w-360 border-l border-line'
+        : 'w-0 border-l-0'}"
+      aria-label="Side panel"
+      inert={!rightPanelOpen}
+      ontransitionend={(e) => {
+        if (e.target === panelAside && !rightPanelOpen) shownStack = []
+      }}
+    >
+      <SidePanel
+        stack={panel.length ? panel : shownStack}
+        {index}
+        {config}
+        onback={() => (panel = panelStack.back(panel))}
+        onpromote={promotePanel}
+        onclose={closePanel}
+        onpush={openInPanel}
+        onpopto={(i) => (panel = panelStack.popTo(panel, i))}
+        onnavigate={select}
+      />
+    </aside>
   </div>
 </div>
 

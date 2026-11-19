@@ -85,10 +85,12 @@ describe('AC1: duplicate Q35 headings', () => {
 })
 
 describe('AC1: links', () => {
-  it('remove-service-account 07: ../notes/gone.md is the broken state (no href, no data-path); cross-space links resolve', () => {
+  it('remove-service-account 07: ../notes/gone.md is the broken state (clickable: data-broken, no real href); cross-space links resolve', () => {
     const path = Object.keys(index.files).find((p) => p.startsWith(RSA + '07-'))!
     const html = render(path)
-    expect(html).toMatch(/<a class="lk lk-broken" aria-disabled="true" title="Not found: modules\/remove-service-account\/notes\/gone\.md">/)
+    expect(html).toMatch(
+      /<a class="lk lk-broken" href="#" data-broken="no-file" data-path="modules\/remove-service-account\/notes\/gone\.md" title="Not found: modules\/remove-service-account\/notes\/gone\.md">/,
+    )
     expect(html).not.toMatch(/href="[^"]*gone\.md/)
     // an internal link that works is a marker, not a real href
     expect(html).toMatch(/<a class="lk" href="#" data-path="modules\/one-cash-mover\/issues\/05-[^"]+\.md" data-frag="q3"/)
