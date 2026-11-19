@@ -1,0 +1,2603 @@
+{
+  "format": "Parser oracle. tickets: one full TicketMeta per ticket file (legacyRule is null for migrated files). items, links, refs, textRefs are keyed by docs-relative path; line numbers are 1-based file lines and endLine is the last non-blank line of an item; resolved objects follow the Resolved shape in docs/assets/04-parser-contract-draft.md.",
+  "decisions": {
+    "D2": "Rule 1 narrowed: superseded only when text starts with \"superseded\" or contains \"superseded by NN\"",
+    "D3": "\"merged\" without \"not\" wins over rule 4; \"Not merged ... built on ...\" is in-review",
+    "D4": "waiting_on inferred for blocked legacy tickets from person words; Type token wins; never for done/dropped/superseded",
+    "D5": "fallback stretches typography and word order only; unblocked, parked, pending stay unknown",
+    "D6": "Open questions hides closed tickets by default (see viewDefaults)",
+    "D7": "the other 16 ambiguities follow the draft"
+  },
+  "viewDefaults": {
+    "hideClosedQuestions": true,
+    "note": "D6: Q items in done, dropped or superseded tickets are hidden from Open questions, with a toggle. The parser indexes all of them."
+  },
+  "ambiguities": [
+    {
+      "id": "A1",
+      "where": "rule 1",
+      "case": "modules/cash-handling-workflow/issues/19 and 20: 'Resolved (superseded by the D3 amendment)', 'Dropped — superseded by 30'",
+      "chosen": "Rule 1 matches only when the text starts with \"superseded\" or contains \"superseded by NN\". 19 is done (rule 6); 12 and 20 stay superseded (rule 1).",
+      "why": "Rules run in order and rule 1 matches 'superseded' anywhere, so rule 1 beats rules 2 and 6. A resolved ticket that merely mentions a superseded clause is wrongly marked superseded. Suggest anchoring rule 1 to the start or to 'superseded by'.",
+      "decision": "D2",
+      "was": "superseded",
+      "resolved": true
+    },
+    {
+      "id": "A2",
+      "where": "rule 1",
+      "case": "legacy superseded tickets have no superseded_by",
+      "chosen": "Legacy superseded tickets get superseded_by from \"superseded by NN\": 12 is \"45\", 20 is \"30\".",
+      "why": "The fallback gives only a status. 'superseded by 45' could be parsed into a ref but the table does not say so. The STATUS_SHAPE warning (superseded with no superseded_by) would fire on every legacy file, so the check must skip legacy.",
+      "decision": "D7",
+      "was": "expected has no superseded_by field for legacy files",
+      "resolved": true
+    },
+    {
+      "id": "A3",
+      "where": "rule 2",
+      "case": "cash-handling-workflow/issues/11: 'Won’t do' with a curly apostrophe",
+      "chosen": "Curly quotes are normalised before matching. 11 is dropped (rule 2).",
+      "why": "The pattern uses an ASCII apostrophe. Real files typed in editors with smart quotes would miss rule 2 and fall to unknown. Suggest normalising U+2019 to ' before matching.",
+      "decision": "D5",
+      "was": "unknown",
+      "resolved": true
+    },
+    {
+      "id": "A4",
+      "where": "rule 3 vs 4",
+      "case": "issues/21: 'Blocked — built on branch claude/ocm-hook, awaiting DBA'",
+      "chosen": "21 stays blocked (rule 3 before rule 4).",
+      "why": "Rule 3 comes before rule 4. Reads right here. No conflict found in the other direction.",
+      "decision": "D7",
+      "was": "blocked",
+      "resolved": true
+    },
+    {
+      "id": "A5",
+      "where": "rule 3",
+      "case": "issues/13 'blocked on DBA' and cloud-migration/08 'blocked on infra'",
+      "chosen": "waiting_on is inferred from person words (owner, client, dba, infra, ops) in the status text of a blocked legacy ticket. 21 is dba, cloud-migration 08 is infra. 13 stays ops because the Type token wins. Never set when status is done, dropped or superseded.",
+      "why": "The fallback table does not extract waiting_on. The viewer's Waiting-on view will miss legacy tickets. Only the '+ ops' Type token sets waiting_on (see A9).",
+      "decision": "D4",
+      "was": "status blocked, waiting_on not derived from the status text",
+      "resolved": true
+    },
+    {
+      "id": "A6",
+      "where": "rule 4",
+      "case": "issues/39: 'Built on claude/ocm-ledger, merged to dev'",
+      "chosen": "\"merged\" without a preceding \"not\" means done, even with a branch name. 39 is done (rule 6).",
+      "why": "Rule 4 fires on 'on claude/' even though the text says merged. Rule 4 has no negative check for 'merged'. Real data likely has this: the branch name stays in the text after the merge.",
+      "decision": "D3",
+      "was": "in-review",
+      "resolved": true
+    },
+    {
+      "id": "A7",
+      "where": "rule 4",
+      "case": "issues/38: 'Not merged — built on claude/ocm-x'",
+      "chosen": "\"Not merged — built on ...\" means in-review (rule 4). 38 is in-review.",
+      "why": "Rule 4 needs the text to start with 'built', so the reversed order falls through every rule. Arguably should be in-review.",
+      "decision": "D3",
+      "was": "unknown",
+      "resolved": true
+    },
+    {
+      "id": "A8",
+      "where": "rule 6",
+      "case": "issues/31: 'Done (not merged to dev yet)'",
+      "chosen": "31 stays done (first word wins).",
+      "why": "'not merged' only counts for text starting with 'built'. Contradictory text is taken at its first word.",
+      "decision": "D7",
+      "was": "done",
+      "resolved": true
+    },
+    {
+      "id": "A9",
+      "where": "Type: task + ops",
+      "case": "issues/13 'task + ops'",
+      "chosen": "Non-enum Type tokens are dropped; a person token in Type sets waiting_on and wins over the status text. It is set only while the ticket is not done, dropped or superseded.",
+      "why": "The generic rule 'a + b becomes [a, b]' would give [task, ops], and ops is not in the type enum. Handoff section 2 says it becomes task + waiting_on ops. Chosen: tokens not in the type enum are dropped, and a token in the waiting_on enum sets waiting_on. This is applied for any status, while the handoff says 'while the ops step is open'; a done ticket would still show waiting_on ops.",
+      "decision": "D4",
+      "was": "type [task], waiting_on ops",
+      "resolved": true
+    },
+    {
+      "id": "A10",
+      "where": "Type:",
+      "case": "missing Type line, or Type with unknown token",
+      "chosen": "Missing Type or unknown token gives type [] plus a warning naming the token. Case-insensitive.",
+      "why": "No rule for a missing Type. Case is ignored: 'Build' becomes build (issues/25).",
+      "decision": "D7",
+      "was": "type [] (empty)",
+      "resolved": true
+    },
+    {
+      "id": "A11",
+      "where": "Status:",
+      "case": "issues/34 (no Status line) and 35 ('✅' only, empty after stripping)",
+      "chosen": "34 and 35 are unknown (rule 8) with status_note null.",
+      "why": "Rule 8 says 'anything else', so an absent or empty status is unknown. No status_note is set.",
+      "decision": "D7",
+      "was": "unknown",
+      "resolved": true
+    },
+    {
+      "id": "A12",
+      "where": "rule 7",
+      "case": "issues/36 'Unblocked — ready to build'; 37 'Open (dropped from sprint 4)'",
+      "chosen": "36 stays unknown (no new vocabulary, raw text kept). 37 is open (rule 7).",
+      "why": "'^blocked' does not match 'unblocked', so 36 falls to unknown even though it means ready. Rule 2 needs the word at the start, so 37 is open. Both follow the rules literally.",
+      "decision": "D5",
+      "was": "36 unknown, 37 open",
+      "resolved": true
+    },
+    {
+      "id": "A13",
+      "where": "strip step",
+      "case": "issues/08 '**Status:** in progress' and 09 'Status: `open`'",
+      "chosen": "The line regex accepts a bold label (colon either side) and strips backticks.",
+      "why": "The handoff strips * and ` from the text after Status:, but the colon sits inside the bold in '**Status:**'. The line regex must allow ** around 'Status:' and the colon either side.",
+      "decision": "D7",
+      "was": "parser must accept the bold label and strip backticks",
+      "resolved": true
+    },
+    {
+      "id": "A14",
+      "where": "Blocked by:",
+      "case": "ranges '03–07' (en dash) and '03-07' (hyphen)",
+      "chosen": "Both en dash and hyphen ranges are expanded inclusively, start <= end, no existence check.",
+      "why": "Handoff names only the en dash. A hyphen could also appear in a slug. Expansion does not check that the numbers exist in the space (09 gets 03,04,05,06,07; 03-07 spans folders).",
+      "decision": "D7",
+      "was": "both are ranges, expanded inclusively to every number from start to end",
+      "resolved": true
+    },
+    {
+      "id": "A15",
+      "where": "Blocked by:",
+      "case": "mixed '01, 03–05' (ticket 100); free text with a leading number '05 (only the ADO part)' (issue 26); 'none' and '—'",
+      "chosen": "A comma list of numbers and ranges gives refs (100: 01, 03, 04, 05). A number followed by words (26) is free text: blocked_by [] and blocked_note holds the raw text. none, dash, n/a and empty give [] and no note.",
+      "why": "'Refs are pulled out only when it is bare numbers'. A comma list mixing numbers and ranges is still bare numbers. A number followed by words is not, so the ref is lost. The parser might also salvage the leading number; not done here.",
+      "decision": "D7",
+      "was": "mixed list: refs 01,03,04,05. Number plus text: free text, blocked_by [], blocked_note holds the raw line. none, —, empty, n/a: [] and no note",
+      "resolved": true
+    },
+    {
+      "id": "A16",
+      "where": "Blocked by:",
+      "case": "free text like 'waiting for the DBA...' or 'client answers'",
+      "chosen": "Free text gives blocked_by [] and blocked_note = raw text.",
+      "why": "Per section 3. The blocked_note is stored for any non-empty, non-ref text, including 'none' variants when written as prose.",
+      "decision": "D7",
+      "was": "blocked_by [], blocked_note = raw text",
+      "resolved": true
+    },
+    {
+      "id": "A17",
+      "where": "num",
+      "case": "ticket numbers of 3 digits and 5+ digits",
+      "chosen": "num is kept as written; key and refs use pad2(parseInt(num)).",
+      "why": "Section 1: 5, 05 and 005 are the same ticket, and two digits minimum.",
+      "decision": "D7",
+      "was": "num keeps the file's digits as written ('100'); refs pad to at least 2 digits",
+      "resolved": true
+    },
+    {
+      "id": "A18",
+      "where": "legacy flag",
+      "case": "one-cash-mover is mixed: 01 and 06 legacy, 05 migrated",
+      "chosen": "legacy is decided per file, never per space.",
+      "why": "A space can hold both. The viewer must not decide per space.",
+      "decision": "D7",
+      "was": "legacy is decided per file, by the absence of frontmatter",
+      "resolved": true
+    },
+    {
+      "id": "A19",
+      "where": "Label:",
+      "case": "Label line (wayfinder:bug)",
+      "chosen": "Label: is not mapped into meta; it stays body text.",
+      "why": "Section 3 gives no mapping for Label. It is kept as plain body text.",
+      "decision": "D7",
+      "was": "not in the oracle",
+      "resolved": true
+    },
+    {
+      "id": "A20",
+      "where": "H1",
+      "case": "issues/02 and 26 have no number in the H1",
+      "chosen": "num always comes from the filename; title is the H1 minus an optional leading \"NN — \".",
+      "why": "Section 1.",
+      "decision": "D7",
+      "was": "num always comes from the filename, never the H1",
+      "resolved": true
+    },
+    {
+      "id": "A21",
+      "where": "status_note",
+      "case": "every legacy file with a Status line",
+      "chosen": "status_note is stripped (* ` ✅ removed, quotes normalised, trimmed); null when empty. Every record carries it.",
+      "why": "Section 3 says the original text becomes status_note but does not say whether it is the stripped or raw text.",
+      "decision": "D7",
+      "was": "status_note is the text after Status: with * ` ✅ stripped and trimmed (null when empty)",
+      "resolved": true
+    },
+    {
+      "id": "T1",
+      "where": "deliberate FM_REF trap",
+      "case": "remove-service-account issues/10 blocked_by \"cloud-migration 07#q3\"",
+      "chosen": "the only intentionally dangling ref: cloud-migration issues/07 has no q3 anchor (only an unanchored Q1 heading). The ref \"one-cash-mover#q3\" in issues/07 resolves, because one-cash-mover/map.md now has anchor q3.",
+      "why": "Gives the checker and viewer one unresolved item-ref to handle.",
+      "decision": null,
+      "resolved": false,
+      "trap": true
+    }
+  ],
+  "tickets": [
+    {
+      "path": "modules/cash-handling-workflow/issues/01-ledger-schema.md",
+      "space": "cash-handling-workflow",
+      "num": "01",
+      "key": "cash-handling-workflow 01",
+      "title": "Ledger schema",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "build"
+      ],
+      "status": "done",
+      "status_note": "resolved",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/02-entrypoint.md",
+      "space": "cash-handling-workflow",
+      "num": "02",
+      "key": "cash-handling-workflow 02",
+      "title": "Cash handling entrypoint",
+      "legacy": true,
+      "legacyRule": 7,
+      "type": [
+        "grilling"
+      ],
+      "status": "open",
+      "status_note": "open",
+      "waiting_on": null,
+      "blocked_by": [
+        "01"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/03-decide-batching.md",
+      "space": "cash-handling-workflow",
+      "num": "03",
+      "key": "cash-handling-workflow 03",
+      "title": "Decide how batches form",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "decision"
+      ],
+      "status": "done",
+      "status_note": "decided Nov 17, 2026",
+      "waiting_on": null,
+      "blocked_by": [
+        "01",
+        "02"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/04-build-movecash.md",
+      "space": "cash-handling-workflow",
+      "num": "04",
+      "key": "cash-handling-workflow 04",
+      "title": "Build the move-cash step",
+      "legacy": true,
+      "legacyRule": 4,
+      "type": [
+        "build"
+      ],
+      "status": "in-review",
+      "status_note": "built Nov 16, 2026 on claude/ocm-movecash",
+      "waiting_on": null,
+      "blocked_by": [
+        "03"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/05-decide-and-build-parking.md",
+      "space": "cash-handling-workflow",
+      "num": "05",
+      "key": "cash-handling-workflow 05",
+      "title": "Decide and build parking",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "decision",
+        "build"
+      ],
+      "status": "done",
+      "status_note": "resolved",
+      "waiting_on": null,
+      "blocked_by": [
+        "03",
+        "04"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/06-wire-service-bus.md",
+      "space": "cash-handling-workflow",
+      "num": "06",
+      "key": "cash-handling-workflow 06",
+      "title": "Wire the service bus",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "task"
+      ],
+      "status": "done",
+      "status_note": "done — merged to dev in PR 208",
+      "waiting_on": null,
+      "blocked_by": [
+        "04",
+        "05"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": true
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/07-spike-ledger-lock.md",
+      "space": "cash-handling-workflow",
+      "num": "07",
+      "key": "cash-handling-workflow 07",
+      "title": "Spike: ledger lock contention",
+      "legacy": true,
+      "legacyRule": 7,
+      "type": [
+        "spike"
+      ],
+      "status": "open",
+      "status_note": "open — charted Oct 6, 2026; no owner yet",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": "waiting for the DBA to confirm the ledger schema",
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/08-fix-rounding.md",
+      "space": "cash-handling-workflow",
+      "num": "08",
+      "key": "cash-handling-workflow 08",
+      "title": "Fix cent rounding",
+      "legacy": true,
+      "legacyRule": 5,
+      "type": [
+        "bug"
+      ],
+      "status": "in-progress",
+      "status_note": "in progress",
+      "waiting_on": null,
+      "blocked_by": [
+        "06"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/09-repair-batch-total.md",
+      "space": "cash-handling-workflow",
+      "num": "09",
+      "key": "cash-handling-workflow 09",
+      "title": "Repair the batch total",
+      "legacy": true,
+      "legacyRule": 7,
+      "type": [
+        "bug"
+      ],
+      "status": "open",
+      "status_note": "open",
+      "waiting_on": null,
+      "blocked_by": [
+        "03",
+        "04",
+        "05",
+        "06",
+        "07"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/10-old-export.md",
+      "space": "cash-handling-workflow",
+      "num": "10",
+      "key": "cash-handling-workflow 10",
+      "title": "Old CSV export",
+      "legacy": true,
+      "legacyRule": 2,
+      "type": [
+        "task"
+      ],
+      "status": "dropped",
+      "status_note": "won't do",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/100-final-cutover.md",
+      "space": "cash-handling-workflow",
+      "num": "100",
+      "key": "cash-handling-workflow 100",
+      "title": "Final cutover",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "decision",
+        "build"
+      ],
+      "status": "done",
+      "status_note": "decided Nov 18, 2026",
+      "waiting_on": null,
+      "blocked_by": [
+        "01",
+        "03",
+        "04",
+        "05"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/11-old-sftp.md",
+      "space": "cash-handling-workflow",
+      "num": "11",
+      "key": "cash-handling-workflow 11",
+      "title": "Old SFTP drop",
+      "legacy": true,
+      "legacyRule": 2,
+      "type": [
+        "task"
+      ],
+      "status": "dropped",
+      "status_note": "Won't do — client dropped scope",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/12-first-parking.md",
+      "space": "cash-handling-workflow",
+      "num": "12",
+      "key": "cash-handling-workflow 12",
+      "title": "First parking design",
+      "legacy": true,
+      "legacyRule": 1,
+      "type": [
+        "build"
+      ],
+      "status": "superseded",
+      "status_note": "superseded by 45",
+      "waiting_on": null,
+      "blocked_by": [
+        "03"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": "45",
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/13-dba-ddl.md",
+      "space": "cash-handling-workflow",
+      "num": "13",
+      "key": "cash-handling-workflow 13",
+      "title": "Apply the ledger DDL",
+      "legacy": true,
+      "legacyRule": 3,
+      "type": [
+        "task"
+      ],
+      "status": "blocked",
+      "status_note": "blocked on DBA",
+      "waiting_on": "ops",
+      "blocked_by": [],
+      "blocked_note": "DBA must apply DDL on each environment",
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/14-build-reconcile.md",
+      "space": "cash-handling-workflow",
+      "num": "14",
+      "key": "cash-handling-workflow 14",
+      "title": "Build the reconcile job",
+      "legacy": true,
+      "legacyRule": 4,
+      "type": [
+        "build"
+      ],
+      "status": "in-review",
+      "status_note": "built — not merged",
+      "waiting_on": null,
+      "blocked_by": [
+        "04"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/15-park-queue.md",
+      "space": "cash-handling-workflow",
+      "num": "15",
+      "key": "cash-handling-workflow 15",
+      "title": "Park the queue until next year",
+      "legacy": true,
+      "legacyRule": 8,
+      "type": [
+        "verify"
+      ],
+      "status": "unknown",
+      "status_note": "parked until Q1 2027",
+      "waiting_on": null,
+      "blocked_by": [
+        "02"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/16-build-audit.md",
+      "space": "cash-handling-workflow",
+      "num": "16",
+      "key": "cash-handling-workflow 16",
+      "title": "Build the audit log",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "build"
+      ],
+      "status": "done",
+      "status_note": "Built, merged to dev (PR 211)",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/17-build-schema-v2.md",
+      "space": "cash-handling-workflow",
+      "num": "17",
+      "key": "cash-handling-workflow 17",
+      "title": "Build schema v2",
+      "legacy": true,
+      "legacyRule": 4,
+      "type": [
+        "build"
+      ],
+      "status": "in-review",
+      "status_note": "Built on the provisional schema",
+      "waiting_on": null,
+      "blocked_by": [
+        "16"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/18-verify-uat.md",
+      "space": "cash-handling-workflow",
+      "num": "18",
+      "key": "cash-handling-workflow 18",
+      "title": "Verify on UAT",
+      "legacy": true,
+      "legacyRule": 4,
+      "type": [
+        "verify"
+      ],
+      "status": "in-review",
+      "status_note": "built — not yet run on UAT",
+      "waiting_on": null,
+      "blocked_by": [
+        "16"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/19-decide-amend.md",
+      "space": "cash-handling-workflow",
+      "num": "19",
+      "key": "cash-handling-workflow 19",
+      "title": "Amend the batching decision",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "decision"
+      ],
+      "status": "done",
+      "status_note": "Resolved (superseded by the D3 amendment)",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/20-drop-retry.md",
+      "space": "cash-handling-workflow",
+      "num": "20",
+      "key": "cash-handling-workflow 20",
+      "title": "Retry loop (dropped)",
+      "legacy": true,
+      "legacyRule": 1,
+      "type": [
+        "task"
+      ],
+      "status": "superseded",
+      "status_note": "Dropped — superseded by 30",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": "30",
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/21-build-ocm-hook.md",
+      "space": "cash-handling-workflow",
+      "num": "21",
+      "key": "cash-handling-workflow 21",
+      "title": "Build the OCM hook",
+      "legacy": true,
+      "legacyRule": 3,
+      "type": [
+        "build"
+      ],
+      "status": "blocked",
+      "status_note": "Blocked — built on branch claude/ocm-hook, awaiting DBA",
+      "waiting_on": "dba",
+      "blocked_by": [
+        "14"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/22-decide-ttl.md",
+      "space": "cash-handling-workflow",
+      "num": "22",
+      "key": "cash-handling-workflow 22",
+      "title": "Decide the hold time",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "decision"
+      ],
+      "status": "done",
+      "status_note": "settled",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/23-fix-null-ref.md",
+      "space": "cash-handling-workflow",
+      "num": "23",
+      "key": "cash-handling-workflow 23",
+      "title": "Fix null reference",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "bug"
+      ],
+      "status": "done",
+      "status_note": "merged to dev, PR 190",
+      "waiting_on": null,
+      "blocked_by": [
+        "08"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/24-grill-cutoff.md",
+      "space": "cash-handling-workflow",
+      "num": "24",
+      "key": "cash-handling-workflow 24",
+      "title": "Grill: bank cut-off time",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "grilling"
+      ],
+      "status": "done",
+      "status_note": "answered 2026-10-14",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/25-build-report.md",
+      "space": "cash-handling-workflow",
+      "num": "25",
+      "key": "cash-handling-workflow 25",
+      "title": "Build the daily report",
+      "legacy": true,
+      "legacyRule": 7,
+      "type": [
+        "build"
+      ],
+      "status": "open",
+      "status_note": "not started",
+      "waiting_on": null,
+      "blocked_by": [
+        "04",
+        "05"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/26-build-export.md",
+      "space": "cash-handling-workflow",
+      "num": "26",
+      "key": "cash-handling-workflow 26",
+      "title": "Build the new export",
+      "legacy": true,
+      "legacyRule": 7,
+      "type": [
+        "build"
+      ],
+      "status": "open",
+      "status_note": "charted Oct 6, 2026",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": "05 (only the ADO part)",
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/27-build-retry.md",
+      "space": "cash-handling-workflow",
+      "num": "27",
+      "key": "cash-handling-workflow 27",
+      "title": "Build retry",
+      "legacy": true,
+      "legacyRule": 5,
+      "type": [
+        "build"
+      ],
+      "status": "in-progress",
+      "status_note": "building",
+      "waiting_on": null,
+      "blocked_by": [
+        "14",
+        "16"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/28-cancel-mail.md",
+      "space": "cash-handling-workflow",
+      "num": "28",
+      "key": "cash-handling-workflow 28",
+      "title": "Mail notifier",
+      "legacy": true,
+      "legacyRule": 2,
+      "type": [
+        "task"
+      ],
+      "status": "dropped",
+      "status_note": "cancelled",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/29-bug-wontfix.md",
+      "space": "cash-handling-workflow",
+      "num": "29",
+      "key": "cash-handling-workflow 29",
+      "title": "Odd date format",
+      "legacy": true,
+      "legacyRule": 2,
+      "type": [
+        "bug"
+      ],
+      "status": "dropped",
+      "status_note": "wontfix",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/30-build-retry-v2.md",
+      "space": "cash-handling-workflow",
+      "num": "30",
+      "key": "cash-handling-workflow 30",
+      "title": "Build retry v2",
+      "legacy": true,
+      "legacyRule": 5,
+      "type": [
+        "build"
+      ],
+      "status": "in-progress",
+      "status_note": "In progress — branch claude/reconcile",
+      "waiting_on": null,
+      "blocked_by": [
+        "27"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/31-task-close-day.md",
+      "space": "cash-handling-workflow",
+      "num": "31",
+      "key": "cash-handling-workflow 31",
+      "title": "Close the day",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "task"
+      ],
+      "status": "done",
+      "status_note": "Done (not merged to dev yet)",
+      "waiting_on": null,
+      "blocked_by": [
+        "30"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/32-grill-client-limits.md",
+      "space": "cash-handling-workflow",
+      "num": "32",
+      "key": "cash-handling-workflow 32",
+      "title": "Grill: client limits",
+      "legacy": true,
+      "legacyRule": 8,
+      "type": [
+        "grilling"
+      ],
+      "status": "unknown",
+      "status_note": "Pending client answer",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": "client answers",
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/33-task-old-tool.md",
+      "space": "cash-handling-workflow",
+      "num": "33",
+      "key": "cash-handling-workflow 33",
+      "title": "Retire the old tool",
+      "legacy": true,
+      "legacyRule": 8,
+      "type": [
+        "task"
+      ],
+      "status": "unknown",
+      "status_note": "No longer needed",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/34-build-no-status.md",
+      "space": "cash-handling-workflow",
+      "num": "34",
+      "key": "cash-handling-workflow 34",
+      "title": "Build with no status line",
+      "legacy": true,
+      "legacyRule": 8,
+      "type": [
+        "build"
+      ],
+      "status": "unknown",
+      "status_note": null,
+      "waiting_on": null,
+      "blocked_by": [
+        "03"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/35-decide-empty.md",
+      "space": "cash-handling-workflow",
+      "num": "35",
+      "key": "cash-handling-workflow 35",
+      "title": "Decide the empty case",
+      "legacy": true,
+      "legacyRule": 8,
+      "type": [
+        "decision"
+      ],
+      "status": "unknown",
+      "status_note": null,
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/36-build-unblocked.md",
+      "space": "cash-handling-workflow",
+      "num": "36",
+      "key": "cash-handling-workflow 36",
+      "title": "Build after unblock",
+      "legacy": true,
+      "legacyRule": 8,
+      "type": [
+        "build"
+      ],
+      "status": "unknown",
+      "status_note": "Unblocked — ready to build",
+      "waiting_on": null,
+      "blocked_by": [
+        "03"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/37-build-dropped-sprint.md",
+      "space": "cash-handling-workflow",
+      "num": "37",
+      "key": "cash-handling-workflow 37",
+      "title": "Build (dropped from sprint 4)",
+      "legacy": true,
+      "legacyRule": 7,
+      "type": [
+        "build"
+      ],
+      "status": "open",
+      "status_note": "Open (dropped from sprint 4)",
+      "waiting_on": null,
+      "blocked_by": [
+        "03"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/38-build-notmerged-first.md",
+      "space": "cash-handling-workflow",
+      "num": "38",
+      "key": "cash-handling-workflow 38",
+      "title": "Build with the status reversed",
+      "legacy": true,
+      "legacyRule": 4,
+      "type": [
+        "build"
+      ],
+      "status": "in-review",
+      "status_note": "Not merged — built on claude/ocm-x",
+      "waiting_on": null,
+      "blocked_by": [
+        "03"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/issues/39-build-merged-branch.md",
+      "space": "cash-handling-workflow",
+      "num": "39",
+      "key": "cash-handling-workflow 39",
+      "title": "Build merged from branch",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "build"
+      ],
+      "status": "done",
+      "status_note": "Built on claude/ocm-ledger, merged to dev",
+      "waiting_on": null,
+      "blocked_by": [
+        "03"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/step2b-payment-identification/issues/40-decide-match-keys.md",
+      "space": "cash-handling-workflow",
+      "num": "40",
+      "key": "cash-handling-workflow 40",
+      "title": "Decide the match keys",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "decision"
+      ],
+      "status": "done",
+      "status_note": "resolved",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/step2b-payment-identification/issues/41-grill-payment-ids.md",
+      "space": "cash-handling-workflow",
+      "num": "41",
+      "key": "cash-handling-workflow 41",
+      "title": "Grill: payment identifiers",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "decision",
+        "build"
+      ],
+      "status": "done",
+      "status_note": "decided Nov 2, 2026",
+      "waiting_on": null,
+      "blocked_by": [
+        "40"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/step2b-payment-identification/issues/42-build-id-matcher.md",
+      "space": "cash-handling-workflow",
+      "num": "42",
+      "key": "cash-handling-workflow 42",
+      "title": "Build the ID matcher",
+      "legacy": true,
+      "legacyRule": 4,
+      "type": [
+        "build"
+      ],
+      "status": "in-review",
+      "status_note": "built Nov 9, 2026 on claude/pay-id",
+      "waiting_on": null,
+      "blocked_by": [
+        "41"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/step2b-payment-identification/issues/43-spike-fuzzy.md",
+      "space": "cash-handling-workflow",
+      "num": "43",
+      "key": "cash-handling-workflow 43",
+      "title": "Spike: fuzzy match",
+      "legacy": true,
+      "legacyRule": 7,
+      "type": [
+        "spike"
+      ],
+      "status": "open",
+      "status_note": "open",
+      "waiting_on": null,
+      "blocked_by": [
+        "41",
+        "42"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/step2b-payment-identification/issues/44-task-fixtures.md",
+      "space": "cash-handling-workflow",
+      "num": "44",
+      "key": "cash-handling-workflow 44",
+      "title": "Make match fixtures",
+      "legacy": true,
+      "legacyRule": 5,
+      "type": [
+        "task"
+      ],
+      "status": "in-progress",
+      "status_note": "in progress",
+      "waiting_on": null,
+      "blocked_by": [
+        "43"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": true
+    },
+    {
+      "path": "modules/cash-handling-workflow/step2b-payment-identification/issues/45-grill-unmatched.md",
+      "space": "cash-handling-workflow",
+      "num": "45",
+      "key": "cash-handling-workflow 45",
+      "title": "Grill: the unmatched queue",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "grilling"
+      ],
+      "status": "done",
+      "status_note": "resolved",
+      "waiting_on": null,
+      "blocked_by": [
+        "40"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-handling-workflow/step2b-payment-identification/issues/46-verify-matcher.md",
+      "space": "cash-handling-workflow",
+      "num": "46",
+      "key": "cash-handling-workflow 46",
+      "title": "Verify the matcher",
+      "legacy": true,
+      "legacyRule": 7,
+      "type": [
+        "verify"
+      ],
+      "status": "open",
+      "status_note": "open",
+      "waiting_on": null,
+      "blocked_by": [
+        "44",
+        "45"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cash-movement-engine/issues/08-shared-matcher.md",
+      "space": "cash-movement-engine",
+      "num": "08",
+      "key": "cash-movement-engine 08",
+      "title": "Shared matcher",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "build"
+      ],
+      "status": "done",
+      "status_note": "merged",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cloud-migration/issues/07-decide-region.md",
+      "space": "cloud-migration",
+      "num": "07",
+      "key": "cloud-migration 07",
+      "title": "Decide the Azure region",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "decision"
+      ],
+      "status": "done",
+      "status_note": "decided Oct 20, 2026",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/cloud-migration/issues/08-build-vnet.md",
+      "space": "cloud-migration",
+      "num": "08",
+      "key": "cloud-migration 08",
+      "title": "Build the VNet",
+      "legacy": true,
+      "legacyRule": 3,
+      "type": [
+        "task"
+      ],
+      "status": "blocked",
+      "status_note": "blocked on infra",
+      "waiting_on": "infra",
+      "blocked_by": [],
+      "blocked_note": "Rico must open the private link",
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/one-cash-mover/issues/01-inventory.md",
+      "space": "one-cash-mover",
+      "num": "01",
+      "key": "one-cash-mover 01",
+      "title": "Inventory the movers",
+      "legacy": true,
+      "legacyRule": 6,
+      "type": [
+        "task"
+      ],
+      "status": "done",
+      "status_note": "resolved",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/one-cash-mover/issues/05-build-movecash.md",
+      "space": "one-cash-mover",
+      "num": "05",
+      "key": "one-cash-mover 05",
+      "title": "Build the single move-cash path",
+      "legacy": false,
+      "legacyRule": null,
+      "type": [
+        "build"
+      ],
+      "status": "in-progress",
+      "status_note": null,
+      "waiting_on": null,
+      "blocked_by": [
+        "01"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [
+        212
+      ],
+      "ado": [
+        72650
+      ],
+      "afk": false
+    },
+    {
+      "path": "modules/one-cash-mover/issues/06-spike-reversal.md",
+      "space": "one-cash-mover",
+      "num": "06",
+      "key": "one-cash-mover 06",
+      "title": "Spike: reversals",
+      "legacy": true,
+      "legacyRule": 7,
+      "type": [
+        "spike"
+      ],
+      "status": "open",
+      "status_note": "open",
+      "waiting_on": null,
+      "blocked_by": [
+        "05"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/remove-service-account/issues/01-entrypoints-and-callers.md",
+      "space": "remove-service-account",
+      "num": "01",
+      "key": "remove-service-account 01",
+      "title": "Every scheduled job has a direct entrypoint",
+      "legacy": false,
+      "legacyRule": null,
+      "type": [
+        "task"
+      ],
+      "status": "done",
+      "status_note": "merged to dev in PR 201, Nov 12",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [
+        201
+      ],
+      "ado": [
+        72633
+      ],
+      "afk": true
+    },
+    {
+      "path": "modules/remove-service-account/issues/02-cutover.md",
+      "space": "remove-service-account",
+      "num": "02",
+      "key": "remove-service-account 02",
+      "title": "Cut over: nothing scheduled calls a route",
+      "legacy": false,
+      "legacyRule": null,
+      "type": [
+        "build"
+      ],
+      "status": "in-review",
+      "status_note": "PRs open, Nov 18",
+      "waiting_on": null,
+      "blocked_by": [
+        "01"
+      ],
+      "blocked_note": null,
+      "related": [
+        "03#d1"
+      ],
+      "superseded_by": null,
+      "pr": [
+        204,
+        205
+      ],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/remove-service-account/issues/03-decide-key-owner.md",
+      "space": "remove-service-account",
+      "num": "03",
+      "key": "remove-service-account 03",
+      "title": "Decide who owns the Key Vault key",
+      "legacy": false,
+      "legacyRule": null,
+      "type": [
+        "decision",
+        "build"
+      ],
+      "status": "done",
+      "status_note": "decided Nov 14, 2026",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [
+        "02"
+      ],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [
+        72640,
+        72641
+      ],
+      "afk": false
+    },
+    {
+      "path": "modules/remove-service-account/issues/04-rotate-in-vault.md",
+      "space": "remove-service-account",
+      "num": "04",
+      "key": "remove-service-account 04",
+      "title": "Rotate the key in Key Vault",
+      "legacy": false,
+      "legacyRule": null,
+      "type": [
+        "build"
+      ],
+      "status": "in-progress",
+      "status_note": "started Nov 18",
+      "waiting_on": null,
+      "blocked_by": [
+        "03#q3"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": true
+    },
+    {
+      "path": "modules/remove-service-account/issues/05-grill-uat-schedule.md",
+      "space": "remove-service-account",
+      "num": "05",
+      "key": "remove-service-account 05",
+      "title": "Grill: what runs on UAT at night",
+      "legacy": false,
+      "legacyRule": null,
+      "type": [
+        "grilling"
+      ],
+      "status": "open",
+      "status_note": null,
+      "waiting_on": "owner",
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [
+        "one-cash-mover 06"
+      ],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/remove-service-account/issues/06-dba-rotate-sql-login.md",
+      "space": "remove-service-account",
+      "num": "06",
+      "key": "remove-service-account 06",
+      "title": "DBA drops the SQL login",
+      "legacy": false,
+      "legacyRule": null,
+      "type": [
+        "task"
+      ],
+      "status": "blocked",
+      "status_note": "DBA window Nov 24",
+      "waiting_on": "dba",
+      "blocked_by": [
+        "05",
+        "05#q3"
+      ],
+      "blocked_note": "05 on each environment",
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/remove-service-account/issues/07-ops-delete-secret.md",
+      "space": "remove-service-account",
+      "num": "07",
+      "key": "remove-service-account 07",
+      "title": "Ops delete the old Key Vault secret",
+      "legacy": false,
+      "legacyRule": null,
+      "type": [
+        "task"
+      ],
+      "status": "blocked",
+      "status_note": null,
+      "waiting_on": "ops",
+      "blocked_by": [
+        "one-cash-mover 05",
+        "one-cash-mover 05#q3",
+        "one-cash-mover#q3"
+      ],
+      "blocked_note": null,
+      "related": [
+        "cloud-migration 07"
+      ],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/remove-service-account/issues/08-drop-nightly-report.md",
+      "space": "remove-service-account",
+      "num": "08",
+      "key": "remove-service-account 08",
+      "title": "Drop the nightly report job",
+      "legacy": false,
+      "legacyRule": null,
+      "type": [
+        "spike"
+      ],
+      "status": "dropped",
+      "status_note": "the report moved to cloud-migration, Nov 16",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/remove-service-account/issues/09-old-cutover-plan.md",
+      "space": "remove-service-account",
+      "num": "09",
+      "key": "remove-service-account 09",
+      "title": "First cutover plan (replaced)",
+      "legacy": false,
+      "legacyRule": null,
+      "type": [
+        "task"
+      ],
+      "status": "superseded",
+      "status_note": "replaced by 02",
+      "waiting_on": null,
+      "blocked_by": [],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": "02",
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/remove-service-account/issues/10-client-signoff.md",
+      "space": "remove-service-account",
+      "num": "10",
+      "key": "remove-service-account 10",
+      "title": "Client signs off the removal",
+      "legacy": false,
+      "legacyRule": null,
+      "type": [
+        "build",
+        "verify"
+      ],
+      "status": "blocked",
+      "status_note": null,
+      "waiting_on": "client",
+      "blocked_by": [
+        "cloud-migration 07#q3"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    },
+    {
+      "path": "modules/remove-service-account/issues/11-vnet-rule.md",
+      "space": "remove-service-account",
+      "num": "11",
+      "key": "remove-service-account 11",
+      "title": "Open the VNet rule for the new entrypoint",
+      "legacy": false,
+      "legacyRule": null,
+      "type": [
+        "bug"
+      ],
+      "status": "blocked",
+      "status_note": "waiting for Rico",
+      "waiting_on": "infra",
+      "blocked_by": [
+        "02"
+      ],
+      "blocked_note": null,
+      "related": [],
+      "superseded_by": null,
+      "pr": [],
+      "ado": [],
+      "afk": false
+    }
+  ],
+  "items": {
+    "modules/cash-handling-workflow/step2b-payment-identification/issues/41-grill-payment-ids.md": [
+      {
+        "kind": "Q",
+        "n": 35,
+        "id": "q35",
+        "title": "Which reference field identifies the payer",
+        "line": 22,
+        "endLine": 28,
+        "state": "answered",
+        "stateNote": "2026-10-14",
+        "anchor": "none",
+        "fragments": [
+          "q35",
+          "q35-answered--2026-10-14"
+        ]
+      }
+    ],
+    "modules/remove-service-account/issues/05-grill-uat-schedule.md": [
+      {
+        "kind": "Q",
+        "n": 1,
+        "id": "q1",
+        "title": "Which jobs run on UAT",
+        "line": 23,
+        "endLine": 26,
+        "state": "open",
+        "stateNote": null,
+        "anchor": "above"
+      },
+      {
+        "kind": "Q",
+        "n": 2,
+        "id": "q2",
+        "title": "Is the nightly job still needed",
+        "line": 28,
+        "endLine": 29,
+        "state": "answered",
+        "stateNote": "2026-11-16 (owner)",
+        "anchor": "inline"
+      },
+      {
+        "kind": "Q",
+        "n": 3,
+        "id": "q3",
+        "title": "Who has the schedule list",
+        "line": 31,
+        "endLine": 32,
+        "state": "open",
+        "stateNote": null,
+        "anchor": "inline"
+      },
+      {
+        "kind": "AC",
+        "n": 1,
+        "id": "ac1",
+        "title": "The schedule list is written down.",
+        "line": 36,
+        "endLine": 36,
+        "state": "open",
+        "stateNote": null,
+        "anchor": "inline"
+      }
+    ],
+    "modules/remove-service-account/issues/11-vnet-rule.md": [
+      {
+        "kind": "Q",
+        "n": 1,
+        "id": "q1",
+        "title": "Which subnet",
+        "line": 23,
+        "endLine": 26,
+        "state": "open",
+        "stateNote": null,
+        "anchor": "above"
+      },
+      {
+        "kind": "AC",
+        "n": 1,
+        "id": "ac1",
+        "title": "Rule is live.",
+        "line": 30,
+        "endLine": 30,
+        "state": "open",
+        "stateNote": null,
+        "anchor": "inline"
+      }
+    ],
+    "modules/remove-service-account/issues/03-decide-key-owner.md": [
+      {
+        "kind": "Q",
+        "n": 1,
+        "id": "q1",
+        "title": "Is the key shared with the lockbox job",
+        "line": 27,
+        "endLine": 28,
+        "state": "answered",
+        "stateNote": "2026-11-13 (client)",
+        "anchor": "inline"
+      },
+      {
+        "kind": "Q",
+        "n": 2,
+        "id": "q2",
+        "title": "Does the DBA rotate it",
+        "line": 30,
+        "endLine": 31,
+        "state": "open",
+        "stateNote": null,
+        "anchor": "inline"
+      },
+      {
+        "kind": "Q",
+        "n": 3,
+        "id": "q3",
+        "title": "Who deletes the old secret",
+        "line": 33,
+        "endLine": 34,
+        "state": "answered",
+        "stateNote": "2026-11-14 (owner)",
+        "anchor": "inline"
+      },
+      {
+        "kind": "D",
+        "n": 1,
+        "id": "d1",
+        "title": "Ops owns the key",
+        "line": 38,
+        "endLine": 39,
+        "state": "open",
+        "stateNote": null,
+        "anchor": "inline"
+      },
+      {
+        "kind": "D",
+        "n": 2,
+        "id": "d2",
+        "title": "The DBA rotates it",
+        "line": 41,
+        "endLine": 42,
+        "state": "superseded",
+        "stateNote": "D1",
+        "anchor": "inline"
+      },
+      {
+        "kind": "R",
+        "n": 1,
+        "id": "r1",
+        "title": "Key left in a Library variable group",
+        "line": 46,
+        "endLine": 47,
+        "state": "closed",
+        "stateNote": "2026-11-15",
+        "anchor": "inline"
+      },
+      {
+        "kind": "R",
+        "n": 2,
+        "id": "r2",
+        "title": "A job we did not find",
+        "line": 49,
+        "endLine": 50,
+        "state": "dropped",
+        "stateNote": "2026-11-15",
+        "anchor": "inline"
+      },
+      {
+        "kind": "AC",
+        "n": 1,
+        "id": "ac1",
+        "title": "D1 is written.",
+        "line": 23,
+        "endLine": 23,
+        "state": "open",
+        "stateNote": null,
+        "anchor": "inline"
+      }
+    ],
+    "modules/remove-service-account/issues/01-entrypoints-and-callers.md": [
+      {
+        "kind": "AC",
+        "n": 1,
+        "id": "ac1",
+        "title": "Every scheduled job has an entrypoint.",
+        "line": 29,
+        "endLine": 29,
+        "state": "open",
+        "stateNote": null,
+        "anchor": "inline"
+      },
+      {
+        "kind": "AC",
+        "n": 2,
+        "id": "ac2",
+        "title": "No job needs an API key.",
+        "line": 30,
+        "endLine": 30,
+        "state": "closed",
+        "stateNote": "2026-11-12",
+        "anchor": "inline"
+      },
+      {
+        "kind": "AC",
+        "n": 3,
+        "id": "ac3",
+        "title": "Remove the job from UAT.",
+        "line": 31,
+        "endLine": 31,
+        "state": "dropped",
+        "stateNote": "2026-11-10",
+        "anchor": "inline"
+      }
+    ],
+    "modules/cloud-migration/issues/07-decide-region.md": [
+      {
+        "kind": "Q",
+        "n": 1,
+        "id": "q1",
+        "title": "Paired region",
+        "line": 20,
+        "endLine": 21,
+        "state": "open",
+        "stateNote": null,
+        "anchor": "none"
+      }
+    ],
+    "modules/remove-service-account/map.md": [
+      {
+        "kind": "R",
+        "n": 1,
+        "id": "r1",
+        "title": "Prod has a caller we never found",
+        "line": 46,
+        "endLine": 47,
+        "state": "closed",
+        "stateNote": "2026-11-15",
+        "anchor": "inline"
+      },
+      {
+        "kind": "Q",
+        "n": 1,
+        "id": "q1",
+        "title": "Do we keep a break-glass key",
+        "line": 51,
+        "endLine": 52,
+        "state": "open",
+        "stateNote": null,
+        "anchor": "inline"
+      },
+      {
+        "kind": "Q",
+        "n": 2,
+        "id": "q2",
+        "title": "Who approves the prod window",
+        "line": 54,
+        "endLine": 55,
+        "state": "answered",
+        "stateNote": "2026-11-17 (owner)",
+        "anchor": "inline"
+      },
+      {
+        "kind": "Q",
+        "n": 3,
+        "id": "q3",
+        "title": "Is cloud-migration 07 a prerequisite",
+        "line": 57,
+        "endLine": 58,
+        "state": "open",
+        "stateNote": null,
+        "anchor": "inline"
+      }
+    ],
+    "modules/one-cash-mover/issues/05-build-movecash.md": [
+      {
+        "kind": "Q",
+        "n": 1,
+        "id": "q1",
+        "title": "One path for all banks",
+        "line": 23,
+        "endLine": 24,
+        "state": "answered",
+        "stateNote": "2026-11-10 (client)",
+        "anchor": "inline"
+      },
+      {
+        "kind": "Q",
+        "n": 3,
+        "id": "q3",
+        "title": "Who moves the cash in Step 4",
+        "line": 26,
+        "endLine": 27,
+        "state": "open",
+        "stateNote": null,
+        "anchor": "inline"
+      },
+      {
+        "kind": "AC",
+        "n": 1,
+        "id": "ac1",
+        "title": "One path moves cash for all banks.",
+        "line": 31,
+        "endLine": 31,
+        "state": "open",
+        "stateNote": null,
+        "anchor": "inline"
+      }
+    ]
+  },
+  "links": {
+    "modules/cash-handling-workflow/answers.md": [
+      {
+        "href": "step2b-payment-identification/issues/41-grill-payment-ids.md#q35",
+        "text": "41",
+        "line": 5,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/cash-handling-workflow/step2b-payment-identification/issues/41-grill-payment-ids.md",
+          "fragment": "q35",
+          "itemId": "q35",
+          "ok": true
+        }
+      }
+    ],
+    "modules/remove-service-account/issues/07-ops-delete-secret.md": [
+      {
+        "href": "../../one-cash-mover/issues/05-build-movecash.md#q3",
+        "text": "one-cash-mover 05 Q3",
+        "line": 19,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/one-cash-mover/issues/05-build-movecash.md",
+          "fragment": "q3",
+          "itemId": "q3",
+          "ok": true
+        }
+      },
+      {
+        "href": "../notes/gone.md",
+        "text": "old notes",
+        "line": 20,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/remove-service-account/notes/gone.md",
+          "fragment": null,
+          "itemId": null,
+          "ok": false,
+          "problem": "no-file"
+        }
+      }
+    ],
+    "modules/cash-handling-workflow/issues/16-build-audit.md": [
+      {
+        "href": "../map.md",
+        "text": "map",
+        "line": 9,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/cash-handling-workflow/map.md",
+          "fragment": null,
+          "itemId": null,
+          "ok": true
+        }
+      },
+      {
+        "href": "15-gone-ticket.md",
+        "text": "the audit spec",
+        "line": 20,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/cash-handling-workflow/issues/15-gone-ticket.md",
+          "fragment": null,
+          "itemId": null,
+          "ok": false,
+          "problem": "no-file"
+        }
+      }
+    ],
+    "modules/remove-service-account/map.md": [
+      {
+        "href": "issues/01-entrypoints-and-callers.md",
+        "text": "01",
+        "line": 23,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/remove-service-account/issues/01-entrypoints-and-callers.md",
+          "fragment": null,
+          "itemId": null,
+          "ok": true
+        }
+      },
+      {
+        "href": "issues/02-cutover.md",
+        "text": "02",
+        "line": 23,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/remove-service-account/issues/02-cutover.md",
+          "fragment": null,
+          "itemId": null,
+          "ok": true
+        }
+      },
+      {
+        "href": "issues/03-decide-key-owner.md",
+        "text": "03",
+        "line": 24,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/remove-service-account/issues/03-decide-key-owner.md",
+          "fragment": null,
+          "itemId": null,
+          "ok": true
+        }
+      },
+      {
+        "href": "../cloud-migration/map.md#q1",
+        "text": "cloud-migration map",
+        "line": 58,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/cloud-migration/map.md",
+          "fragment": "q1",
+          "itemId": "q1",
+          "ok": true
+        }
+      }
+    ],
+    "handoffs/ocm-cutover-handoff.md": [
+      {
+        "href": "../modules/one-cash-mover/issues/05-build-movecash.md#q3",
+        "text": "05",
+        "line": 21,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/one-cash-mover/issues/05-build-movecash.md",
+          "fragment": "q3",
+          "itemId": "q3",
+          "ok": true
+        }
+      },
+      {
+        "href": "../modules/remove-service-account/map.md",
+        "text": "map",
+        "line": 21,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/remove-service-account/map.md",
+          "fragment": null,
+          "itemId": null,
+          "ok": true
+        }
+      }
+    ],
+    "modules/cash-handling-workflow/issues/04-build-movecash.md": [
+      {
+        "href": "../map.md",
+        "text": "map",
+        "line": 9,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/cash-handling-workflow/map.md",
+          "fragment": null,
+          "itemId": null,
+          "ok": true
+        }
+      },
+      {
+        "href": "../../one-cash-mover/issues/05-build-movecash.md#q3",
+        "text": "one-cash-mover 05 Q3",
+        "line": 29,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/one-cash-mover/issues/05-build-movecash.md",
+          "fragment": "q3",
+          "itemId": "q3",
+          "ok": true
+        }
+      }
+    ],
+    "modules/remove-service-account/issues/03-decide-key-owner.md": [
+      {
+        "href": "#d1",
+        "text": "D1",
+        "line": 42,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/remove-service-account/issues/03-decide-key-owner.md",
+          "fragment": "d1",
+          "itemId": "d1",
+          "ok": true
+        }
+      },
+      {
+        "href": "01-entrypoints-and-callers.md",
+        "text": "01",
+        "line": 50,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/remove-service-account/issues/01-entrypoints-and-callers.md",
+          "fragment": null,
+          "itemId": null,
+          "ok": true
+        }
+      },
+      {
+        "href": "../../one-cash-mover/issues/05-build-movecash.md#q3",
+        "text": "one-cash-mover 05 Q3",
+        "line": 54,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/one-cash-mover/issues/05-build-movecash.md",
+          "fragment": "q3",
+          "itemId": "q3",
+          "ok": true
+        }
+      }
+    ],
+    "modules/remove-service-account/issues/02-cutover.md": [
+      {
+        "href": "01-entrypoints-and-callers.md",
+        "text": "01",
+        "line": 19,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/remove-service-account/issues/01-entrypoints-and-callers.md",
+          "fragment": null,
+          "itemId": null,
+          "ok": true
+        }
+      },
+      {
+        "href": "03-decide-key-owner.md#d1",
+        "text": "D1",
+        "line": 19,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/remove-service-account/issues/03-decide-key-owner.md",
+          "fragment": "d1",
+          "itemId": "d1",
+          "ok": true
+        }
+      },
+      {
+        "href": "evidence/02-lastused-before.png",
+        "text": "before cutover",
+        "line": 31,
+        "image": true,
+        "resolved": null
+      }
+    ],
+    "modules/remove-service-account/issues/01-entrypoints-and-callers.md": [
+      {
+        "href": "02-cutover.md",
+        "text": "02",
+        "line": 25,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/remove-service-account/issues/02-cutover.md",
+          "fragment": null,
+          "itemId": null,
+          "ok": true
+        }
+      }
+    ],
+    "modules/cash-handling-workflow/issues/09-repair-batch-total.md": [
+      {
+        "href": "../map.md",
+        "text": "map",
+        "line": 10,
+        "image": false,
+        "resolved": {
+          "kind": "internal",
+          "path": "modules/cash-handling-workflow/map.md",
+          "fragment": null,
+          "itemId": null,
+          "ok": true
+        }
+      },
+      {
+        "href": "evidence/09-before.png",
+        "text": "before",
+        "line": 21,
+        "image": true,
+        "resolved": null
+      }
+    ]
+  },
+  "refs": {
+    "modules/one-cash-mover/issues/05-build-movecash.md": [
+      {
+        "field": "blocked_by",
+        "ref": "01",
+        "path": "modules/one-cash-mover/issues/01-inventory.md",
+        "fragment": null,
+        "itemId": null,
+        "ok": true
+      }
+    ],
+    "modules/remove-service-account/issues/02-cutover.md": [
+      {
+        "field": "blocked_by",
+        "ref": "01",
+        "path": "modules/remove-service-account/issues/01-entrypoints-and-callers.md",
+        "fragment": null,
+        "itemId": null,
+        "ok": true
+      },
+      {
+        "field": "related",
+        "ref": "03#d1",
+        "path": "modules/remove-service-account/issues/03-decide-key-owner.md",
+        "fragment": "d1",
+        "itemId": "d1",
+        "ok": true
+      }
+    ],
+    "modules/remove-service-account/issues/03-decide-key-owner.md": [
+      {
+        "field": "related",
+        "ref": "02",
+        "path": "modules/remove-service-account/issues/02-cutover.md",
+        "fragment": null,
+        "itemId": null,
+        "ok": true
+      }
+    ],
+    "modules/remove-service-account/issues/04-rotate-in-vault.md": [
+      {
+        "field": "blocked_by",
+        "ref": "03#q3",
+        "path": "modules/remove-service-account/issues/03-decide-key-owner.md",
+        "fragment": "q3",
+        "itemId": "q3",
+        "ok": true
+      }
+    ],
+    "modules/remove-service-account/issues/05-grill-uat-schedule.md": [
+      {
+        "field": "related",
+        "ref": "one-cash-mover 06",
+        "path": "modules/one-cash-mover/issues/06-spike-reversal.md",
+        "fragment": null,
+        "itemId": null,
+        "ok": true
+      }
+    ],
+    "modules/remove-service-account/issues/06-dba-rotate-sql-login.md": [
+      {
+        "field": "blocked_by",
+        "ref": "05",
+        "path": "modules/remove-service-account/issues/05-grill-uat-schedule.md",
+        "fragment": null,
+        "itemId": null,
+        "ok": true
+      },
+      {
+        "field": "blocked_by",
+        "ref": "05#q3",
+        "path": "modules/remove-service-account/issues/05-grill-uat-schedule.md",
+        "fragment": "q3",
+        "itemId": "q3",
+        "ok": true
+      }
+    ],
+    "modules/remove-service-account/issues/07-ops-delete-secret.md": [
+      {
+        "field": "blocked_by",
+        "ref": "one-cash-mover 05",
+        "path": "modules/one-cash-mover/issues/05-build-movecash.md",
+        "fragment": null,
+        "itemId": null,
+        "ok": true
+      },
+      {
+        "field": "blocked_by",
+        "ref": "one-cash-mover 05#q3",
+        "path": "modules/one-cash-mover/issues/05-build-movecash.md",
+        "fragment": "q3",
+        "itemId": "q3",
+        "ok": true
+      },
+      {
+        "field": "blocked_by",
+        "ref": "one-cash-mover#q3",
+        "path": "modules/one-cash-mover/map.md",
+        "fragment": "q3",
+        "itemId": "q3",
+        "ok": true
+      },
+      {
+        "field": "related",
+        "ref": "cloud-migration 07",
+        "path": "modules/cloud-migration/issues/07-decide-region.md",
+        "fragment": null,
+        "itemId": null,
+        "ok": true
+      }
+    ],
+    "modules/remove-service-account/issues/09-old-cutover-plan.md": [
+      {
+        "field": "superseded_by",
+        "ref": "02",
+        "path": "modules/remove-service-account/issues/02-cutover.md",
+        "fragment": null,
+        "itemId": null,
+        "ok": true
+      }
+    ],
+    "modules/remove-service-account/issues/10-client-signoff.md": [
+      {
+        "field": "blocked_by",
+        "ref": "cloud-migration 07#q3",
+        "path": "modules/cloud-migration/issues/07-decide-region.md",
+        "fragment": "q3",
+        "itemId": null,
+        "ok": false,
+        "problem": "no-anchor"
+      }
+    ],
+    "modules/remove-service-account/issues/11-vnet-rule.md": [
+      {
+        "field": "blocked_by",
+        "ref": "02",
+        "path": "modules/remove-service-account/issues/02-cutover.md",
+        "fragment": null,
+        "itemId": null,
+        "ok": true
+      }
+    ]
+  },
+  "textRefs": {
+    "modules/remove-service-account/issues/07-ops-delete-secret.md": [
+      {
+        "line": 20,
+        "text": "cloud-migration 07",
+        "kind": "ticket",
+        "target": "modules/cloud-migration/issues/07-decide-region.md"
+      }
+    ],
+    "modules/remove-service-account/issues/10-client-signoff.md": [
+      {
+        "line": 19,
+        "text": "card 84997",
+        "kind": "ado",
+        "target": null,
+        "ado": 84997
+      },
+      {
+        "line": 19,
+        "text": "order 51234",
+        "kind": "none",
+        "target": null
+      }
+    ],
+    "modules/cash-handling-workflow/issues/07-spike-ledger-lock.md": [
+      {
+        "line": 20,
+        "text": "cloud-migration 07",
+        "kind": "ticket",
+        "target": "modules/cloud-migration/issues/07-decide-region.md"
+      }
+    ],
+    "modules/cash-handling-workflow/issues/13-dba-ddl.md": [
+      {
+        "line": 20,
+        "text": "card 72633",
+        "kind": "ado",
+        "target": null,
+        "ado": 72633
+      },
+      {
+        "line": 20,
+        "text": "invoice 90817",
+        "kind": "none",
+        "target": null
+      }
+    ],
+    "modules/cash-handling-workflow/issues/14-build-reconcile.md": [
+      {
+        "line": 20,
+        "text": "cash-movement-engine ticket 08",
+        "kind": "ticket",
+        "target": "modules/cash-movement-engine/issues/08-shared-matcher.md"
+      }
+    ],
+    "modules/cash-handling-workflow/issues/22-decide-ttl.md": [
+      {
+        "line": 20,
+        "text": "ticket 77",
+        "kind": "none",
+        "target": null
+      }
+    ],
+    "modules/one-cash-mover/issues/06-spike-reversal.md": [
+      {
+        "line": 20,
+        "text": "ticket 01",
+        "kind": "ticket",
+        "target": "modules/one-cash-mover/issues/01-inventory.md"
+      }
+    ],
+    "handoffs/migration-notes.md": [
+      {
+        "line": 3,
+        "text": "cloud-migration 08",
+        "kind": "ticket",
+        "target": "modules/cloud-migration/issues/08-build-vnet.md"
+      }
+    ]
+  },
+  "hidden": {
+    "absentFromIndex": [
+      "modules/_templates/map.md",
+      "modules/_templates/ticket.md"
+    ],
+    "rule": "any path with a segment starting \"_\" is not indexed"
+  }
+}
