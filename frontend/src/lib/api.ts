@@ -48,9 +48,9 @@ export const saveCache = (parserVersion: string, index: unknown): Promise<void> 
 /** Writes a timing line to the Go log. */
 export const logTimings = (line: string): Promise<void> => DocsService.LogTimings(line)
 /** One ReadBatch call. The caller keeps batches to BATCH_SIZE paths. */
-export const readBatch = async (paths: string[]): Promise<{ files: SourceFile[]; missing: string[] }> => {
+export const readBatch = async (paths: string[]): Promise<{ files: SourceFile[]; missing: string[]; failed: string[] }> => {
   const res = await DocsService.ReadBatch(paths)
-  return { files: res.files ?? [], missing: res.missing ?? [] }
+  return { files: res.files ?? [], missing: res.missing ?? [], failed: res.failed ?? [] }
 }
 
 /** Reads the paths in chunks. Files deleted since the scan come back in `missing`. */

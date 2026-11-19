@@ -5,7 +5,7 @@ import { buildIndex, updateIndex, type Index, type SourceFile } from './parser'
 const PV = 'lib-test'
 
 /** A fake disk plus fake Go: files by path, a log of every call, controllable timers. */
-function rig(initial: string[] = [], opts: { cache?: Index | null; delivered?: boolean; loadFails?: boolean; failRead?: boolean } = {}) {
+function rig(initial: string[] = [], opts: { cache?: Index | null; delivered?: boolean; loadFails?: boolean; failRead?: boolean; unreadable?: Map<string, number> } = {}) {
   const disk = new Map<string, string>(initial.map((p) => [p, `# ${p}\n`]))
   const calls: string[] = []
   const batches: string[][] = []
@@ -60,14 +60,22 @@ function rig(initial: string[] = [], opts: { cache?: Index | null; delivered?: b
       inflight--
       const files: SourceFile[] = []
       const missing: string[] = []
+      const failed: string[] = []
       for (const p of paths) {
+        const left = opts.unreadable?.get(p) ?? 0
+        if (left > 0) {
+          opts.unreadable!.set(p, left - 1)
+          failed.push(p)
+          continue
+        }
         if (disk.has(p)) {
           files.push({ path: p, text: disk.get(p)!, mtime: 1 })
           delivered.set(p, disk.get(p)!)
         } else missing.push(p)
       }
-      return { files, missing }
+      return { files, missing, failed }
     },
+    sleep: async () => {},
     updateIndex(index, changed, removed) {
       calls.push(`update:${changed.length}/${removed.length}`)
       return updateIndex(index, changed, removed)
@@ -297,5 +305,57 @@ describe('rescan', () => {
     expect(Object.keys(idx.files).sort()).toEqual([paths(3)[0], paths(3)[2], 'modules/a/issues/030-q.md'].sort())
     expect(r.calls).toContain('rescan')
     expect(r.touched.at(-1)!.changed).toContain(paths(3)[1]) // the open doc is told to re-check
+  })
+})
+
+describe('failures heal themselves', () => {
+  it('a file that cannot be read is retried once and then lands', async () => {
+    const unreadable = new Map([['modules/a/issues/050-lock.md', 1]])
+    const r = rig(paths(2), { unreadable })
+    await r.engine.start()
+    r.disk.set('modules/a/issues/050-lock.md', '# lock\n')
+    await r.engine.applyChangeSet({ changed: ['modules/a/issues/050-lock.md'], removed: [], rescan: false })
+    expect(Object.keys(r.engine.current()!.files)).toContain('modules/a/issues/050-lock.md')
+    expect(r.calls).not.toContain('rescan')
+    expect(r.calls.filter((c) => c === 'read:1')).toHaveLength(2) // the read and its one retry
+  })
+
+  it('a file still unreadable after the retry queues a rescan', async () => {
+    const unreadable = new Map([['modules/a/issues/051-lock.md', 2]])
+    const r = rig(paths(2), { unreadable })
+    await r.engine.start()
+    r.disk.set('modules/a/issues/051-lock.md', '# lock\n')
+    await r.engine.applyChangeSet({ changed: ['modules/a/issues/051-lock.md'], removed: [], rescan: false })
+    await new Promise((res) => setTimeout(res, 20))
+    expect(r.calls).toContain('rescan')
+    expect(Object.keys(r.engine.current()!.files)).toContain('modules/a/issues/051-lock.md')
+  })
+
+  it('a ChangeSet that throws queues a rescan', async () => {
+    const opts = { failRead: false }
+    const r = rig(paths(2), opts)
+    await r.engine.start()
+    opts.failRead = true
+    await expect(r.engine.applyChangeSet({ changed: [paths(2)[0]], removed: [], rescan: false })).rejects.toThrow('io')
+    await new Promise((res) => setTimeout(res, 20))
+    expect(r.calls).toContain('rescan')
+  })
+
+  it('a cache payload that is not an index triggers a full rescan, not a diff', async () => {
+    const r = rig(paths(4), { cache: { nope: true } as unknown as Index, delivered: true })
+    const t = await r.engine.start()
+    expect(t.warm).toBe(false)
+    expect(r.calls).toContain('rescan')
+    expect(r.calls).not.toContain('scan')
+    expect(Object.keys(r.engine.current()!.files)).toHaveLength(4)
+  })
+
+  it('does nothing after dispose', async () => {
+    const r = rig(paths(2))
+    await r.engine.start()
+    await r.engine.dispose()
+    const before = r.calls.length
+    await r.engine.applyChangeSet({ changed: [paths(2)[0]], removed: [], rescan: false })
+    expect(r.calls.length).toBe(before)
   })
 })

@@ -11,6 +11,8 @@ import type { Index, SourceFile } from './parser'
 export const BATCH_SIZE = 100
 /** SaveCache runs this long after the last mutation (05 section 3.5). */
 export const SAVE_DELAY_MS = 2000
+/** Wait before the one retry of files that could not be read. */
+export const RETRY_DELAY_MS = 500
 
 export interface ScanInfo {
   changed: string[]
@@ -30,7 +32,9 @@ export interface EngineDeps {
   saveCache(parserVersion: string, index: Index): Promise<void>
   scan(): Promise<ScanInfo>
   rescan(): Promise<ScanInfo>
-  readBatch(paths: string[]): Promise<{ files: SourceFile[]; missing: string[] }>
+  /** `failed` lists files that could not be read right now (a sharing violation). */
+  readBatch(paths: string[]): Promise<{ files: SourceFile[]; missing: string[]; failed?: string[] }>
+  sleep(ms: number): Promise<void>
   updateIndex(index: Index, changed: SourceFile[], removed: string[]): Index
   emptyIndex(): Index
   parserVersion: string
@@ -79,6 +83,7 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
   let queue: Promise<unknown> = Promise.resolve()
   let saveTimer: unknown = null
   let disposed = false
+  let stopped = false
   let dirty = false
 
   /** Runs fn after everything queued before it. A failure rejects the caller only. */
@@ -100,11 +105,12 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
     removed: string[],
     progressive: boolean,
     label: (done: number, total: number) => string,
-  ): Promise<{ index: Index; touched: string[]; gone: string[] }> {
+  ): Promise<{ index: Index; touched: string[]; gone: string[]; failed: string[] }> {
     const batches = chunk(paths, BATCH_SIZE)
     let cur = removed.length ? deps.updateIndex(base, [], removed) : base
     const touched: string[] = []
     const gone = [...removed]
+    let failed: string[] = []
     let done = 0
     let inflight = batches.length ? deps.readBatch(batches[0]) : null
     for (let i = 0; i < batches.length; i++) {
@@ -115,13 +121,24 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
       cur = deps.updateIndex(cur, res.files ?? [], missing)
       touched.push(...(res.files ?? []).map((f) => f.path))
       gone.push(...missing)
+      failed.push(...(res.failed ?? []))
       done += batches[i].length
       if (progressive) {
         publish(cur)
         hooks.onStatus({ text: label(done, paths.length), checking: false })
       }
     }
-    return { index: cur, touched, gone }
+    if (failed.length) {
+      // Sharing violations are routine on Windows: retry the misses once, shortly after.
+      await deps.sleep(RETRY_DELAY_MS)
+      const again = await deps.readBatch(failed)
+      cur = deps.updateIndex(cur, again.files ?? [], again.missing ?? [])
+      touched.push(...(again.files ?? []).map((f) => f.path))
+      gone.push(...(again.missing ?? []))
+      failed = again.failed ?? []
+      if (progressive) publish(cur)
+    }
+    return { index: cur, touched, gone, failed }
   }
 
   function scheduleSave(immediately = false) {
@@ -165,6 +182,9 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
         deps.log(`index: LoadCache failed, cold start: ${String(err)}`)
       }
       const hit = isIndex(cached) ? cached : null
+      // A payload the frontend rejects while Go has loaded its stamps would leave a nearly
+      // empty index: ask for a full rescan instead of a diff.
+      const rejected = cached != null && !hit
       const warm = hit !== null
       let base: Index
       if (hit) {
@@ -178,7 +198,7 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
         hooks.onStatus({ text: 'Scanning…', checking: false })
       }
 
-      const scan = await deps.scan()
+      const scan = await (rejected ? deps.rescan() : deps.scan())
       const scanMs = Math.round(deps.now() - t0)
       deps.log(`index: scan returned in ${scanMs} ms (walk ${scan.walkMs} ms, ${scan.changed.length} changed, ${scan.removed.length} removed)`)
 
@@ -190,6 +210,7 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
       hooks.onStatus({ text: `${scan.count} files`, checking: false })
       deps.log(`index: ${warm ? 'warm' : 'cold'} start current in ${currentMs} ms`)
       if (warm && (r.touched.length || r.gone.length)) hooks.onTouched(r.touched, r.gone)
+      if (r.failed.length) recover(`${r.failed.length} files unreadable after a retry`)
       return { cachePaintMs, scanMs, currentMs, warm, count: scan.count, walkMs: scan.walkMs }
     })
   }
@@ -197,19 +218,35 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
   /** A debounced docs:changed from Go: read what changed, update, tell the UI. */
   function applyChangeSet(cs: ChangeInfo): Promise<void> {
     return enqueue(async () => {
-      if (!index || (!cs.changed.length && !cs.removed.length)) return
+      if (stopped || !index || (!cs.changed.length && !cs.removed.length)) return
       const t = deps.now()
-      const r = await applyPaths(index, cs.changed, cs.removed, false, () => '')
+      let r
+      try {
+        r = await applyPaths(index, cs.changed, cs.removed, false, () => '')
+      } catch (err) {
+        // Go has already marked these paths delivered or removed: only a rescan is sure to heal.
+        recover(`ChangeSet failed: ${String(err)}`)
+        throw err
+      }
       publish(r.index)
       deps.log(`index: applied ChangeSet (${cs.changed.length} changed, ${cs.removed.length} removed) in ${Math.round(deps.now() - t)} ms`)
       hooks.onTouched(r.touched, r.gone)
       scheduleSave()
+      if (r.failed.length) recover(`${r.failed.length} files unreadable after a retry`)
     })
+  }
+
+  /** Queues a full rescan after a failure. Not awaited from inside the queue. */
+  function recover(why: string) {
+    if (stopped) return
+    deps.log(`index: ${why}, rescanning`)
+    void rescan().catch((err) => deps.log(`index: recovery rescan failed: ${String(err)}`))
   }
 
   /** Ctrl+R and root changes: forget every stamp, list all files, rebuild from nothing. */
   function rescan(): Promise<void> {
     return enqueue(async () => {
+      if (stopped) return
       hooks.onStatus({ text: 'Rescanning…', checking: true })
       const scan = await deps.rescan()
       hooks.onScan?.({ count: scan.count, walkMs: scan.walkMs })
@@ -227,6 +264,7 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
 
   /** Flushes a pending save now (window close) and stops the timer. */
   async function dispose() {
+    stopped = true
     if (saveTimer !== null) {
       deps.clearTimer(saveTimer)
       saveTimer = null

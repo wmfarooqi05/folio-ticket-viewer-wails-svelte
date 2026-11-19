@@ -40,6 +40,7 @@ type ScanResult struct {
 type BatchResult struct {
 	Files   []SourceFile `json:"files"`
 	Missing []string     `json:"missing"` // deleted between scan and read
+	Failed  []string     `json:"failed"`  // could not be read now (a sharing violation); retry
 }
 
 // ChangeSet is the payload of the "docs:changed" event.
@@ -73,6 +74,7 @@ type DocsService struct {
 	// of the same state is dropped before the frontend has read the file.
 	announced map[string]stamp
 	watch     *watcher
+	closed    bool
 	cacheDir  string // empty means %LOCALAPPDATA%\Folio\cache
 }
 
@@ -82,15 +84,28 @@ func NewService(roots func() Roots, emit func(ChangeSet)) *DocsService {
 	return &DocsService{roots: roots, emit: emit, stamps: map[string]stamp{}, announced: map[string]stamp{}}
 }
 
-// ServiceShutdown stops the watcher when the app exits.
+// ServiceShutdown stops the watcher when the app exits. It never closes fsnotify
+// under the lock or waits for it: Close can block on Windows while an error is pending.
 func (s *DocsService) ServiceShutdown() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.watch != nil {
-		s.watch.close()
-		s.watch = nil
+	s.closed = true
+	w := s.watch
+	s.watch = nil
+	s.mu.Unlock()
+	if w != nil {
+		w.closeAsync()
 	}
 	return nil
+}
+
+// send emits a ChangeSet unless the service has shut down.
+func (s *DocsService) send(cs ChangeSet) {
+	s.mu.Lock()
+	closed := s.closed
+	s.mu.Unlock()
+	if !closed && s.emit != nil {
+		s.emit(cs)
+	}
 }
 
 // Rescan is the manual Rescan command (Ctrl+R) and the overflow fallback.
@@ -134,6 +149,11 @@ func (s *DocsService) Scan() (ScanResult, error) {
 		if _, ok := found[p]; !ok {
 			res.Removed = append(res.Removed, p)
 			delete(s.stamps, p)
+		}
+	}
+	for p := range s.announced {
+		if _, ok := found[p]; !ok {
+			delete(s.announced, p)
 		}
 	}
 	slices.Sort(res.Changed)
@@ -196,13 +216,17 @@ func (s *DocsService) ReadBatch(paths []string) (BatchResult, error) {
 	}
 	wg.Wait()
 
-	res := BatchResult{Files: make([]SourceFile, 0, len(paths)), Missing: []string{}}
+	res := BatchResult{Files: make([]SourceFile, 0, len(paths)), Missing: []string{}, Failed: []string{}}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, o := range out {
 		switch {
 		case o.err != nil:
-			return BatchResult{}, o.err
+			// One unreadable file (a sharing violation, say) must not fail the batch.
+			// It is reported, and its announced stamp is cleared so a retry is seen.
+			log.Printf("docs.ReadBatch: %s: %v", paths[i], o.err)
+			res.Failed = append(res.Failed, paths[i])
+			delete(s.announced, paths[i])
 		case o.missing:
 			res.Missing = append(res.Missing, paths[i])
 			delete(s.stamps, paths[i])

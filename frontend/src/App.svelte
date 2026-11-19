@@ -73,10 +73,14 @@
   $effect(() => {
     void indexStore.docVersion
     const path = untrack(() => selected)
+    if (untrack(() => view)) return // a cross-space view is showing, not the document
     if (path && indexStore.touched(path)) void reloadSelected(path, indexStore.removed(path))
   })
 
+  let reloadToken = 0 // the newest reload wins; a slow read must not undo a deletion
+
   async function reloadSelected(path: string, gone: boolean) {
+    const mine = ++reloadToken
     if (gone) {
       text = null
       docError = 'This file was deleted.'
@@ -84,12 +88,12 @@
     }
     try {
       const content = await api.readFile(path)
-      if (selected === path && content !== text) {
+      if (mine === reloadToken && selected === path && content !== text) {
         text = content // same path, so DocView keeps its scroll position
         docError = null
       }
     } catch (err) {
-      if (selected === path) docError = err instanceof Error ? err.message : String(err)
+      if (mine === reloadToken && selected === path) docError = err instanceof Error ? err.message : String(err)
     }
   }
 
@@ -124,6 +128,7 @@
     showToast('Settings saved')
     if (rescan && next.repoRoot) {
       selected = null
+      view = null
       text = null
       try {
         await indexStore.rescan()

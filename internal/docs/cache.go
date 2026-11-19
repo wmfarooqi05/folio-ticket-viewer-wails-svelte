@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
+	"time"
 )
 
 // cacheVersion is the envelope format. A different value drops the cache.
@@ -34,6 +36,11 @@ func (s *DocsService) setCacheDir(dir string) {
 	s.mu.Unlock()
 }
 
+// normRoot is the docs root as the cache sees it: Windows paths are case-insensitive.
+func normRoot(docs string) string {
+	return strings.ToLower(filepath.ToSlash(filepath.Clean(docs)))
+}
+
 func (s *DocsService) cachePath(r Roots) (string, error) {
 	dir := s.cacheDir
 	if dir == "" {
@@ -47,7 +54,7 @@ func (s *DocsService) cachePath(r Roots) (string, error) {
 		}
 		dir = filepath.Join(base, "Folio", "cache")
 	}
-	sum := sha1.Sum([]byte(filepath.ToSlash(filepath.Clean(r.Docs))))
+	sum := sha1.Sum([]byte(normRoot(r.Docs)))
 	return filepath.Join(dir, hex.EncodeToString(sum[:])[:12]+".json"), nil
 }
 
@@ -65,6 +72,12 @@ func (s *DocsService) LoadCache(parserVersion string) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A crash between CreateTemp and Rename leaves a temp file behind: sweep them.
+	if stale, _ := filepath.Glob(path + ".*.tmp"); len(stale) > 0 {
+		for _, f := range stale {
+			_ = os.Remove(f)
+		}
+	}
 	b, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -78,7 +91,7 @@ func (s *DocsService) LoadCache(parserVersion string) (json.RawMessage, error) {
 		_ = os.Remove(path)
 		return nil, nil
 	}
-	if env.ParserVersion != parserVersion || env.DocsRoot != filepath.ToSlash(filepath.Clean(r.Docs)) || !slices.Equal(env.Roots, r.Roots) {
+	if env.ParserVersion != parserVersion || env.DocsRoot != normRoot(r.Docs) || !slices.Equal(env.Roots, r.Roots) {
 		log.Printf("docs.LoadCache: cache is for another parser or root, cold start")
 		return nil, nil
 	}
@@ -109,7 +122,7 @@ func (s *DocsService) SaveCache(parserVersion string, index json.RawMessage) err
 	}
 	env := cacheEnvelope{
 		V: cacheVersion, ParserVersion: parserVersion,
-		DocsRoot: filepath.ToSlash(filepath.Clean(r.Docs)), Roots: r.Roots,
+		DocsRoot: normRoot(r.Docs), Roots: r.Roots,
 		Stamps: make(map[string][2]int64, len(s.stamps)), Index: index,
 	}
 	for p, st := range s.stamps {
@@ -149,11 +162,16 @@ func writeAtomic(path string, b []byte) error {
 		os.Remove(name)
 		return err
 	}
-	if err := os.Rename(name, path); err != nil {
-		os.Remove(name)
-		return err
+	// Antivirus and indexers briefly hold files on Windows: retry the rename a few times.
+	var rerr error
+	for i := 0; i < 5; i++ {
+		if rerr = os.Rename(name, path); rerr == nil {
+			return nil
+		}
+		time.Sleep(time.Duration(i+1) * 20 * time.Millisecond)
 	}
-	return nil
+	os.Remove(name)
+	return rerr
 }
 
 // LogTimings writes a frontend timing line to the Go log, so a launch can be read

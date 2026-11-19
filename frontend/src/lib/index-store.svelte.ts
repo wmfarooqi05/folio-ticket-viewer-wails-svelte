@@ -20,6 +20,7 @@ class IndexStore {
   scanInfo = $state.raw<{ count: number; walkMs: number } | null>(null)
 
   #engine: IndexEngine | null = null
+  #gen = 0 // bumped by every start(); an older engine can no longer write here
   #unsubscribe: (() => void) | null = null
   #changed = new Set<string>()
   #removed = new Set<string>()
@@ -37,6 +38,8 @@ class IndexStore {
   start(): Promise<StartTimings> {
     this.stop()
     this.index = null
+    const gen = ++this.#gen
+    const live = () => gen === this.#gen
     this.#engine = createIndexEngine(
       {
         loadCache: api.loadCache,
@@ -48,18 +51,17 @@ class IndexStore {
         emptyIndex: () => buildIndex([]),
         parserVersion: __PARSER_VERSION__,
         now: () => performance.now(),
-        log: (m) => {
-          console.info(m)
-          void api.logTimings(m).catch(() => {})
-        },
+        sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+        log: (m) => console.info(m),
         setTimer: (fn, ms) => setTimeout(fn, ms),
         clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
       },
       {
-        onIndex: (i) => (this.index = i),
-        onStatus: (s) => (this.status = s),
-        onScan: (i) => (this.scanInfo = i),
+        onIndex: (i) => live() && (this.index = i),
+        onStatus: (s) => live() && (this.status = s),
+        onScan: (i) => live() && (this.scanInfo = i),
         onTouched: (changed, removed) => {
+          if (!live()) return
           this.#changed = new Set(changed)
           this.#removed = new Set(removed)
           this.docVersion++
@@ -72,7 +74,15 @@ class IndexStore {
         .applyChangeSet({ changed: cs.changed ?? [], removed: cs.removed ?? [], rescan: !!cs.rescan })
         .catch((err) => console.error('docs:changed failed', err)),
     )
-    return engine.start()
+    return engine.start().then((t) => {
+      // The start timings go to the Go log once; nothing else crosses IPC for logging.
+      void api
+        .logTimings(
+          `${t.warm ? 'warm' : 'cold'} start: cache paint ${t.cachePaintMs ?? 'n/a'} ms, scan ${t.scanMs} ms, current ${t.currentMs} ms, ${t.count} files`,
+        )
+        .catch(() => {})
+      return t
+    })
   }
 
   /** Ctrl+R, and a root change in Settings. Rebuilds from every file. */
@@ -81,6 +91,7 @@ class IndexStore {
   }
 
   stop() {
+    this.#gen++ // invalidates the running engine's hooks at once
     this.#unsubscribe?.()
     this.#unsubscribe = null
     void this.#engine?.dispose()

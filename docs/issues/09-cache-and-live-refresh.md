@@ -86,6 +86,25 @@ These are on the dev PC. The slow VM is unmeasured, and the warm path reading no
 
 **AC3.** The `parserVersion` test in Go covers a different version giving a cold start, and the Vite define changes whenever `lib.mjs` changes.
 
+**Review fixes (Nov 20, 2026)**
+- **Watcher deadlocks on Windows.** fsnotify v1.10.1 hangs if its reader is blocked sending an event or error that nobody drains. The watcher now never calls `AddWith` or `Close` on its loop goroutine and never closes under `s.mu`.
+  - `closeAsync` closes in its own goroutine, draining Events and Errors, with a 5 s give-up that leaks rather than blocks. `startWatcher` registers directories without the lock, with the loop already running, and swaps the pointer under the lock. `ServiceShutdown` uses the same path, and nothing is emitted after it.
+  - A watcher error closes the watcher and runs `rescanAfterError` in a goroutine, with backoff (1, 2, 4, 8, 15 s) if `Scan` fails.
+  - A new directory is registered and walked in a goroutine that posts the found paths back on a channel, so the loop keeps draining.
+  - **Chosen approach:** per-directory watches, not fsnotify's recursive `root\...`. Recursive watching ignores the skip rules (node_modules, dot and `_` folders) and puts the whole tree on one buffer, which overflows sooner.
+  - **Tests:** a real overflow (4 KB buffer, loop wedged, two flooded directories) that yields a Rescan ChangeSet while Scan, ReadBatch and shutdown stay responsive; a new directory amid 120 other events; no emit after shutdown; rescan retry; the existing injected-error test.
+- **Failed reads.** `ReadBatch` reports a per-file error in `failed` instead of failing the batch, and clears that path's announced stamp. `Scan` also drops announced stamps of files that are gone. The engine retries `failed` once after 500 ms, then queues a full rescan. Any failed ChangeSet also queues a rescan.
+- **Rejected cache.** If `LoadCache` returned something that is not an index (Go has loaded its stamps), the start uses `Rescan`, not `Scan`.
+- **Smaller fixes.**
+  - The cache rename is retried, and stale `.tmp` files are swept in `LoadCache`.
+  - The docs root is lowercased before hashing and comparing.
+  - A generation guard stops an older engine writing to the store.
+  - `reloadSelected` has a request token, and the docVersion effect returns while a view is showing.
+  - A settings root change also clears `view`.
+  - Only the start timings go over IPC to the Go log.
+  - `vite.config.ts` resolves the lib config with `fileURLToPath`.
+- **Test timing.** The two debounce tests now measure from the last write with loose bounds.
+
 **Not done or open**
 - The window-close flush is not wired: a quit within 2 s of the last change skips the save, and the next start just reconciles.
 - Ctrl+R shows no UI beyond the footer text "Rescanning…".

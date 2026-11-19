@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 import { build, defineConfig, type Rollup } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
@@ -11,7 +12,7 @@ import wails from '@wailsio/runtime/plugins/vite'
  */
 async function parserVersion(): Promise<string> {
   const out = (await build({
-    configFile: 'vite.lib.config.ts',
+    configFile: fileURLToPath(new URL('./vite.lib.config.ts', import.meta.url)),
     logLevel: 'silent',
     build: { write: false, emptyOutDir: false },
   })) as Rollup.RollupOutput | Rollup.RollupOutput[]

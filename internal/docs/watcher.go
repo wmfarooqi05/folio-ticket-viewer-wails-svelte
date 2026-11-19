@@ -19,9 +19,21 @@ const (
 	debounceMax   = time.Second            // a flush is forced after this long
 )
 
-// watcher is a recursive fsnotify watcher over the configured roots. It collects
-// events into a set of paths and judges each one by stat at flush time, against the
-// stamps the service has delivered (docs/issues/05, D3).
+// watchBufferSize is the ReadDirectoryChangesW buffer per directory (Windows). A var
+// so a test can shrink it and cause real overflows.
+var watchBufferSize = 256 << 10
+
+// watcher is a directory-by-directory fsnotify watcher over the configured roots. It
+// collects events into a set of paths and judges each one by stat at flush time,
+// against the stamps the service has delivered (docs/issues/05, D3).
+//
+// fsnotify on Windows deadlocks if its reader goroutine is blocked sending an event
+// or error that nobody drains, so: the loop never calls AddWith or Close, and never
+// blocks except on its own select.
+//
+// Recursive watching ("root\...") was considered and not used: it ignores the
+// skip rules (node_modules, dot and _ folders would flood the one shared buffer
+// with events) and one buffer per tree overflows sooner than one per directory.
 type watcher struct {
 	w     *fsnotify.Watcher
 	docs  string
@@ -31,17 +43,14 @@ type watcher struct {
 	max   time.Duration // a flush is forced after this long
 	done  chan struct{}
 	once  sync.Once
+	found chan []string // .md paths found under a new directory, posted by its walker
 }
 
 // startWatcher (re)creates the watcher for r. It registers every directory first;
-// Scan walks afterwards, so no change falls between the two.
+// Scan walks afterwards, so no change falls between the two. Registration runs
+// without s.mu held (the loop needs the lock to flush, and AddWith waits on the
+// reader), and the old watcher is closed asynchronously, never under the lock.
 func (s *DocsService) startWatcher(r Roots) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.watch != nil {
-		s.watch.close()
-		s.watch = nil
-	}
 	if s.emit == nil {
 		return
 	}
@@ -50,7 +59,18 @@ func (s *DocsService) startWatcher(r Roots) {
 		log.Printf("docs: watcher not started: %v", err)
 		return
 	}
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		w.closeAsync()
+		return
+	}
+	old := s.watch
 	s.watch = w
+	s.mu.Unlock()
+	if old != nil {
+		old.closeAsync()
+	}
 }
 
 func newWatcher(r Roots, svc *DocsService) (*watcher, error) {
@@ -58,27 +78,45 @@ func newWatcher(r Roots, svc *DocsService) (*watcher, error) {
 	if err != nil {
 		return nil, err
 	}
-	w := &watcher{w: fw, docs: r.Docs, svc: svc, emit: svc.emit,
-		quiet: debounceQuiet, max: debounceMax, done: make(chan struct{})}
+	w := &watcher{w: fw, docs: r.Docs, svc: svc, emit: svc.send,
+		quiet: debounceQuiet, max: debounceMax, done: make(chan struct{}),
+		found: make(chan []string, 16)}
+	// The loop runs first so it drains Events while AddWith registers directories.
+	go w.loop()
 	start := time.Now()
 	n := 0
 	for _, root := range r.Roots {
 		n += w.addTree(filepath.Join(r.Docs, filepath.FromSlash(root)))
 	}
 	log.Printf("docs: watching %d directories (registered in %s)", n, time.Since(start))
-	go w.loop()
 	return w, nil
 }
 
-func (w *watcher) close() {
+// closeAsync stops the loop and closes fsnotify in the background. On Windows Close
+// can block while an error is pending, so it runs in its own goroutine, which keeps
+// draining Events and Errors until Close returns (or gives up after 5 s and leaks).
+func (w *watcher) closeAsync() {
 	w.once.Do(func() {
 		close(w.done)
-		_ = w.w.Close()
+		go func() {
+			c := make(chan struct{})
+			go func() { _ = w.w.Close(); close(c) }()
+			t := time.After(5 * time.Second)
+			for {
+				select {
+				case <-c:
+					return
+				case <-w.w.Events:
+				case <-w.w.Errors:
+				case <-t:
+					return
+				}
+			}
+		}()
 	})
 }
 
 // addTree registers dir and every directory beneath it, returning how many.
-// The Windows buffer is raised to 256 KB so a big checkout is less likely to overflow.
 func (w *watcher) addTree(dir string) int {
 	n := 0
 	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
@@ -88,7 +126,7 @@ func (w *watcher) addTree(dir string) int {
 		if p != dir && skipDir(d.Name()) {
 			return filepath.SkipDir
 		}
-		if w.w.AddWith(p, fsnotify.WithBufferSize(256<<10)) == nil {
+		if w.w.AddWith(p, fsnotify.WithBufferSize(watchBufferSize)) == nil {
 			n++
 		}
 		return nil
@@ -113,6 +151,35 @@ func inScope(rel string) bool {
 		}
 	}
 	return true
+}
+
+// walkNew registers a new directory and then walks it: a file made before the watch
+// exists is found by the walk, one made after arrives as an event. It runs off the
+// loop, and posts the paths back on w.found.
+func (w *watcher) walkNew(dir string) {
+	w.addTree(dir)
+	var paths []string
+	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if p != dir && skipDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.EqualFold(filepath.Ext(p), ".md") {
+			if r, ok := w.rel(p); ok {
+				paths = append(paths, r)
+			}
+		}
+		return nil
+	})
+	select {
+	case w.found <- paths:
+	case <-w.done:
+	}
 }
 
 func (w *watcher) loop() {
@@ -157,27 +224,7 @@ func (w *watcher) loop() {
 			if ev.Has(fsnotify.Create) {
 				if st, err := os.Stat(ev.Name); err == nil && st.IsDir() {
 					if !skipDir(filepath.Base(ev.Name)) {
-						// Register first, then walk: a file made before the watch exists is
-						// found by the walk, one made after arrives as an event.
-						w.addTree(ev.Name)
-						_ = filepath.WalkDir(ev.Name, func(p string, d fs.DirEntry, err error) error {
-							if err != nil {
-								return nil
-							}
-							if d.IsDir() {
-								if p != ev.Name && skipDir(d.Name()) {
-									return filepath.SkipDir
-								}
-								return nil
-							}
-							if strings.EqualFold(filepath.Ext(p), ".md") {
-								if r, ok := w.rel(p); ok {
-									pending[r] = struct{}{}
-								}
-							}
-							return nil
-						})
-						arm()
+						go w.walkNew(ev.Name)
 					}
 					continue
 				}
@@ -193,15 +240,24 @@ func (w *watcher) loop() {
 				gone = append(gone, rel)
 				arm()
 			}
+		case paths := <-w.found:
+			for _, p := range paths {
+				pending[p] = struct{}{}
+			}
+			if len(paths) > 0 {
+				arm()
+			}
 		case err, ok := <-w.w.Errors:
 			if !ok {
 				return
 			}
 			// Overflow or any other watcher error: the pending set is no longer
-			// trustworthy. Rebuild the watcher and diff the whole tree.
+			// trustworthy. Rebuild the watcher and diff the whole tree, off this
+			// goroutine, and let closeAsync drain what fsnotify still has to send.
 			log.Printf("docs: watch error, rescanning: %v", err)
-			w.svc.rescanAfterError()
-			return // Scan started a fresh watcher; this one is closed
+			w.closeAsync()
+			go w.svc.rescanAfterError()
+			return
 		case <-quiet:
 			flush()
 		case <-forced:
@@ -272,25 +328,41 @@ func (s *DocsService) judge(paths map[string]struct{}) ChangeSet {
 	return cs
 }
 
+// rescanBackoff are the waits between retries when the rescan after an error fails
+// (the root is gone, say). A var so tests can shorten it.
+var rescanBackoff = []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 15 * time.Second}
+
 // rescanAfterError runs after a watcher overflow or error. Scan starts a new watcher
 // (registering first) and diffs the walk against the stamps. The result goes out as
-// a ChangeSet with Rescan set, so the frontend reconciles it as one batch.
+// a ChangeSet with Rescan set. If Scan fails it is retried with backoff, so the app
+// is not left without a watcher.
 func (s *DocsService) rescanAfterError() {
-	res, err := s.Scan()
-	if err != nil {
-		log.Printf("docs: rescan after watcher error failed: %v", err)
-		return
-	}
-	s.mu.Lock()
-	for _, p := range res.Changed {
-		if full, err := ResolveMarkdown(s.roots().Docs, p); err == nil {
-			if st, err := os.Stat(full); err == nil {
-				s.announced[p] = stamp{Mtime: st.ModTime().UnixMilli(), Size: st.Size()}
-			}
+	for attempt := 0; ; attempt++ {
+		s.mu.Lock()
+		closed := s.closed
+		s.mu.Unlock()
+		if closed {
+			return
 		}
-	}
-	s.mu.Unlock()
-	if s.emit != nil {
-		s.emit(ChangeSet{Changed: res.Changed, Removed: res.Removed, Rescan: true})
+		res, err := s.Scan()
+		if err == nil {
+			s.mu.Lock()
+			for _, p := range res.Changed {
+				if full, err := ResolveMarkdown(s.roots().Docs, p); err == nil {
+					if st, err := os.Stat(full); err == nil {
+						s.announced[p] = stamp{Mtime: st.ModTime().UnixMilli(), Size: st.Size()}
+					}
+				}
+			}
+			s.mu.Unlock()
+			s.send(ChangeSet{Changed: res.Changed, Removed: res.Removed, Rescan: true})
+			return
+		}
+		if attempt >= len(rescanBackoff) {
+			log.Printf("docs: rescan after watcher error gave up: %v", err)
+			return
+		}
+		log.Printf("docs: rescan after watcher error failed (%v), retrying in %s", err, rescanBackoff[attempt])
+		time.Sleep(rescanBackoff[attempt])
 	}
 }
