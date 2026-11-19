@@ -34,8 +34,12 @@ Reached when:
 
 ## Order
 
-1. 07 (running).
-2. Then build slicing, which graduates from the fog once 07 fixes the RAM baseline B.
+**Planning destination reached on Nov 20, 2026.** Decisions 01–07 are closed. The build runs as slices 08–15 on the scaffolded app.
+
+1. **Now, in parallel:** 08 (parser) and 13 (settings).
+2. **After 08:** 09 (cache), 10 (document view) and 12 (views), in parallel.
+3. **After 10:** 11 (side panel). After 10 and 12: 14 (graph, Mermaid, highlighting).
+4. **Last:** 15 (budgets, installer, v1 on the VM).
 
 ## Tickets
 
@@ -49,6 +53,14 @@ Reached when:
 | 05 | [Go/JS split, index cache and refresh](issues/05-index-cache-refresh.md) | decision | [01](issues/01-wails-shell.md) | — | done — decided Nov 20, 2026 (owner) | — |
 | 06 | [Rendering pipeline and file-size budget](issues/06-rendering-and-size-budget.md) | decision | [01](issues/01-wails-shell.md) | — | done — decided Nov 20, 2026 (owner) | — |
 | 07 | [Can WebView2 be tuned well below 240 MB?](issues/07-webview2-tuning.md) | spike | — | — | done — GPU-off flags applied, B is about 160 MB | — |
+| 08 | [Parser passes the fixture oracle](issues/08-parser.md) | build | — | — | open | — |
+| 09 | [Cache, warm start and live refresh](issues/09-cache-and-live-refresh.md) | build | [08](issues/08-parser.md) | — | blocked | — |
+| 10 | [Document view: rendering, header card, tree and theme](issues/10-document-view.md) | build | [08](issues/08-parser.md) | — | blocked | — |
+| 11 | [Right side panel: link targets, fragments and back stack](issues/11-side-panel.md) | build | [10](issues/10-document-view.md) | — | blocked | — |
+| 12 | [Views: Waiting on, Board and Open questions](issues/12-cross-space-views.md) | build | [08](issues/08-parser.md) | — | blocked | — |
+| 13 | [Settings dialog and first-run flow](issues/13-settings-dialog.md) | build | — | — | open | — |
+| 14 | [Dependency graph, Mermaid and syntax highlighting](issues/14-graph-mermaid-highlight.md) | build | [10](issues/10-document-view.md), [12](issues/12-cross-space-views.md) | — | blocked | — |
+| 15 | [Budgets enforced, installer, v1 release](issues/15-budgets-and-packaging.md) | build | [09](issues/09-cache-and-live-refresh.md), [11](issues/11-side-panel.md), [13](issues/13-settings-dialog.md), [14](issues/14-graph-mermaid-highlight.md) | — | blocked | — |
 <!-- tickets:end -->
 
 ## Decisions so far
@@ -63,9 +75,8 @@ Reached when:
 
 ## Not yet specified
 
-- **Build slicing:** how to cut the viewer into vertical slices once 05–07 close. The right panel and the cross-space views are now specified by 03's spec and 04's contract, and go into the slices.
 - **Upstream amendments:** D2 to D5 in ticket 04 change handoff §3. Someone has to carry them into the other repo's CONVENTIONS and the handoff when the parser moves there.
-- **Packaging:** build and distribution (a prebuilt `.exe` or the owner builds it), and WebView2 availability on other machines. 01 showed the exe needs only WebView2; installer packaging (NSIS or MSIX) is still undecided.
+- **Distribution beyond the owner's VM:** whether anyone else installs Folio, and how to handle machines without WebView2. 15 covers only the NSIS installer for the owner.
 
 ## Out of scope
 
