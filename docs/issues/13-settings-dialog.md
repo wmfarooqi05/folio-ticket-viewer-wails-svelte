@@ -38,4 +38,20 @@ afk: true
 
 ## Outcome
 
-*(empty)*
+Built. Code: `frontend/src/components/SettingsDialog.svelte`, the schema and pure logic in `frontend/src/lib/settings.ts`, and `internal/shell` (`OpenExternal`, `OpenSettingsFile`, `CheckDocs`).
+
+- **Schema:** `SECTIONS` in `settings.ts` drives the sections and fields. A new field is one entry there, plus a `kind` the dialog already renders.
+- **States:** Default is the dialog on Docs folder. Link error: clear or break a `{id}` template. No roots: Choose folder on a folder with none of the roots. Saved: change something and press Save (toast "Settings saved"). Dark: choose Dark under Appearance and Save.
+- **Save rules:** disabled until something changes and while a template or the docs folder name is invalid. Enter saves (except on a button), Esc closes.
+- **Rescan:** a changed repo root, docs folder or roots set triggers `load()` in `App.svelte`.
+- **Live chips:** there are no link chips yet (ticket 11). `expandTemplate` in `settings.ts` is the one function they should use. `App.svelte` holds the saved config, so a saved template reaches them at once.
+- **AC3:** `TestFirstRunFlowAgainstFixtures` snapshots `fixtures/` before and after and checks that only `settings.json` is written.
+- **AC2:** the Go path (no settings, CheckRoot, SetConfig, scan) is tested. The native picker click still needs a human.
+
+Deviations from the mockup:
+- An empty template is valid (the link is off), because the default settings are empty and Go accepts it. The mockup would block Save.
+- Templates also need an `https://` prefix (the mockup checked `{id}` only), as ticket D4 says.
+- Save stays enabled in the No roots state, as in the mockup. The backend then rejects it and the error shows inline.
+- The dialog has no closing animation, only the opening one.
+- Template inputs update the preview on every keystroke, not on change.
+- The visual match to the PNG was not checked by eye (see the manual checks).
