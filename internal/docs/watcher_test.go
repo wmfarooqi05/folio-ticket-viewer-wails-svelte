@@ -26,7 +26,7 @@ func newWatchRig(t *testing.T, files ...string) *watchRig {
 	r := &watchRig{root: root, got: make(chan ChangeSet, 32)}
 	r.s = NewService(func() Roots { return Roots{Docs: root, Roots: []string{"modules"}} },
 		func(cs ChangeSet) { r.got <- cs })
-	r.s.SetCacheDir(t.TempDir())
+	r.s.setCacheDir(t.TempDir())
 	t.Cleanup(func() { _ = r.s.ServiceShutdown() })
 	res, err := r.s.Scan()
 	if err != nil {

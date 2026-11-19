@@ -41,6 +41,15 @@ export const scan = (): Promise<ScanResult> => DocsService.Scan()
 /** Forgets what was delivered and lists every file as changed (after a root change). */
 export const rescan = (): Promise<ScanResult> => DocsService.Rescan()
 export const readFile = (path: string): Promise<string> => DocsService.ReadFile(path)
+/** The cached index (parsed JSON), or null on a cold start. Also loads Go's stamps. */
+export const loadCache = (parserVersion: string): Promise<unknown> => DocsService.LoadCache(parserVersion)
+/** Writes the index through Go, which adds its stamps and saves atomically. */
+export const saveCache = (parserVersion: string, index: unknown): Promise<void> => DocsService.SaveCache(parserVersion, index)
+/** One ReadBatch call. The caller keeps batches to BATCH_SIZE paths. */
+export const readBatch = async (paths: string[]): Promise<{ files: SourceFile[]; missing: string[] }> => {
+  const res = await DocsService.ReadBatch(paths)
+  return { files: res.files ?? [], missing: res.missing ?? [] }
+}
 
 /** Reads the paths in chunks. Files deleted since the scan come back in `missing`. */
 export async function readAll(paths: string[]): Promise<{ files: SourceFile[]; missing: string[] }> {

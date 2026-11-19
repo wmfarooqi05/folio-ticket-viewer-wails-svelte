@@ -12,7 +12,7 @@ func cacheService(t *testing.T) (*DocsService, string, string) {
 	t.Helper()
 	s, root := newTestService(t)
 	cache := t.TempDir()
-	s.SetCacheDir(cache)
+	s.setCacheDir(cache)
 	return s, root, cache
 }
 
@@ -39,7 +39,7 @@ func TestCacheRoundTripLoadsStamps(t *testing.T) {
 
 	// A fresh service (the next launch) gets the index back and a stat-only diff.
 	s2 := NewService(s.roots, nil)
-	s2.SetCacheDir(cache)
+	s2.setCacheDir(cache)
 	got, err := s2.LoadCache("p1")
 	if err != nil || string(got) != `{"files":{"a":1}}` {
 		t.Fatalf("LoadCache: %s %v", got, err)
@@ -83,7 +83,7 @@ func TestCacheDroppedWhenParserVersionChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	s2 := NewService(s.roots, nil)
-	s2.SetCacheDir(cache)
+	s2.setCacheDir(cache)
 	if got, err := s2.LoadCache("new"); err != nil || got != nil {
 		t.Fatalf("want cold start, got %s %v", got, err)
 	}
@@ -98,7 +98,7 @@ func TestCacheDroppedWhenRootsChange(t *testing.T) {
 	deliverAll(t, s)
 	_ = s.SaveCache("p", json.RawMessage(`{}`))
 	s2 := NewService(func() Roots { return Roots{Docs: root, Roots: []string{"modules"}} }, nil)
-	s2.SetCacheDir(cache)
+	s2.setCacheDir(cache)
 	if got, _ := s2.LoadCache("p"); got != nil {
 		t.Fatalf("different roots must not hit: %s", got)
 	}

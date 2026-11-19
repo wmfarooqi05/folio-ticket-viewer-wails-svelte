@@ -26,9 +26,9 @@ type cacheEnvelope struct {
 	Index         json.RawMessage     `json:"index"`
 }
 
-// SetCacheDir overrides where cache files go. Tests use a temp dir; the app leaves
+// setCacheDir overrides where cache files go. Tests use a temp dir; the app leaves
 // it unset and gets %LOCALAPPDATA%\Folio\cache. The cache never goes inside the docs root.
-func (s *DocsService) SetCacheDir(dir string) {
+func (s *DocsService) setCacheDir(dir string) {
 	s.mu.Lock()
 	s.cacheDir = dir
 	s.mu.Unlock()
