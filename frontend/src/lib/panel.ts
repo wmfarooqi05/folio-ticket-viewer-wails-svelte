@@ -1,6 +1,8 @@
 // The right panel's back stack (ticket 11). Pure functions over an array of entries; the
 // last entry is the one on show and an empty stack means the panel is closed.
 
+import { extractFragment, type DocRecord, type LineRange } from './parser'
+
 export interface PanelEntry {
   path: string
   fragment: string | null
@@ -38,6 +40,26 @@ export const top = (stack: PanelStack): PanelEntry | null => stack[stack.length 
 /** Promotes the entry on show to the middle pane: the entry to open there, and the closed stack. */
 export function promote(stack: PanelStack): { entry: PanelEntry | null; stack: PanelStack } {
   return { entry: top(stack), stack: [] }
+}
+
+/** `]`: closes an open panel (remembering it), or brings back the one last closed. */
+export function toggle(stack: PanelStack, lastClosed: PanelStack): { stack: PanelStack; lastClosed: PanelStack } {
+  return stack.length > 0 ? { stack: [], lastClosed: stack } : { stack: lastClosed, lastClosed }
+}
+
+export type EntryState =
+  | { state: 'missing' } // the file is not in the index: the not-found card
+  | { state: 'whole'; range: null } // no fragment: the whole file
+  | { state: 'fragment'; range: LineRange } // one item or section
+  | { state: 'bad-fragment'; range: null } // the file, under an "Item #x not found" banner
+
+/** What the panel shows for an entry, given its record and (once read) its text. */
+export function resolveEntry(entry: PanelEntry, rec: DocRecord | null, text: string | null): EntryState | null {
+  if (!rec) return { state: 'missing' }
+  if (!entry.fragment) return { state: 'whole', range: null }
+  if (text === null) return null // still reading
+  const range = extractFragment(text, rec, entry.fragment)
+  return range ? { state: 'fragment', range } : { state: 'bad-fragment', range: null }
 }
 
 /** A short trail label: `05 Q3` for an item, `05` for a whole ticket, the file name otherwise. */

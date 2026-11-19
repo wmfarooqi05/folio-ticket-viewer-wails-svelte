@@ -86,6 +86,9 @@
   border-bottom: 1px dashed var(--s-block);
   cursor: not-allowed;
 }
+.doc a.lk-broken[data-broken] {
+  cursor: pointer; /* it opens the panel, which says what is missing */
+}
 .doc a.lk-broken:hover {
   border-bottom-style: dashed;
 }

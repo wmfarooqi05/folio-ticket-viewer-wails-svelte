@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { back, canBack, close, label, popTo, promote, push, MAX_DEPTH, type PanelStack } from './panel'
+import { back, canBack, close, label, popTo, promote, push, toggle, MAX_DEPTH, type PanelStack } from './panel'
 
 const e = (path: string, fragment: string | null = null) => ({ path, fragment })
 
@@ -52,6 +52,14 @@ describe('panel stack', () => {
     for (let i = 0; i < MAX_DEPTH + 5; i++) s = push(s, e(`f${i}.md`))
     expect(s).toHaveLength(MAX_DEPTH)
     expect(s[0].path).toBe('f5.md')
+  })
+
+  it('toggle (]) closes and remembers the stack, then brings it back', () => {
+    const s = push(push([], e('a.md')), e('b.md'))
+    const closed = toggle(s, [])
+    expect(closed).toEqual({ stack: [], lastClosed: s })
+    expect(toggle(closed.stack, closed.lastClosed).stack).toBe(s)
+    expect(toggle([], []).stack).toEqual([]) // nothing to bring back
   })
 
   it('labels entries for the trail', () => {

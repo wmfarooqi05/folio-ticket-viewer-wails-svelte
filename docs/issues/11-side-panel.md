@@ -44,7 +44,23 @@ Built on branch `worktree-agent-aca622383b057057e`.
 - **Layout**: the panel animates width 0 to 360 on `--dur` and `--ease-pane`, which are zero under `prefers-reduced-motion`. The tree auto-hides below 1200px while the panel is open.
 - **VS Code line**: `OpenInVSCode(path, line)` and `VSCodeURL` already took a line, so Go is unchanged. The panel passes the item's first line (or 0 for a whole file).
 
+### Added after review
+- A `#frag` link to a part of the file that the fragment view does not draw is one more hop (`DocHandlers.onLocal`), not a dead link.
+- The panel keeps text with the `{path, mtime}` it was read at. It never shows one file's text for another record, and keeps the previous range until the refreshed text arrives.
+- Link definitions (`[x]: url`) outside the fragment range are kept (moved to the end), so reference-style links still resolve.
+- Focus: the first push remembers the focused element, and close or promote restores it (or focuses the middle pane). Back at depth 1 moves focus to Close first. Esc is ignored while typing in an input.
+- LINKS block for a whole ticket in the panel: blocked by, related, used by and its questions, as chips.
+- Keys `[` (tree) and `]` (panel, brings back the last closed stack), ignored while typing.
+- Spec G1: a `no-file` or `no-anchor` link carries `data-path`, `data-frag` and `data-broken`, and a plain click opens the panel (not-found card, or the file under an "Item #x not found" banner). A bad-scheme link stays inert. Every click is still cancelled.
+- The panel contents stay while it closes (`shownStack`, cleared on `transitionend`, or at once with no motion). The closed aside has no border. "Open in middle" is disabled with no record.
+
+### Deviations
+- "Open in middle" promotes the entry and closes the panel.
+- The trail is clickable and the stack holds at most 50 entries (both beyond the spec).
+- The LINKS block is a compact chip grid, not the mockup's summary paragraph (real tickets have no summary).
+- No shared text memo between the panel and the middle pane: the panel reads its own file.
+
 ### Verification
-- Vitest 309 tests pass (after merging main with ticket 09), including the stack (push, 3 hops back, promote, close, dedupe) and happy-dom tests for click routing (plain, Ctrl, middle, broken) and fragment-only rendering of fixture `05 Q1` (with its answer marker) and `05 Q3`.
-- `go test ./...`, `go vet ./...`, `npm run check` and `task build` are green. Initial JS is 99.2 KB gzip (limit 120).
+- Vitest 314 tests pass (after merging main with ticket 09), including the stack (push, 3 hops back, promote, close, dedupe) and happy-dom tests for click routing (plain, Ctrl, middle, broken) and fragment-only rendering of fixture `05 Q1` (with its answer marker) and `05 Q3`.
+- `go test ./...`, `go vet ./...`, `npm run check` and `task build` are green. Initial JS is 100.5 KB gzip (limit 120).
 - Not checked by eye in the real exe: the panel slide and the trail layout.

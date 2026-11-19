@@ -66,7 +66,9 @@
     setTimeout(() => (notice = null), 4000)
   }
 
-  const open = (p: string, frag: string | null, middle = false) => {
+  const open = (p: string, frag: string | null, middle = false, broken = false) => {
+    // a broken link is explained in the panel, whichever document it points at
+    if (broken && onpanel) return onpanel(p, frag)
     // a link to this very document scrolls; it never reloads the file
     if (p === path && variant === 'main') {
       if (frag && body && scrollToAnchor(body, frag)) return
@@ -83,7 +85,11 @@
     installNavGuard()
     if (!body) return
     return attachDocHandlers(body, {
-      onLink: (p, frag, middle) => open(p, frag, middle),
+      onLink: (p, frag, middle, broken) => open(p, frag, middle, broken),
+      // in the panel only one item is drawn: a link to another part of this file is one more hop
+      onLocal: (f) => {
+        if (variant === 'panel' && path) onpanel?.(path, f)
+      },
       onExternal: (url) => api.openExternal(url).catch((e) => fail('Could not open the link', e)),
     })
   })
