@@ -1,8 +1,8 @@
 ---
 type: build
-status: open
-status_note: null
-waiting_on: null
+status: blocked
+status_note: "merged Nov 20, 2026; AC1 (five states match the mockup) and AC2 (first run through the UI) wait on the owner's check in the app"
+waiting_on: owner
 blocked_by: []
 blocked_note: null
 related: ["05"]

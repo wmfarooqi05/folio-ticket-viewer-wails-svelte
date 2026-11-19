@@ -1,7 +1,7 @@
 ---
 type: build
-status: open
-status_note: null
+status: done
+status_note: "merged Nov 20, 2026: 192 tests green, cold 1,000-file build about 25-42 ms"
 waiting_on: null
 blocked_by: []
 blocked_note: null
