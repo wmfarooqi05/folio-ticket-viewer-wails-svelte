@@ -1,8 +1,8 @@
 ---
 type: build
-status: in-review
-status_note: "built on branch worktree-agent-a4dbdbfa818e5a578, not merged"
-waiting_on: null
+status: blocked
+status_note: "merged Nov 20, 2026; waiting on the owner: a UI check in the app (AC2) and whether Board shows on every map or only view=kanban"
+waiting_on: owner
 blocked_by: ["08"]
 blocked_note: null
 related: ["03", "04"]
