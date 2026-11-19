@@ -1,7 +1,7 @@
 ---
 type: spike
-status: in-progress
-status_note: "claimed by Claude, Nov 19, 2026"
+status: done
+status_note: "decided Nov 20, 2026 (owner): GPU-off flags applied, B is about 160 MB"
 waiting_on: null
 blocked_by: []
 blocked_note: null
@@ -40,4 +40,15 @@ Label: wayfinder:prototype
 
 ## Outcome
 
-*(empty)*
+Decided Nov 20, 2026 (owner). Findings: [07-findings.md](../assets/07-findings.md).
+
+### <a id="d1"></a>D1 — Apply the GPU-off flag set
+- Applied in `main.go` through `WindowsOptions.AdditionalBrowserArgs` and `DisabledFeatures`. The env var does not work under Wails.
+- Private memory falls from about 236 MB to about 160 MB, with no measurable CPU cost.
+- **B, the RAM baseline for the 06 D5 budgets, is about 160 MB private**, idle and indexed.
+- The first build slice must check visually that nothing glitches with the GPU off.
+
+### <a id="d2"></a>D2 — No `--single-process`, no Low memory target for now
+- `--single-process` is unsupported by Chromium, and one crash takes the app down.
+- `MemoryUsageTargetLevel=Low` trims only the working set and needs a patched Wails. Skipped: ask Wails upstream to expose it, and adopt it when they do.
+- Go GC tuning and the JS heap flags had no effect.

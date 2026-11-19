@@ -48,7 +48,7 @@ Reached when:
 | 04 | [Parser module contract](issues/04-parser-contract.md) | decision | [02](issues/02-fixture-corpus.md) | — | done — decided Nov 19, 2026 (owner) | — |
 | 05 | [Go/JS split, index cache and refresh](issues/05-index-cache-refresh.md) | decision | [01](issues/01-wails-shell.md) | — | done — decided Nov 20, 2026 (owner) | — |
 | 06 | [Rendering pipeline and file-size budget](issues/06-rendering-and-size-budget.md) | decision | [01](issues/01-wails-shell.md) | — | done — decided Nov 20, 2026 (owner) | — |
-| 07 | [Can WebView2 be tuned well below 240 MB?](issues/07-webview2-tuning.md) | spike | — | — | in-progress | — |
+| 07 | [Can WebView2 be tuned well below 240 MB?](issues/07-webview2-tuning.md) | spike | — | — | done — GPU-off flags applied, B is about 160 MB | — |
 <!-- tickets:end -->
 
 ## Decisions so far
@@ -59,6 +59,7 @@ Reached when:
 - [Lock the UI design from the mockup](issues/03-ui-design.md): Folio, Indigo theme, with motion kept. Geist fonts bundled, ages taken from mtime, map modes Doc/Board/Graph, no diagnostics panel in v1.
 - [Go/JS split, index cache and refresh](issues/05-index-cache-refresh.md): Go stats, reads and watches, and JS holds the only index. A Go-owned JSON cache paints instantly on a warm start, with a debounced, stat-judged refresh. An **in-app Settings dialog behind a gear button** covers the repo root, the ADO and PR URLs and the theme, built to be extended.
 - [Rendering pipeline and file-size budget](issues/06-rendering-and-size-budget.md): markdown-it joined to the parser by line, an allowlist sanitiser (no DOMPurify), lazy Mermaid and lazy highlight.js, a hand-rolled SVG graph. Initial JS ≤ 120 KB gzip, RAM ≤ B + 15 MB.
+- [Can WebView2 be tuned well below 240 MB?](issues/07-webview2-tuning.md): GPU off cuts idle private memory from about 236 MB to about 160 MB (B), applied in `main.go`. No single-process mode, and no patched Wails for the Low memory target.
 
 ## Not yet specified
 
@@ -75,7 +76,7 @@ Reached when:
 ## Risks
 
 ### <a id="r1"></a>R1 — Wails may be heavier or rougher than hoped
-Measured in 01: about 240 MB private at idle, mostly WebView2. Ticket 07 tests tuning. If tuning fails, the fallback is the Go server plus an Edge `--app` window, with the same code.
+**Closed 2026-11-20:** 07 cut idle private memory to about 160 MB with GPU-off flags. Tuned Edge `--app` reaches about 125 MB, so it remains a fallback if the real UI blows the budget.
 
 ## Open questions (owner)
 

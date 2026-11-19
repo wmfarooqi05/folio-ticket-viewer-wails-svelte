@@ -41,6 +41,23 @@ func main() {
 			application.NewService(shellSvc),
 		},
 		Assets: application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
+		// WebView2 tuning from ticket 07 (docs/assets/07-findings.md). GPU off is the real
+		// win: about -75 MB private at idle with no CPU cost. The rest is housekeeping.
+		// Extra disabled features must go in DisabledFeatures: Wails emits its own
+		// --disable-features, and a second one in AdditionalBrowserArgs would override it.
+		Windows: application.WindowsOptions{
+			DisabledFeatures: []string{
+				"SpareRendererForSitePerProcess", "Translate", "TranslateUI",
+				"OptimizationHints", "OptimizationGuideModelDownloading", "MediaRouter",
+				"AutofillServerCommunication", "msEdgeShopping", "msEdgeSidebar",
+			},
+			AdditionalBrowserArgs: []string{
+				"--disable-gpu", "--disable-gpu-compositing",
+				"--disable-spell-checking", "--disable-component-update",
+				"--disable-background-networking", "--disable-sync", "--no-pings",
+				"--disable-breakpad",
+			},
+		},
 	})
 
 	win := app.Window.NewWithOptions(shell.WindowOptions(shellSvc, application.WebviewWindowOptions{
