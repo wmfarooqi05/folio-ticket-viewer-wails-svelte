@@ -50,6 +50,13 @@ tasks:
     cmds:
       - npm test
 
+  build:lib:
+    summary: Builds the parser alone into frontend/dist-lib/lib.mjs (zero imports, for the upstream CLI)
+    dir: frontend
+    deps: [common:install:frontend:deps]
+    cmds:
+      - npm run build:lib
+
   check:
     summary: go vet plus svelte-check (regenerates the TS bindings first)
     deps: [dist:stub, common:install:frontend:deps]

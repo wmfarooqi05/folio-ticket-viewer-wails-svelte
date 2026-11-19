@@ -8,6 +8,7 @@
     "build:dev": "vite build --minify false --mode development",
     "build": "vite build --mode production",
     "preview": "vite preview",
+    "build:lib": "vite build --config vite.lib.config.ts",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run"
   },
