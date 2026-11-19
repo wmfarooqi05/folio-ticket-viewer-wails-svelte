@@ -66,9 +66,11 @@ export interface DocRecord {
   headings: Heading[]
   items: Item[]
   links: Link[]
-  map: { kanban: boolean; issuesDir: string | null } | null
+  map: { kanban: boolean; issuesDir: string } | null
   hasMermaid: boolean
   diagnostics: Diagnostic[]
+  /** 1-based line of each frontmatter key (or legacy label) that can carry a diagnostic */
+  fmLines: Record<string, number>
 }
 
 export interface TicketMeta {
@@ -96,6 +98,8 @@ export interface LegacyMeta extends TicketMeta {
   legacyRule: DocRecord['legacyRule']
   /** per-line warnings (unknown Type tokens); `line` is 1-based in the text given */
   warnings: { line: number; code: string; message: string }[]
+  /** 1-based line of the legacy label each field came from, for diagnostics */
+  lines: Record<string, number>
 }
 
 export interface Heading {
@@ -136,7 +140,7 @@ export interface Resolved {
   fragment: string | null
   itemId: string | null
   ok: boolean
-  problem?: 'no-file' | 'no-anchor' | 'bad-ref'
+  problem?: 'no-file' | 'no-anchor' | 'bad-ref' | 'bad-scheme'
 }
 
 export interface Edge {
@@ -210,6 +214,17 @@ interface FmBlock {
   diagnostics: { line: number; code: string; message: string }[]
   /** 1-based line of the first body line */
   bodyLine: number
+  /** 1-based line of each key */
+  keyLines: Record<string, number>
+}
+
+/** Reference fields keep their raw token text, so `[02]` stays "02" and not the number 2. */
+const REF_KEYS = ['blocked_by', 'related', 'superseded_by']
+
+/** True when the text opens a frontmatter block that never closes. */
+function hasUnclosedFrontmatter(text: string): boolean {
+  const lines = splitLines(text)
+  return lines[0].trimEnd() === '---' && !lines.slice(1).some((l) => l.trimEnd() === '---')
 }
 
 /** null when the text does not start with `---` and have a closing `---` line. */
@@ -226,6 +241,7 @@ function readFrontmatter(text: string): FmBlock | null {
   if (end < 0) return null
   const data: Frontmatter = {}
   const diagnostics: FmBlock['diagnostics'] = []
+  const keyLines: Record<string, number> = {}
   for (let i = 1; i < end; i++) {
     const raw = lines[i]
     if (raw.trim() === '' || /^\s*#/.test(raw)) continue
@@ -234,14 +250,15 @@ function readFrontmatter(text: string): FmBlock | null {
       diagnostics.push({ line: i + 1, code: 'FM_PARSE', message: `Not in the frontmatter subset: ${raw.trim()}` })
       continue
     }
-    const value = parseFmValue(stripComment(m[2] ?? ''))
+    const value = parseFmValue(stripComment(m[2] ?? ''), REF_KEYS.includes(m[1]))
     if (value === UNPARSEABLE) {
       diagnostics.push({ line: i + 1, code: 'FM_PARSE', message: `Cannot read the value of "${m[1]}"` })
       continue
     }
     data[m[1]] = value
+    keyLines[m[1]] = i + 1
   }
-  return { data, diagnostics, bodyLine: end + 2 }
+  return { data, diagnostics, bodyLine: end + 2, keyLines }
 }
 
 export function parseFrontmatter(text: string): Frontmatter | null {
@@ -263,11 +280,12 @@ function stripComment(s: string): string {
   return s.trim()
 }
 
-function parseFmScalar(s: string): unknown {
+function parseFmScalar(s: string, raw = false): unknown {
   const t = s.trim()
   if (t === '' || t === 'null' || t === '~') return null
   if (t === 'true') return true
   if (t === 'false') return false
+  if (raw && /^-?\d+$/.test(t)) return t
   if (/^-?\d+(?:\.\d+)?$/.test(t)) return Number(t)
   if (t.startsWith('"')) {
     if (t.length < 2 || !t.endsWith('"')) return UNPARSEABLE
@@ -284,8 +302,8 @@ function parseFmScalar(s: string): unknown {
   return t
 }
 
-function parseFmValue(s: string): unknown {
-  if (!s.startsWith('[')) return parseFmScalar(s)
+function parseFmValue(s: string, raw = false): unknown {
+  if (!s.startsWith('[')) return parseFmScalar(s, raw)
   if (!s.endsWith(']')) return UNPARSEABLE
   const inner = s.slice(1, -1)
   const parts: string[] = []
@@ -309,7 +327,7 @@ function parseFmValue(s: string): unknown {
   if (cur.trim() !== '' || parts.length > 0) parts.push(cur)
   const out: unknown[] = []
   for (const p of parts) {
-    const v = parseFmScalar(p)
+    const v = parseFmScalar(p, raw)
     if (v === UNPARSEABLE) return UNPARSEABLE
     out.push(v)
   }
@@ -609,12 +627,22 @@ function cleanStatus(raw: string): string {
 
 const BRANCH_WORDS = ['on branch', 'on claude/', 'not merged', 'not yet run', 'on the provisional']
 
+/** Typography-only normalisation for matching (D5): curly double quotes, dash variants, leading quotes. */
+function matchForm(text: string): string {
+  return text
+    .replace(/[“”]/g, '"')
+    .replace(/[‐‑–—]/g, '-')
+    .replace(/^["'\s]+/, '')
+    .toLowerCase()
+}
+
 function legacyStatus(text: string): { status: Status; rule: NonNullable<DocRecord['legacyRule']> } {
-  const t = text.toLowerCase()
+  const t = matchForm(text)
   if (/^superseded\b/.test(t) || /\bsuperseded by (?:ticket )?\d{2,}/.test(t)) return { status: 'superseded', rule: 1 }
   if (/^(dropped|won't|wontfix|cancel)/.test(t)) return { status: 'dropped', rule: 2 }
   if (/^blocked/.test(t)) return { status: 'blocked', rule: 3 }
-  const merged = /(?<!not )\bmerged\b/.test(t) // D3: "merged" without "not" wins over rule 4
+  // D3: "merged" with no "not" before it (in the same clause) wins over rule 4
+  const merged = /\bmerged\b/.test(t) && !/\bnot\b[^.;]*\bmerged\b/.test(t)
   if (/^built/.test(t) && BRANCH_WORDS.some((w) => t.includes(w)) && !merged) return { status: 'in-review', rule: 4 }
   if (/^not merged/.test(t)) return { status: 'in-review', rule: 4 }
   if (/^(in[ -]progress|building)/.test(t)) return { status: 'in-progress', rule: 5 }
@@ -721,6 +749,10 @@ export function parseLegacy(body: string): LegacyMeta {
     afk,
     legacyRule: rule,
     warnings,
+    lines: {
+      ...(found.status ? { status: found.status.line, superseded_by: found.status.line, waiting_on: found.status.line } : {}),
+      ...(found['blocked by'] ? { blocked_by: found['blocked by'].line } : {}),
+    },
   }
 }
 
@@ -737,19 +769,21 @@ function numList(v: unknown): number[] {
   return (Array.isArray(v) ? v : v == null ? [] : [v]).map(Number).filter((n) => Number.isFinite(n))
 }
 
-function fmTicketMeta(fm: Frontmatter, diag: (code: string, message: string) => void): TicketMeta {
+type FmDiag = (code: string, message: string, key: string) => void
+
+function fmTicketMeta(fm: Frontmatter, diag: FmDiag): TicketMeta {
   let status = strOrNull(fm.status) as Status | null
   if (status === null || !STATUSES.includes(status)) {
-    if (status !== null) diag('FM_ENUM', `Unknown status "${status}"`)
+    if (status !== null) diag('FM_ENUM', `Unknown status "${status}"`, 'status')
     status = 'unknown'
   }
   let waiting_on = strOrNull(fm.waiting_on) as Person | null
   if (waiting_on !== null && !PERSONS.includes(waiting_on)) {
-    diag('FM_ENUM', `Unknown waiting_on "${waiting_on}"`)
+    diag('FM_ENUM', `Unknown waiting_on "${waiting_on}"`, 'waiting_on')
     waiting_on = null
   }
   const type = strList(fm.type)
-  for (const t of type) if (!TYPES.includes(t)) diag('FM_ENUM', `Unknown type "${t}"`)
+  for (const t of type) if (!TYPES.includes(t)) diag('FM_ENUM', `Unknown type "${t}"`, 'type')
   return {
     type,
     status,
@@ -765,10 +799,10 @@ function fmTicketMeta(fm: Frontmatter, diag: (code: string, message: string) => 
   }
 }
 
-function fmMapMeta(fm: Frontmatter, diag: (code: string, message: string) => void): MapMeta {
+function fmMapMeta(fm: Frontmatter, diag: FmDiag): MapMeta {
   let status = strOrNull(fm.status) as MapMeta['status']
   if (status !== null && !(MAP_STATUSES as readonly string[]).includes(status)) {
-    diag('FM_ENUM', `Unknown map status "${status}"`)
+    diag('FM_ENUM', `Unknown map status "${status}"`, 'status')
     status = null
   }
   const ado = numList(fm.ado)[0]
@@ -793,22 +827,31 @@ export function parseFile(file: SourceFile): DocRecord {
   const diagnostics: Diagnostic[] = []
   const push = (line: number, code: string, level: 'error' | 'warning', message: string) =>
     diagnostics.push({ path, line, code, level, message })
+  if (!fm && hasUnclosedFrontmatter(text)) {
+    push(1, 'FM_PARSE', 'error', 'The frontmatter block opens with --- but never closes; the file is read as legacy')
+  }
   for (const d of fm?.diagnostics ?? []) push(d.line, d.code, 'error', d.message)
   for (const d of scan.diagnostics) push(d.line, d.code, d.level, d.message)
 
   let meta: DocRecord['meta'] = null
   let legacyRule: DocRecord['legacyRule'] = null
+  let fmLines: Record<string, number> = {}
+  const diagAt: FmDiag = (c, m, key) => push(fm?.keyLines[key] ?? 1, c, 'error', m)
   if (kind === 'ticket') {
-    if (fm) meta = fmTicketMeta(fm.data, (c, m) => push(1, c, 'error', m))
-    else {
+    if (fm) {
+      meta = fmTicketMeta(fm.data, diagAt)
+      fmLines = fm.keyLines
+    } else {
       const lg = parseLegacy(text)
       legacyRule = lg.legacyRule
+      fmLines = lg.lines
       for (const w of lg.warnings) push(w.line, w.code, 'warning', w.message)
-      const { legacyRule: _r, warnings: _w, ...rest } = lg
+      const { legacyRule: _r, warnings: _w, lines: _l, ...rest } = lg
       meta = rest
     }
   } else if (kind === 'map') {
-    meta = fm ? fmMapMeta(fm.data, (c, m) => push(1, c, 'error', m)) : { status: null, ado: null, superseded_by: null }
+    meta = fm ? fmMapMeta(fm.data, diagAt) : { status: null, ado: null, superseded_by: null }
+    if (fm) fmLines = fm.keyLines
   }
 
   const h1 = scan.headings.find((h) => h.level === 1)
@@ -832,6 +875,7 @@ export function parseFile(file: SourceFile): DocRecord {
     map: kind === 'map' ? { kanban: /<!--\s*tickets:begin\b[^>]*\bview=kanban\b/.test(text), issuesDir: `${dirname(path)}/issues` } : null,
     hasMermaid: scan.hasMermaid,
     diagnostics,
+    fmLines,
   }
 }
 
@@ -885,20 +929,33 @@ export function resolveRef(ref: string, fromPath: string, index: Index): Resolve
 }
 
 export function resolveHref(href: string, fromPath: string, index: Index): Resolved {
-  if (/^[a-z][a-z0-9+.-]+:/i.test(href)) return { kind: 'external', path: null, fragment: null, itemId: null, ok: true }
+  const scheme = /^([a-z][a-z0-9+.-]+):/i.exec(href)
+  if (scheme) {
+    // only these four are links the viewer may open (spec 2.5.1); javascript:, file: and the rest are refused
+    return ['http', 'https', 'mailto', 'vscode'].includes(scheme[1].toLowerCase())
+      ? { kind: 'external', path: null, fragment: null, itemId: null, ok: true }
+      : { kind: 'external', path: null, fragment: null, itemId: null, ok: false, problem: 'bad-scheme' }
+  }
   const hash = href.indexOf('#')
   let rawPath = hash < 0 ? href : href.slice(0, hash)
   let fragment = hash < 0 ? '' : href.slice(hash + 1)
-  try {
-    rawPath = decodeURIComponent(rawPath)
-    fragment = decodeURIComponent(fragment)
-  } catch {
-    // keep the raw text
+  const q = rawPath.indexOf('?')
+  if (q >= 0) rawPath = rawPath.slice(0, q)
+  rawPath = rawPath.replace(/\\/g, '/')
+  const decode = (s: string): string => {
+    try {
+      return decodeURIComponent(s)
+    } catch {
+      return s // keep the raw text
+    }
   }
+  fragment = decode(fragment)
   const frag = fragment === '' ? null : fragment.toLowerCase()
   if (rawPath === '') return resolveInFile(fromPath, frag, index)
   const out: string[] = []
-  const segs = rawPath.startsWith('/') ? rawPath.split('/') : [...dirname(fromPath).split('/').filter(Boolean), ...rawPath.split('/')]
+  // split first, then decode per segment, so an encoded slash stays inside its segment
+  const given = rawPath.split('/').map(decode)
+  const segs = rawPath.startsWith('/') ? given : [...dirname(fromPath).split('/').filter(Boolean), ...given]
   for (const s of segs) {
     if (s === '' || s === '.') continue
     if (s === '..') {
@@ -914,7 +971,8 @@ export function resolveHref(href: string, fromPath: string, index: Index): Resol
 export function extractFragment(text: string, rec: DocRecord, fragment: string): LineRange | null {
   const f = fragment.toLowerCase()
   for (const it of rec.items) if (it.id === f || it.fragments?.includes(f)) return { start: it.line, end: it.endLine }
-  const k = rec.headings.findIndex((h) => h.anchor === f) >= 0 ? rec.headings.findIndex((h) => h.anchor === f) : rec.headings.findIndex((h) => h.slug === f)
+  let k = rec.headings.findIndex((h) => h.anchor === f)
+  if (k < 0) k = rec.headings.findIndex((h) => h.slug === f)
   if (k < 0) return null
   const h = rec.headings[k]
   const lines = splitLines(text)
@@ -934,14 +992,27 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/** One compiled space regex per index.spaces array (a new array comes with every new index). */
+const SPACE_RE_CACHE = new WeakMap<string[], RegExp>()
+
+function spaceRegex(spaces: string[]): RegExp {
+  let re = SPACE_RE_CACHE.get(spaces)
+  if (!re) {
+    const names = [...spaces].sort((a, b) => b.length - a.length).map(escapeRe).join('|')
+    re = new RegExp(`(?<![\\w-])(${names})(?: ticket)? (\\d{2,})(?: (Q|D|AC|R)(\\d+))?(?![\\w-])`, 'g')
+    SPACE_RE_CACHE.set(spaces, re)
+  }
+  re.lastIndex = 0
+  return re
+}
+
 export function scanText(text: string, fromPath: string, index: Index): TextRef[] {
   const out: TextRef[] = []
   const overlaps = (s: number, e: number) => out.some((r) => s < r.end && e > r.start)
   const fromSpace = spaceOf(fromPath, index)
 
   if (index.spaces.length > 0) {
-    const names = [...index.spaces].sort((a, b) => b.length - a.length).map(escapeRe).join('|')
-    const re = new RegExp(`(?<![\\w-])(${names})(?: ticket)? (\\d{2,})(?: (Q|D|AC|R)(\\d+))?(?![\\w-])`, 'g')
+    const re = spaceRegex(index.spaces)
     let m: RegExpExecArray | null
     while ((m = re.exec(text))) {
       const path = index.tickets[`${m[1]} ${pad2(m[2])}`]
@@ -961,7 +1032,7 @@ export function scanText(text: string, fromPath: string, index: Index): TextRef[
   }
 
   if (fromSpace) {
-    const re = /(?<![\w-])ticket (\d{2,})(?![\w-])/g
+    const re = /(?<![\w-])ticket (\d{2,})(?![\w-])/gi
     let m: RegExpExecArray | null
     while ((m = re.exec(text))) {
       const end = m.index + m[0].length
@@ -1045,7 +1116,7 @@ function crossFile(parsed: Record<string, DocRecord>): Index {
           index.edges.push({ from: p, field, ref, to, crossSpace: to.path !== null && toSpace !== rec.space })
           if (!to.ok) {
             diagnostics.push({
-              path: p, line: 1, code: 'FM_REF', level: rec.legacy ? 'warning' : 'error',
+              path: p, line: rec.fmLines[field] ?? 1, code: 'FM_REF', level: rec.legacy ? 'warning' : 'error',
               message: `${field} "${ref}" does not resolve (${to.problem})`,
             })
           }
