@@ -44,9 +44,12 @@ export function enhanceDoc(root: HTMLElement, o: EnhanceOptions): () => void {
   const els = [...root.querySelectorAll<HTMLElement>('.code[data-mermaid]')]
   let off: (() => void) | null = null
   if (els.length > 0) {
-    const blocks = els.map((el, n) => {
+    const blocks = els.map((el, i) => {
       if (!sources.has(el)) sources.set(el, el.querySelector('code')?.textContent ?? '')
-      return { el, src: sources.get(el)!, n }
+      // the fence's line in the file, so two views of one file share a diagram; the position
+      // in this root only when the line is missing
+      const line = Number(el.dataset.line)
+      return { el, src: sources.get(el)!, n: Number.isFinite(line) && el.dataset.line ? line : -1 - i }
     })
     let shown: ThemeName | null = null
     const draw = () => {

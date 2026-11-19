@@ -11,8 +11,8 @@ vi.mock('./highlight', () => ({ highlightCode }))
 
 const fence = (lang: string, body: string) =>
   `<div class="code"><div class="code-head"><span>${lang}</span></div><pre><code class="language-${lang}">${body}</code></pre></div>`
-const mermaidFence = (body: string) =>
-  `<div class="code mermaid-ph" data-mermaid><div class="code-head"><span>mermaid</span></div><pre><code>${body}</code></pre></div>`
+const mermaidFence = (body: string, line = 3) =>
+  `<div class="code mermaid-ph" data-mermaid data-line="${line}"><div class="code-head"><span>mermaid</span></div><pre><code>${body}</code></pre></div>`
 
 function doc(html: string): HTMLElement {
   const root = document.createElement('div')
@@ -47,13 +47,13 @@ describe('enhanceDoc', () => {
   })
 
   it('hands every mermaid fence to the renderer, with its source and index', async () => {
-    const root = doc(`${mermaidFence('graph TD\n  A--&gt;B')}<p>x</p>${mermaidFence('sequenceDiagram')}`)
+    const root = doc(`${mermaidFence('graph TD\n  A--&gt;B', 12)}<p>x</p>${mermaidFence('sequenceDiagram', 30)}`)
     const off = enhanceDoc(root, { path: 'm.md', mtime: 7 })
     await vi.waitFor(() => expect(renderBlocks).toHaveBeenCalledTimes(1))
     const [blocks, ctx] = renderBlocks.mock.calls[0] as unknown as [{ src: string; n: number }[], { path: string; mtime: number; theme: string }]
     expect(blocks.map((b) => [b.n, b.src])).toEqual([
-      [0, 'graph TD\n  A-->B'],
-      [1, 'sequenceDiagram'],
+      [12, 'graph TD\n  A-->B'],
+      [30, 'sequenceDiagram'],
     ])
     expect(ctx).toMatchObject({ path: 'm.md', mtime: 7, theme: 'light' })
     off()
