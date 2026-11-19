@@ -44,6 +44,8 @@ function onClick(root: HTMLElement, h: DocHandlers, e: MouseEvent): void {
   if (!a || !root.contains(a)) return
   // the webview must never navigate away from the app, so every anchor is cancelled
   e.preventDefault()
+  // a link inside a Mermaid label is diagram content, never a route (ticket 14)
+  if (a.closest('.mermaid-out')) return
   if (a.getAttribute('aria-disabled') === 'true') return
   const { path, frag, ext, broken } = a.dataset
   if (ext) {

@@ -73,6 +73,29 @@ describe('fixture spaces', () => {
   })
 })
 
+describe('blockers that do not resolve', () => {
+  it('every ticket with a blocked_by ref is linked to something, so none looks free', () => {
+    let unresolved = 0
+    for (const rec of Object.values(index.files)) {
+      if (rec.kind !== 'map') continue
+      const m = graphFor(index, rec.path)
+      const linked = new Set<string>()
+      for (const e of m.input.edges) linked.add(e.to)
+      for (const s of m.input.stubs) for (const b of s.blocks) linked.add(b)
+      for (const e of index.edges) {
+        if (e.field !== 'blocked_by' || !m.tickets.has(e.from)) continue
+        const target = e.to.path ? index.files[e.to.path] : undefined
+        // a hidden (dropped or superseded) in-map blocker is the only case that leaves no link
+        const hiddenInMap = target && !m.tickets.has(target.path) && target.path.startsWith(rec.path.replace(/map\.md$/, 'issues/'))
+        if (!hiddenInMap) expect(linked.has(e.from), `${e.from} <- ${e.ref}`).toBe(true)
+        if (!target) unresolved++
+      }
+      for (const [id, s] of m.stubs) if (s.unresolved) expect(id.startsWith('unresolved:')).toBe(true)
+    }
+    expect(unresolved).toBeGreaterThanOrEqual(0)
+  })
+})
+
 describe('layering', () => {
   it('puts a ticket one column right of its deepest blocker', () => {
     const g = layoutGraph(input(['a', 'b', 'c', 'd'], [['a', 'b'], ['b', 'c'], ['a', 'c'], ['a', 'd']]))

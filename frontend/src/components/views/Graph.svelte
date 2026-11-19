@@ -3,7 +3,8 @@
   // edges. The layout is lib/graph/layout.ts. Motion is plain CSS: `rise` on nodes, `draw` on
   // resolved edges and `march` on live ones. prefers-reduced-motion turns all of it off in
   // tokens.css, and with GPU compositing off (07 D1) `march` repaints, so it is limited to
-  // MARCH_MAX live edges; a bigger graph keeps its dashes still.
+  // MARCH_MAX live edges; a bigger graph keeps its dashes still. The spec's in-progress `pulse`
+  // dot is left out for the same reason (it animates box-shadow, a repaint every frame).
   import Icon from '../../lib/icons/Icon.svelte'
   import { layoutGraph, NODE_H, NODE_W, STUB_H, STUB_W } from '../../lib/graph/layout'
   import { graphFor, linkKey } from '../../lib/graph/model'
@@ -25,9 +26,16 @@
   const g = $derived(layoutGraph(model.input))
   const liveCount = $derived(g.links.filter((l) => model.live.has(linkKey(l.from, l.to))).length)
   const total = $derived(model.input.tickets.length)
+  /** level of the first ticket each stub blocks, for the stub's entrance delay (spec 6.2) */
+  const targetLevel = $derived.by(() => {
+    const level = new Map(g.boxes.map((b) => [b.id, b.level]))
+    const m = new Map<string, number>()
+    for (const l of g.links) if (l.from.startsWith('stub:') || l.from.startsWith('unresolved:')) if (!m.has(l.from)) m.set(l.from, level.get(l.to) ?? 0)
+    return m
+  })
 
   function kind(from: string, to: string): 'stub' | 'live' | 'resolved' {
-    if (from.startsWith('stub:')) return 'stub'
+    if (from.startsWith('stub:') || from.startsWith('unresolved:')) return 'stub'
     return model.live.has(linkKey(from, to)) ? 'live' : 'resolved'
   }
 </script>
@@ -87,7 +95,7 @@
               <path d="M1 1 L7 4 L1 7 z" fill="var(--fg3)" />
             </marker>
           </defs>
-          {#each g.links as l (l.from + l.to)}
+          {#each g.links as l (linkKey(l.from, l.to))}
             {@const k = kind(l.from, l.to)}
             {#if k === 'live'}
               <path
@@ -139,20 +147,25 @@
               style:top="{b.y}px"
               style:width="{STUB_W}px"
               style:height="{STUB_H}px"
-              style:animation-delay="{b.level * 90 + 150}ms"
+              style:animation-delay="{(targetLevel.get(b.id) ?? 0) * 90 + 150}ms"
               style:opacity={s.closed ? 0.6 : 1}
               title="{s.label}: {s.title}"
-              onclick={() => onselect(s.path)}
+              disabled={s.path === null}
+              onclick={() => s.path && onselect(s.path)}
             >
               <span class="min-w-0 truncate">{s.label}</span>
-              <Icon name="arrow-up-right" size={10} />
+              {#if s.unresolved}
+                <span class="ml-auto font-sans text-2xs text-fg3">unresolved</span>
+              {:else}
+                <Icon name="arrow-up-right" size={10} />
+              {/if}
             </button>
           {:else}
             {@const t = model.tickets.get(b.id)!}
             {@const col = statusVar(t.meta.status)}
             <button
               type="button"
-              class="absolute flex animate-rise-node flex-col justify-between overflow-hidden rounded-lg border bg-card px-9 py-7 text-left shadow-hair transition-[transform,box-shadow] duration-[var(--dur-hover)] hover:-translate-y-1 hover:shadow-lift {col
+              class="absolute flex animate-rise-node flex-col justify-between overflow-hidden rounded-lg border bg-card px-9 py-7 text-left shadow-hair transition-[transform,box-shadow] duration-[var(--dur-hover)] hover:-translate-y-2 hover:shadow-lift {col
                 ? ''
                 : 'border-dashed border-fg3'}"
               style:left="{b.x}px"
@@ -161,7 +174,7 @@
               style:height="{NODE_H}px"
               style:animation-delay="{b.level * 90}ms"
               style:border-color={col ? `color-mix(in oklab, ${col} 30%, transparent)` : null}
-              style:background={col ? `color-mix(in oklab, ${col} 10%, var(--card))` : null}
+              style:background={col ? `color-mix(in oklab, ${col} 9%, var(--card))` : null}
               aria-label="{t.key}: {t.title}, {t.meta.status}"
               onclick={() => onselect(t.path)}
             >

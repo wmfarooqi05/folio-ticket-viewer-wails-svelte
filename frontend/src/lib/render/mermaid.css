@@ -3,6 +3,8 @@
   padding: 14px 16px;
   overflow-x: auto;
   text-align: center;
+  /* a label cannot paint or lay out outside its card (CSS overlay tricks) */
+  contain: layout paint;
 }
 .doc .code[data-mermaid] .mermaid-out svg {
   display: inline-block;

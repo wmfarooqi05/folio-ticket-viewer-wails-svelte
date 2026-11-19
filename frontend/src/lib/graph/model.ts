@@ -8,12 +8,13 @@ import type { GraphInput } from './layout'
 type TicketRec = DocRecord & { meta: TicketMeta }
 
 export interface StubInfo {
-  /** docs-relative path of the outside document */
-  path: string
-  /** "space 07" for a ticket, the file name otherwise */
+  /** docs-relative path of the outside document; null for a ref that resolves to no file */
+  path: string | null
+  /** "space 07" for a ticket, the file name otherwise, the ref as written when unresolved */
   label: string
   title: string
   closed: boolean
+  unresolved?: boolean
 }
 
 export interface GraphModel {
@@ -42,9 +43,16 @@ export function graphFor(index: Index, mapPath: string): GraphModel {
   const live = new Set<string>()
 
   for (const e of index.edges) {
-    if (e.field !== 'blocked_by' || !shownSet.has(e.from) || !e.to.path) continue
-    const target = index.files[e.to.path]
-    if (!target) continue
+    if (e.field !== 'blocked_by' || !shownSet.has(e.from)) continue
+    const target = e.to.path ? index.files[e.to.path] : undefined
+    if (!target) {
+      // a blocker that does not resolve still blocks: a dashed "unresolved" stub, not a ticket
+      // that looks free (the header card flags the same ref as not found)
+      const id = 'unresolved:' + e.ref
+      ;(stubBlocks.get(id) ?? stubBlocks.set(id, new Set()).get(id)!).add(e.from)
+      if (!stubs.has(id)) stubs.set(id, { path: null, label: e.ref, title: `Not found: ${e.ref}`, closed: false, unresolved: true })
+      continue
+    }
     let open = !(target.kind === 'ticket' && target.meta && isClosed((target.meta as TicketMeta).status))
     if (open && e.to.itemId) {
       const item = target.items.find((i) => i.id === e.to.itemId || i.fragments?.includes(e.to.itemId!))

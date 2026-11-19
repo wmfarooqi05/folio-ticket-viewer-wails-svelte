@@ -142,3 +142,43 @@ describe('sanitizeSvg and the cache', () => {
     expect(b.el.querySelector('pre code')?.textContent ?? 'graph TD').toContain('graph TD')
   })
 })
+
+describe('Mermaid output hardening (ticket 14 review)', () => {
+  it('strips the data attributes the document layer routes on, keeps the rest', async () => {
+    const m = await vi.importActual<typeof import('./mermaid')>('./mermaid')
+    const out = m.sanitizeSvg(
+      '<svg><foreignObject><a data-ext="https://evil.example" data-path="x.md" data-frag="q1" data-broken="1" data-copy data-keep data-anchor="a" data-mermaid data-line="3" data-id="n1">go</a></foreignObject></svg>',
+    )!
+    expect(out).not.toMatch(/data-(ext|path|frag|broken|copy|keep|anchor|mermaid|line)/)
+    expect(out).toContain('data-id="n1"')
+    expect(out).toContain('go')
+  })
+
+  it('draws a flowchart-elk diagram with dagre', async () => {
+    const m = await vi.importActual<typeof import('./mermaid')>('./mermaid')
+    expect(m.noElk('flowchart-elk TD\n A-->B')).toBe('flowchart TD\n A-->B')
+    expect(m.noElk('%% c\n  flowchart-elk LR')).toBe('%% c\n  flowchart LR')
+    expect(m.noElk('flowchart TD\n A-->B')).toBe('flowchart TD\n A-->B')
+  })
+
+  it('gives every insert of a cached SVG its own ids', async () => {
+    const m = await vi.importActual<typeof import('./mermaid')>('./mermaid')
+    const svg =
+      '<svg id="folio-mmd-7"><marker id="folio-mmd-7_end"></marker><path marker-end="url(#folio-mmd-7_end)"></path></svg>'
+    const mk = () => {
+      const d = document.createElement('div')
+      d.innerHTML = '<div class="code-head"></div><pre><code>x</code></pre>'
+      document.body.append(d)
+      return d
+    }
+    const a = mk()
+    const b = mk()
+    m.showSvg(a, svg)
+    m.showSvg(b, svg)
+    const ids = [...document.querySelectorAll('[id^="folio-mmd-7"]')].map((e) => e.id)
+    expect(ids).toHaveLength(4)
+    expect(new Set(ids).size).toBe(4)
+    const id = a.querySelector('svg')!.id
+    expect(a.querySelector('path')!.getAttribute('marker-end')).toBe(`url(#${id}_end)`)
+  })
+})

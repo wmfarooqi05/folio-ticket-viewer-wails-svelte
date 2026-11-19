@@ -49,6 +49,8 @@ const DROP = new Set([
   'animate',
   'set',
 ])
+/** The data attributes the document layer routes on (dom.ts, enhance.ts): a label must not carry them. */
+const DOC_DATA = new Set(['ext', 'path', 'frag', 'broken', 'copy', 'keep', 'anchor', 'mermaid', 'line'])
 const URL_ATTRS = new Set(['href', 'xlink:href', 'src', 'action', 'formaction', 'data', 'poster', 'background'])
 
 /** `url(` that does not point at a fragment of this document */
@@ -63,6 +65,7 @@ function cleanElement(el: Element): void {
     const name = a.name.toLowerCase()
     const value = a.value
     if (name.startsWith('on')) el.removeAttribute(a.name)
+    else if (name.startsWith('data-') && DOC_DATA.has(name.slice(5))) el.removeAttribute(a.name)
     else if (URL_ATTRS.has(name) && !value.trim().startsWith('#')) el.removeAttribute(a.name)
     else if (name === 'style' && (EXTERNAL_URL.test(value) || /expression\(|javascript:|@import/i.test(value))) el.removeAttribute(a.name)
     else if (name === 'srcdoc') el.removeAttribute(a.name)
@@ -195,6 +198,7 @@ type Mermaid = (typeof import('mermaid'))['default']
 let loaded: Promise<Mermaid> | null = null
 let configuredFor: string | null = null
 let seq = 0
+let inserts = 0
 /** one render at a time: Mermaid parks a scratch element in <body> per call */
 let queue: Promise<unknown> = Promise.resolve()
 
@@ -216,9 +220,25 @@ function configure(mermaid: Mermaid, theme: ThemeName): void {
     fontFamily: vars.fontFamily,
     suppressErrorRendering: true,
     logLevel: 'fatal',
+    // dagre only: ELK is not bundled (vite.config.ts), and a directive or frontmatter in a
+    // document must not be able to switch the layout, the security level or the limits
+    layout: 'dagre',
+    secure: [
+      'secure',
+      'securityLevel',
+      'startOnLoad',
+      'maxTextSize',
+      'suppressErrorRendering',
+      'maxEdges',
+      'layout',
+      'dompurifyConfig',
+    ],
   })
   configuredFor = key
 }
+
+/** `flowchart-elk` is the ELK flowchart; it is drawn with dagre like every other flowchart. */
+export const noElk = (src: string): string => src.replace(/^(\s*)flowchart-elk\b/m, '$1flowchart')
 
 /** The placeholder shows the diagram's source: the fallback and the error state. */
 export function showSource(el: HTMLElement, src: string, error: string | null): void {
@@ -241,7 +261,7 @@ export function showSource(el: HTMLElement, src: string, error: string | null): 
   }
 }
 
-function showSvg(el: HTMLElement, svg: string): void {
+export function showSvg(el: HTMLElement, svg: string): void {
   el.querySelector('.mermaid-err')?.remove()
   el.querySelector('pre')?.remove()
   let out = el.querySelector<HTMLElement>('.mermaid-out')
@@ -250,7 +270,10 @@ function showSvg(el: HTMLElement, svg: string): void {
     out.className = 'mermaid-out'
     el.append(out)
   }
-  out.innerHTML = svg // sanitizeSvg output, serialised: see above
+  // The cached string is shown in more than one place (the middle pane and the panel), so its
+  // id, and every reference to it, gets a suffix that is new for each insert.
+  const base = /<svg[^>]*\sid="([^"]+)"/.exec(svg)?.[1]
+  out.innerHTML = base ? svg.replaceAll(base, `${base}-${++inserts}`) : svg // sanitizeSvg output, serialised
   el.dataset.state = 'ready'
 }
 
@@ -285,7 +308,7 @@ export function renderBlocks(blocks: Block[], ctx: RenderContext): Promise<void>
       let svg: string
       try {
         configure(mermaid, ctx.theme)
-        svg = (await mermaid.render(id, b.src)).svg
+        svg = (await mermaid.render(id, noElk(b.src))).svg
       } catch (e) {
         if (ctx.alive()) showSource(b.el, b.src, oneLine(e))
         continue
