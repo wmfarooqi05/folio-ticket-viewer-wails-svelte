@@ -27,6 +27,42 @@ func TestInspectDocs(t *testing.T) {
 	if got := InspectDocs(filepath.Join(repo, "nope"), "docs", nil); got.OK {
 		t.Fatalf("missing repo accepted: %+v", got)
 	}
+	if got := InspectDocs(repo, "a/../../x", nil); got.OK {
+		t.Fatalf("a/../../x accepted: %+v", got)
+	}
+	if got := InspectDocs(repo, "mydocs", []string{"modules", "../x"}); got.OK {
+		t.Fatalf("escaping root accepted: %+v", got)
+	}
+}
+
+func TestSetConfigKeepsHandEditedSettings(t *testing.T) {
+	t.Setenv(EnvRoot, "")
+	repo := t.TempDir()
+	mkdir(t, repo, "docs", "modules")
+	path := filepath.Join(t.TempDir(), "settings.json")
+	svc := New(path)
+	theme := settings.ThemeLight
+	if _, err := svc.SetConfig(ConfigPatch{RepoRoot: &repo, Theme: &theme}); err != nil {
+		t.Fatal(err)
+	}
+	// The user edits the file by hand while the app runs.
+	ado := "https://dev.azure.com/hand/edited/{id}"
+	disk, _ := settings.Load(path)
+	disk.AdoWorkItemURL = ado
+	if err := settings.Save(path, disk); err != nil {
+		t.Fatal(err)
+	}
+	dark := settings.ThemeDark
+	got, err := svc.SetConfig(ConfigPatch{Theme: &dark})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AdoWorkItemURL != ado || got.Theme != settings.ThemeDark {
+		t.Fatalf("hand edit lost or patch not applied: %+v", got)
+	}
+	if after, _ := settings.Load(path); after.AdoWorkItemURL != ado {
+		t.Fatalf("hand edit overwritten on disk: %+v", after)
+	}
 }
 
 func TestSettingsRoundTripKeepsUnknownKeysAndWindow(t *testing.T) {
@@ -121,8 +157,12 @@ func TestFirstRunFlowAgainstFixtures(t *testing.T) {
 	if _, err := svc.SetConfig(ConfigPatch{DocsRoots: &only}); err != nil {
 		t.Fatal(err)
 	}
-	if res2, err := ds.Scan(); err != nil || res2.Count >= res.Count {
-		t.Fatalf("narrowing roots should shrink the scan: %d vs %d (%v)", res2.Count, res.Count, err)
+	if _, err := ds.ReadBatch(res.Changed); err != nil {
+		t.Fatal(err)
+	}
+	res2, err := ds.Rescan()
+	if err != nil || res2.Count == 0 || res2.Count >= res.Count || len(res2.Changed) != res2.Count {
+		t.Fatalf("narrowing roots should shrink the scan and list every file: %d vs %d (%v)", res2.Count, res.Count, err)
 	}
 
 	after := snapshot(t, fixtures)

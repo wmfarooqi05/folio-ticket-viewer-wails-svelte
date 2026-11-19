@@ -24,6 +24,11 @@ func ValidateExternalURL(raw string) (string, error) {
 	if s := strings.ToLower(u.Scheme); s != "http" && s != "https" {
 		return "", errors.New("only http and https links can be opened")
 	}
+	// Characters that must be escaped in a query. Rejecting them keeps a crafted
+	// template from smuggling extra arguments into the shell handoff.
+	if strings.ContainsAny(u.RawQuery, " \"<>\\^`{|}") {
+		return "", errors.New("link query contains unsafe characters")
+	}
 	if u.Hostname() == "" || u.User != nil {
 		return "", errors.New("link needs a host and no credentials")
 	}

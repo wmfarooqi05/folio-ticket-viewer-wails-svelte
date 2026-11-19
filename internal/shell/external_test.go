@@ -29,6 +29,13 @@ func TestValidateExternalURL(t *testing.T) {
 		"https://user:pw@example.com/",
 		"https://example.com/\nfile:///x",
 		"http//example.com",
+		"https://example.com/?a=b c",
+		"https://example.com/?a=\"x\"",
+		"https://example.com/?a=<b>",
+		"https://example.com/?a=b\\c",
+		"https://example.com/?a=b^c",
+		"https://example.com/?a=`x`",
+		"https://example.com/?a={b}|c",
 	}
 	for _, in := range bad {
 		if got, err := ValidateExternalURL(in); err == nil {

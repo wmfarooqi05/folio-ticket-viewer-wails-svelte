@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -106,8 +105,18 @@ func (s *ShellService) GetConfig() (Config, error) {
 func (s *ShellService) SetConfig(p ConfigPatch) (Config, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	next := s.saved
-	next.DocsRoots = slices.Clone(s.saved.DocsRoots)
+	// Pick up edits made to settings.json by hand ("Open settings file"), so a save
+	// does not overwrite them. The window bounds stay Go's in-memory copy. A missing
+	// or unreadable file keeps what is in memory.
+	base := s.saved
+	if _, err := os.Stat(s.path); err == nil {
+		if disk, err := settings.Load(s.path); err == nil {
+			disk.Window = s.saved.Window
+			base = disk
+		}
+	}
+	next := base
+	next.DocsRoots = slices.Clone(base.DocsRoots)
 	if p.RepoRoot != nil {
 		next.RepoRoot = *p.RepoRoot
 	}
@@ -269,9 +278,15 @@ func InspectDocs(repoRoot, docsDir string, roots []string) RootCheck {
 	if docsDir == "" {
 		docsDir = settings.DefaultDocsDir
 	}
-	if filepath.IsAbs(docsDir) || strings.HasPrefix(filepath.ToSlash(docsDir), "..") {
+	if !settings.IsRelativeInside(docsDir) {
 		rc.Message = "the docs folder must be inside the repo root"
 		return rc
+	}
+	for _, r := range roots {
+		if !settings.IsRelativeInside(r) {
+			rc.Message = "the docs roots must be folders inside the docs folder"
+			return rc
+		}
 	}
 	rc.Found, rc.Missing = probe(filepath.Join(repoRoot, filepath.FromSlash(docsDir)), roots)
 	rc.OK = len(rc.Found) > 0
