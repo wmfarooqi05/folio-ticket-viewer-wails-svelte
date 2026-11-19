@@ -1,8 +1,8 @@
 ---
 type: build
-status: in-review
-status_note: "built on branch worktree-agent-aca622383b057057e, not merged"
-waiting_on: null
+status: blocked
+status_note: "merged Nov 20, 2026; waiting on the owner's check of the panel in the app"
+waiting_on: owner
 blocked_by: []
 blocked_note: null
 related: ["03", "04"]
