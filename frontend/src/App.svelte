@@ -14,6 +14,7 @@
   import { pinnedItems } from './lib/pinned'
   import { pinnedCounts, type ViewId } from './lib/views'
   import * as panelStack from './lib/panel'
+  import { DEFAULT_WIDTH, MAX_WIDTH, MIN_WIDTH, clampWidth, dragWidth, keyWidth, maxWidth } from './lib/resize'
 
   let { initial }: { initial: Config | null } = $props()
 
@@ -46,6 +47,57 @@
   let panelAside = $state<HTMLElement>()
   let mainEl = $state<HTMLElement>()
   let returnFocus: HTMLElement | null = null
+
+  // Tree width (drag-to-resize). sidebarW is the wish; the width drawn is clamped to what fits.
+  let sidebarW = $state(DEFAULT_WIDTH)
+  let bodyW = $state(0) // width of the row that holds the three panes
+  let treeAside = $state<HTMLElement>()
+  let dragging = $state(false)
+  const maxW = $derived(bodyW > 0 ? maxWidth(bodyW, rightPanelOpen) : MAX_WIDTH)
+  const treeW = $derived(clampWidth(sidebarW, maxW))
+  let dragX = 0
+  let dragRaf = 0
+  let saveTimer: ReturnType<typeof setTimeout> | undefined
+
+  function saveWidth() {
+    clearTimeout(saveTimer)
+    api.setSidebarWidth(treeW).catch((err) => console.error('could not save the sidebar width', err))
+  }
+  function dragStart(e: PointerEvent) {
+    if (e.button !== 0 || !treeAside) return
+    e.preventDefault() // no text selection or native drag
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    dragging = true
+  }
+  function dragMove(e: PointerEvent) {
+    if (!dragging || !treeAside) return
+    dragX = e.clientX
+    if (dragRaf) return // one update per frame
+    dragRaf = requestAnimationFrame(() => {
+      dragRaf = 0
+      if (treeAside) sidebarW = dragWidth(dragX, treeAside.getBoundingClientRect().left, maxW)
+    })
+  }
+  function dragEnd(e: PointerEvent) {
+    if (!dragging) return
+    dragging = false
+    cancelAnimationFrame(dragRaf)
+    dragRaf = 0
+    if (treeAside && e.type === 'pointerup') sidebarW = dragWidth(e.clientX, treeAside.getBoundingClientRect().left, maxW)
+    saveWidth() // once, at the end of the drag
+  }
+  function resetWidth() {
+    sidebarW = DEFAULT_WIDTH
+    saveWidth()
+  }
+  function dividerKey(e: KeyboardEvent) {
+    const next = keyWidth(e.key, treeW, maxW)
+    if (next === null) return
+    e.preventDefault()
+    sidebarW = next
+    clearTimeout(saveTimer)
+    saveTimer = setTimeout(saveWidth, 400) // a held key is one save, not many
+  }
 
   $effect(() => {
     if (panel.length) shownStack = panel
@@ -90,6 +142,7 @@
   onMount(async () => {
     try {
       config = initial ?? (await api.getConfig())
+      sidebarW = clampWidth(config.sidebarWidth) // 0 (never saved) gives the default
       if (config.repoRoot) await load()
       else phase = 'first-run'
     } catch (err) {
@@ -253,7 +306,7 @@
 
 <svelte:window onkeydown={onwindowkeydown} />
 
-<div class="flex h-full flex-col bg-bg text-fg" inert={settingsOpen}>
+<div class="flex h-full flex-col bg-bg text-fg {dragging ? 'cursor-col-resize select-none' : ''}" inert={settingsOpen}>
   <header class="chrome flex h-44 shrink-0 items-center gap-12 border-b border-line bg-side px-14">
     <span class="text-[13.5px] font-semibold tracking-[-0.01em]">Folio</span>
     <ol class="flex min-w-0 flex-1 items-center gap-6 text-sm text-fg2" aria-label="Breadcrumb">
@@ -283,9 +336,11 @@
     </button>
   </header>
 
-  <div class="flex min-h-0 flex-1">
+  <div class="flex min-h-0 flex-1" bind:clientWidth={bodyW}>
     <aside
-      class="chrome w-280 shrink-0 flex-col border-r border-line bg-side {!treeOpen ? 'hidden' : rightPanelOpen ? 'hidden min-[1200px]:flex' : 'flex'}"
+      bind:this={treeAside}
+      style:width="{treeW}px"
+      class="chrome relative shrink-0 flex-col border-r border-line bg-side {dragging ? '' : 'transition-[width] duration-(--dur-hover)'} {!treeOpen ? 'hidden' : rightPanelOpen ? 'hidden min-[1200px]:flex' : 'flex'}"
     >
       {#if phase === 'ready'}
         <Tree
@@ -300,6 +355,31 @@
       {:else}
         <p class="p-12 text-sm text-fg3">{phase === 'loading' ? status || 'Loading…' : ''}</p>
       {/if}
+      <!-- the drag handle: a 9px hit area on the tree's right edge, with a 2px accent line -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        aria-valuenow={treeW}
+        aria-valuemin={MIN_WIDTH}
+        aria-valuemax={maxW}
+        tabindex="0"
+        class="group/h absolute inset-y-0 -right-[5px] z-10 w-[9px] cursor-col-resize touch-none outline-none"
+        onpointerdown={dragStart}
+        onpointermove={dragMove}
+        onpointerup={dragEnd}
+        onpointercancel={dragEnd}
+        onlostpointercapture={dragEnd}
+        ondblclick={resetWidth}
+        onkeydown={dividerKey}
+      >
+        <span
+          class="pointer-events-none absolute inset-y-0 left-1/2 w-[2px] -translate-x-1/2 bg-acc transition-opacity duration-(--dur-hover) {dragging
+            ? 'opacity-100'
+            : 'opacity-0 group-hover/h:opacity-60 group-focus-visible/h:opacity-100'}"
+        ></span>
+      </div>
     </aside>
 
     <main bind:this={mainEl} tabindex="-1" class="min-w-0 flex-1 overflow-auto bg-bg outline-none">

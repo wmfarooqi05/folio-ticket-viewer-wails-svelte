@@ -27,7 +27,9 @@ const BATCH_SIZE = 100
 
 export const getConfig = (): Promise<Config> => ShellService.GetConfig()
 export const setConfig = (patch: ConfigPatch): Promise<Config> => ShellService.SetConfig(patch)
-export const pickFolder = (): Promise<string> => ShellService.PickFolder()
+/** UI state, saved once when a resize ends. Returns the width Go stored (clamped). */
+export const setSidebarWidth = (width: number): Promise<number> => ShellService.SetSidebarWidth(width)
+export const pickFolder =(): Promise<string> => ShellService.PickFolder()
 export const checkRoot = (abs: string): Promise<RootCheck> => ShellService.CheckRoot(abs)
 export const checkDocs = (repoRoot: string, docsDir: string, roots: string[]): Promise<RootCheck> =>
   ShellService.CheckDocs(repoRoot, docsDir, roots)

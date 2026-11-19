@@ -43,6 +43,15 @@ type Window struct {
 	Maximised bool `json:"maximised"`
 }
 
+// Sidebar width bounds in px. The frontend clamps to the same range (lib/resize.ts).
+const (
+	MinSidebarWidth = 200
+	MaxSidebarWidth = 480
+)
+
+// ClampSidebarWidth limits w to the allowed range.
+func ClampSidebarWidth(w int) int { return min(max(w, MinSidebarWidth), MaxSidebarWidth) }
+
 // Settings is the content of settings.json.
 type Settings struct {
 	V              int      `json:"v"`
@@ -53,6 +62,11 @@ type Settings struct {
 	AdoPRURL       string   `json:"adoPrUrl"`
 	Theme          string   `json:"theme"`
 	Window         Window   `json:"window"`
+
+	// SidebarWidth is the tree's width in px. UI state, not a user setting: it sits
+	// beside Window, is not in the Settings dialog and is not patchable through
+	// SetConfig. 0 means the default.
+	SidebarWidth int `json:"sidebarWidth"`
 
 	// Extra holds keys this version does not know. They are written back unchanged.
 	Extra map[string]json.RawMessage `json:"-"`
@@ -90,7 +104,7 @@ func Path() (string, error) {
 // The bad file has been renamed to settings.json.bad and defaults are returned.
 var ErrCorrupt = errors.New("settings file is corrupt")
 
-var knownKeys = []string{"v", "repoRoot", "docsDir", "docsRoots", "adoWorkItemUrl", "adoPrUrl", "theme", "window"}
+var knownKeys = []string{"v", "repoRoot", "docsDir", "docsRoots", "adoWorkItemUrl", "adoPrUrl", "theme", "window", "sidebarWidth"}
 
 // Load reads path. A missing file yields Defaults and no error. A corrupt file is
 // renamed to <path>.bad, and Load returns Defaults with an error wrapping ErrCorrupt.

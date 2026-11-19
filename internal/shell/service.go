@@ -112,6 +112,7 @@ func (s *ShellService) SetConfig(p ConfigPatch) (Config, error) {
 	if _, err := os.Stat(s.path); err == nil {
 		if disk, err := settings.Load(s.path); err == nil {
 			disk.Window = s.saved.Window
+			disk.SidebarWidth = s.saved.SidebarWidth
 			base = disk
 		}
 	}
@@ -143,6 +144,29 @@ func (s *ShellService) SetConfig(p ConfigPatch) (Config, error) {
 	}
 	s.saved = next
 	return s.effective(), nil
+}
+
+// SetSidebarWidth saves the tree width (UI state, called once when a drag ends). It
+// reloads settings.json first so hand edits survive, changes only that field, and
+// clamps the value. A missing file is created; a corrupt one is left alone.
+func (s *ShellService) SetSidebarWidth(width int) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	base := s.saved
+	if _, err := os.Stat(s.path); err == nil {
+		disk, err := settings.Load(s.path) // a corrupt file is quarantined and yields defaults
+		if err != nil {
+			return 0, err
+		}
+		disk.Window = s.saved.Window
+		base = disk
+	}
+	base.SidebarWidth = settings.ClampSidebarWidth(width)
+	if err := settings.Save(s.path, base); err != nil {
+		return 0, err
+	}
+	s.saved = base
+	return base.SidebarWidth, nil
 }
 
 // PickFolder opens the native folder dialog. "" means cancelled.
