@@ -1,19 +1,21 @@
 import type { IconName } from './icons/icons'
+import type { ViewId } from './views'
 
 /**
- * One row of the pinned views list at the top of the tree. Ticket 10 draws the rows;
- * ticket 12 owns the views and feeds the real counts (`count: null` draws no number).
+ * One row of the pinned views list at the top of the tree (Tree.svelte draws it).
+ * `count: null` draws no number.
  */
 export interface PinnedItem {
-  id: string
+  id: ViewId
   label: string
   count: number | null
   icon?: IconName
 }
 
-/** The three rows of the mockup, with no counts yet. Ticket 12 replaces this. */
-export const PINNED_STUBS: PinnedItem[] = [
-  { id: 'waiting', label: 'Waiting on', count: null, icon: 'clock' },
-  { id: 'questions', label: 'Open questions', count: null, icon: 'circle-help' },
-  { id: 'board', label: 'Board', count: null, icon: 'columns-3' },
-]
+/** The pinned rows, fed by `pinnedCounts(index)` from lib/views.ts (ticket 12). */
+export function pinnedItems(counts: { waiting: number; questions: number } | null): PinnedItem[] {
+  return [
+    { id: 'waiting', label: 'Waiting on', count: counts?.waiting ?? null, icon: 'clock' },
+    { id: 'questions', label: 'Open questions', count: counts?.questions ?? null, icon: 'circle-help' },
+  ]
+}

@@ -176,7 +176,7 @@ md.renderer.rules.link_open = (tokens, idx, _o, e) => {
   const env = e as RenderEnv
   const t = tokens[idx]
   const meta = (t.meta ?? {}) as LinkMeta
-  const href = t.attrGet('href') ?? ''
+  const href = String(t.attrGet('href') ?? '')
   let open: string, close: string
   if (meta.ext) {
     ;[open, close] = [tag('lk lk-ext', ` href="#" data-ext="${escapeHtml(meta.ext)}"`, meta.ext), '</a>']
@@ -191,7 +191,7 @@ md.renderer.rules.link_close = (_t, _i, _o, e) => (e as RenderEnv).closers.pop()
 md.renderer.rules.image = (tokens, idx, _o, e, self) => {
   const env = e as RenderEnv
   const t = tokens[idx]
-  const src = t.attrGet('src') ?? ''
+  const src = String(t.attrGet('src') ?? '')
   const alt = self.renderInlineAsText(t.children ?? [], md.options, env)
   const p = resolveImagePath(src, env.path)
   if (p === 'external') {
@@ -315,7 +315,7 @@ function folio(state: StateCore): void {
             kids.unshift(box)
             toks[i - 2].attrJoin('class', 'task-item')
             const list = lists.at(-1)
-            if (list && !list.attrGet('class')?.includes('task-list')) list.attrJoin('class', 'task-list')
+            if (list && !String(list.attrGet('class') ?? '').includes('task-list')) list.attrJoin('class', 'task-list')
           }
         }
         t.children = autolink(state, kids, env)

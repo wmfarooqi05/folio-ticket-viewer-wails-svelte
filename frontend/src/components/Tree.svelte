@@ -12,8 +12,8 @@
     onselect: (path: string) => void
     /** the pinned views list; ticket 12 feeds the real counts. Rows are drawn, links are stubs. */
     pinned?: PinnedItem[]
-    activeView?: string | null
-    onview?: (id: string) => void
+    activeView?: PinnedItem["id"] | null
+    onview?: (id: PinnedItem["id"]) => void
   }
   let { files, selected, onselect, pinned = [], activeView = null, onview }: Props = $props()
 
