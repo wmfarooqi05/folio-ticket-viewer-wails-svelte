@@ -3,7 +3,7 @@
 Drafted Nov 19, 2026 as input to [05-index-cache-refresh](../issues/05-index-cache-refresh.md). It recommends; the owner decides.
 
 Sources:
-- [01 FINDINGS](../../prototypes/01-wails-shell/FINDINGS.md), and the prototype's `fileservice.go`, `main.go` and `App.svelte`
+- [01 FINDINGS](01-findings.md), and the prototype's `fileservice.go`, `main.go` and `App.svelte`
 - the [04 contract](04-parser-contract-draft.md)
 - the [03 design spec](03-design-spec.md)
 - handoff §7

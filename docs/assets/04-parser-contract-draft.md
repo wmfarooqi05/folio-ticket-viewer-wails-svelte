@@ -1,6 +1,6 @@
 # 04 — Parser contract: draft for the decision session
 
-Drafted Nov 19, 2026 as input to [04-parser-contract](../issues/04-parser-contract.md). It recommends; the owner decides. Sources: [handoff](../../tickets/handoff.md) §1–5, §7, Part A data flow; [tickets.md](../../tickets/tickets.md); [fixtures/expected.json](../../fixtures/expected.json).
+Drafted Nov 19, 2026 as input to [04-parser-contract](../issues/04-parser-contract.md). It recommends; the owner decides. Sources: [handoff](../handoff/handoff.md) §1–5, §7, Part A data flow; [conventions.md](../handoff/conventions.md); [fixtures/expected.json](../../fixtures/expected.json).
 
 **Owner-judgement questions (the only ones that need a debate):** J1 (A1), J2 (A6/A7), J3 (A5/A9), J4 (fallback-extension policy: A3, A7, A12), J5 (legacy questions in the Open questions view). Everything else in section 3 has an obvious answer that can be accepted as a block.
 

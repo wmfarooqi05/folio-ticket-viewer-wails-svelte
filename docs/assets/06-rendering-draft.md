@@ -6,7 +6,7 @@ Sources:
 - handoff §5 and §7
 - the [04 draft](04-parser-contract-draft.md) (contract D1)
 - the [03 design spec](03-design-spec.md) (`Markdown` and `DepGraph` components, G9, G15)
-- [01 FINDINGS](../../prototypes/01-wails-shell/FINDINGS.md)
+- [01 FINDINGS](01-findings.md)
 - the [fixtures](../../fixtures/README.md) traps
 
 **How the sizes were measured:** the packages were installed from npm on Nov 19 and bundled with esbuild 0.28.2 (`--bundle --minify --format=esm`, browser), then compressed with `gzip -9`. That is close to what Vite 8 produces. Speed is node 26, rendering the 78 fixture files (32 KB) 20 times. Figures marked *est.* are estimates.

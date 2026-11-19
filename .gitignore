@@ -22,3 +22,6 @@ Thumbs.db
 *.log
 .env
 .env.*
+
+# Throwaway prototypes (findings live in docs/assets)
+prototypes/

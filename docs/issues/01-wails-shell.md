@@ -38,7 +38,7 @@ The stack is Wails (Go backend, WebView2 window). Owner priority is low RAM. Bef
 
 ## Outcome
 
-Done Nov 19, 2026. Findings: [FINDINGS.md](../../prototypes/01-wails-shell/FINDINGS.md). Prototype: `prototypes/01-wails-shell/`.
+Done Nov 19, 2026. Findings: [01-findings.md](../assets/01-findings.md). The throwaway prototype was deleted once the real app was scaffolded.
 
 ### <a id="d1"></a>D1 — The stack works; pins
 Pinned versions:

@@ -2,7 +2,7 @@
 
 Extracted Nov 19, 2026 from [03-folio-mockup.html](03-folio-mockup.html), as input to [03-ui-design](../issues/03-ui-design.md). **Already decided (owner):** this mockup is the design, and the theme is **Indigo**. This spec captures that design and flags gaps. It does not reopen the choice.
 
-Other sources: [design-prompt.md](../design-prompt.md), [map.md](../map.md) (Wails v3 + Svelte 5 + Tailwind v4, read-only, low RAM), [handoff §7](../../tickets/handoff.md), [04 parser contract](04-parser-contract-draft.md) (`DocRecord`, `Index`).
+Other sources: [design-prompt.md](../design-prompt.md), [map.md](../map.md) (Wails v3 + Svelte 5 + Tailwind v4, read-only, low RAM), [handoff §7](../handoff/handoff.md), [04 parser contract](04-parser-contract-draft.md) (`DocRecord`, `Index`).
 
 **About the mockup file.** It is a bundler export. A loader script unpacks a base64+gzip manifest: React 18.3.1 UMD (about 142 KB, used only for the demo), a 69 KB runtime, 11 Geist woff2 subsets and a 94 KB HTML template. All values below come from the decoded template and its component script (`renderVals()`). The mockup uses no CSS file and no Tailwind: every style is inline, and the colours are CSS custom properties set on the root element.
 
