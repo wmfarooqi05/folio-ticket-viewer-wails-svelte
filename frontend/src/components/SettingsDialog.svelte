@@ -4,6 +4,7 @@
   import { onDestroy, onMount, untrack } from 'svelte'
   import * as api from '../lib/api'
   import type { Config, RootCheck } from '../lib/api'
+  import { pickRoot, rootsLabel } from '../lib/folder'
   import {
     SECTIONS,
     THEMES,
@@ -86,14 +87,12 @@
 
   async function choose() {
     try {
-      const picked = await api.pickFolder()
-      if (!picked) return // cancelled
-      const rc = await api.checkRoot(picked)
-      if (rc.ok) {
-        draft.repoRoot = rc.repoRoot
-        draft.docsDir = rc.docsDir
-      } else {
-        draft.repoRoot = picked // shows the "No roots" warning
+      const res = await pickRoot()
+      if (res.kind === 'ok') {
+        draft.repoRoot = res.repoRoot
+        draft.docsDir = res.docsDir
+      } else if (res.kind === 'no-roots') {
+        draft.repoRoot = res.picked // shows the "No roots" warning
       }
     } catch (err) {
       saveError = message(err)
@@ -218,7 +217,7 @@
                     <div class="warn" role="alert">
                       <span class="dot" style="width:7px;height:7px;background:var(--s-rev)"></span>
                       <span style="flex:1;min-width:0">
-                        This folder has none of <span class="mono" style="font-size:11.5px">{draft.docsRoots.map((r) => r + '/').join(' · ')}</span>
+                        This folder has none of <span class="mono" style="font-size:11.5px">{rootsLabel(draft.docsRoots)}</span>
                       </span>
                       <button type="button" class="link" onclick={choose}>Choose again</button>
                     </div>
