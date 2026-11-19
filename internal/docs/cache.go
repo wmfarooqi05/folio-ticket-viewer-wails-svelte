@@ -155,3 +155,12 @@ func writeAtomic(path string, b []byte) error {
 	}
 	return nil
 }
+
+// LogTimings writes a frontend timing line to the Go log, so a launch can be read
+// from one place (AC1). It has no other effect.
+func (s *DocsService) LogTimings(line string) {
+	if len(line) > 500 {
+		line = line[:500]
+	}
+	log.Printf("folio.timing: %s", line)
+}

@@ -198,8 +198,10 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
   function applyChangeSet(cs: ChangeInfo): Promise<void> {
     return enqueue(async () => {
       if (!index || (!cs.changed.length && !cs.removed.length)) return
+      const t = deps.now()
       const r = await applyPaths(index, cs.changed, cs.removed, false, () => '')
       publish(r.index)
+      deps.log(`index: applied ChangeSet (${cs.changed.length} changed, ${cs.removed.length} removed) in ${Math.round(deps.now() - t)} ms`)
       hooks.onTouched(r.touched, r.gone)
       scheduleSave()
     })

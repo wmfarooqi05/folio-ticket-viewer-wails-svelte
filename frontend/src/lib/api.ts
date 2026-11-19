@@ -45,6 +45,8 @@ export const readFile = (path: string): Promise<string> => DocsService.ReadFile(
 export const loadCache = (parserVersion: string): Promise<unknown> => DocsService.LoadCache(parserVersion)
 /** Writes the index through Go, which adds its stamps and saves atomically. */
 export const saveCache = (parserVersion: string, index: unknown): Promise<void> => DocsService.SaveCache(parserVersion, index)
+/** Writes a timing line to the Go log. */
+export const logTimings = (line: string): Promise<void> => DocsService.LogTimings(line)
 /** One ReadBatch call. The caller keeps batches to BATCH_SIZE paths. */
 export const readBatch = async (paths: string[]): Promise<{ files: SourceFile[]; missing: string[] }> => {
   const res = await DocsService.ReadBatch(paths)

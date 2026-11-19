@@ -21,6 +21,7 @@ func init() {
 }
 
 func main() {
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds) // the cache timings are read from this log
 	path, err := settings.Path()
 	if err != nil {
 		log.Fatalf("folio: settings path: %v", err)

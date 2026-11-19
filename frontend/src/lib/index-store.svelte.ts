@@ -48,7 +48,10 @@ class IndexStore {
         emptyIndex: () => buildIndex([]),
         parserVersion: __PARSER_VERSION__,
         now: () => performance.now(),
-        log: (m) => console.info(m),
+        log: (m) => {
+          console.info(m)
+          void api.logTimings(m).catch(() => {})
+        },
         setTimer: (fn, ms) => setTimeout(fn, ms),
         clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
       },
