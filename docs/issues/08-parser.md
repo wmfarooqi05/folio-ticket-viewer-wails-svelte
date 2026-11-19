@@ -20,16 +20,16 @@ Every view reads the index. The parser is the 04 contract, and `fixtures/expecte
 
 ## To do
 
-- [ ] Implement the 04 contract in `frontend/src/lib/parser/`:
+- [x] Implement the 04 contract in `frontend/src/lib/parser/`:
   - the viewer API: `buildIndex`, `updateIndex`, `resolveHref`, `extractFragment` and `scanText`;
   - the exported pieces: `parseFile`, `parseFrontmatter`, `parseLegacy`, `parseItems`, `parseLinks` and `resolveRef`.
 
   Spec: [04-parser-contract-draft.md](../assets/04-parser-contract-draft.md), amended by [04](04-parser-contract.md) D2–D7.
-- [ ] Legacy fallback with the amended rules: superseded narrowed, "merged" wins, `waiting_on` inferred only when blocked, typography-only normalisation.
-- [ ] Keep it free of DOM, Svelte and imports, so it compiles to a standalone `lib.mjs`.
-- [ ] Turn every `it.todo` in `index.test.ts` into a real test, and assert every record and section of `expected.json`: tickets, ambiguities, items, links, refs, textRefs and hidden.
-- [ ] Add a build target that emits `dist-lib/lib.mjs`, and a ~15-line Node adapter `buildIndexFromDisk(root)` for the upstream CLI.
-- [ ] A perf test: fixtures copied to about 1,000 files. Record the cold `buildIndex` time against 04 Q1's thresholds (a batch over 50 ms or a cold build over 300 ms would mean adding a worker).
+- [x] Legacy fallback with the amended rules: superseded narrowed, "merged" wins, `waiting_on` inferred only when blocked, typography-only normalisation.
+- [x] Keep it free of DOM, Svelte and imports, so it compiles to a standalone `lib.mjs`.
+- [x] Turn every `it.todo` in `index.test.ts` into a real test, and assert every record and section of `expected.json`: tickets, ambiguities, items, links, refs, textRefs and hidden.
+- [x] Add a build target that emits `dist-lib/lib.mjs`, and a ~15-line Node adapter `buildIndexFromDisk(root)` for the upstream CLI.
+- [x] A perf test: fixtures copied to about 1,000 files. Record the cold `buildIndex` time against 04 Q1's thresholds (a batch over 50 ms or a cold build over 300 ms would mean adding a worker).
 
 ## Done when
 
@@ -39,4 +39,38 @@ Every view reads the index. The parser is the 04 contract, and `fixtures/expecte
 
 ## Outcome
 
-*(empty)*
+Built Nov 20, 2026 on the worktree branch; `status:` is left for the orchestrator to close.
+
+**What was built**
+
+- `frontend/src/lib/parser/index.ts`: the full 04 contract, with no imports. Viewer API: `buildIndex`, `updateIndex`, `resolveHref`, `extractFragment`, `scanText`. Pieces: `parseFile`, `parseFrontmatter`, `parseLegacy`, `parseItems`, `parseLinks`, `resolveRef`. Legacy fallback follows D2 to D5 (rule 1 narrowed, "merged" wins, `waiting_on` only for blocked legacy tickets or a Type token on an open ticket, typography-only normalisation).
+- `frontend/src/lib/parser/node.ts`: the Node adapter `buildIndexFromDisk(root)` (about 15 lines of logic) plus `readDocsRoot`. It is not in `lib.mjs`.
+- `frontend/vite.lib.config.ts`, `npm run build:lib` and `task build:lib` emit `frontend/dist-lib/lib.mjs` (git-ignored, about 28 kB, 9 kB gzip). It has zero imports and exports the 11 functions.
+- `index.test.ts`: 166 tests, no `it.todo`. Every record and section of `expected.json` is asserted: all 64 tickets (every meta key, `key`, `title`, `legacy`, `legacyRule`), each of the 21 ambiguities plus T1, `items` (8 files, exact), `links` (10 files), `refs` (10 files, exact against `index.edges`), `textRefs` (8 files) and `hidden`. It also covers `updateIndex`, `extractFragment`, `resolveHref` and the frontmatter and legacy edge cases.
+
+**Timing (04 Q1, AC3).** A corpus of 1,066 files (the 78 fixtures copied 14 times with the space names suffixed, in a temp dir), measured inside Node 26 / V8 on this machine:
+
+| Measure | Result | Threshold |
+|---|---|---|
+| Cold `buildIndex` of all 1,066 files | about 21 ms | 300 ms |
+| Worst `updateIndex` batch of 100 files (each batch reruns the full cross-file pass) | about 6 ms | 50 ms |
+
+Both are far under the thresholds, so no worker is needed, as 04 Q1 recommended. This is Node, not WebView2; the 04 draft's exit criterion asks for a run inside WebView2, which belongs to the integration tickets. The perf test asserts the two thresholds, so a regression fails `npm test`.
+
+**Where `expected.json` and the contract differ (the oracle was followed)**
+
+- `endLine` of an item is the last non-blank line of its range (the oracle's `format` note). The draft's wording, "to the line before the next item", would include trailing blank lines.
+- `items` entries carry a `fragments` array for q35 in ticket 41. The draft does not list it, so `Item.fragments?` was added (optional; only set when a legacy "Qn answered" follow-up adds a slug).
+- `links` lists only some links per file (for example 4 of the 18 in the rsa map). The tests check that each listed link is present and equal, not that the list is complete.
+- Image links have `resolved: null` in the oracle. The draft says images resolve like other links but are never in the index, so the parser leaves `resolved` unset and the test reads `resolved ?? null`.
+- `textRefs` includes `kind: "none"` entries. `scanText` returns no entry for those, and the test asserts that nothing covers the text. Its `line` and `text` are tested against the offsets `scanText` returns per line.
+- The index holds 76 files, not the 78 on disk, because `modules/_templates/` is hidden (the old skeleton test said 78).
+- Not in the oracle, but real: `modules/cash-movement-engine/issues/08-shared-matcher.md` links to `../map.md`, which does not exist in the fixtures, so it gets a `LINK` warning. The tests pin it.
+
+No ticket, ambiguity or item value in `expected.json` had to be edited, and it was not.
+
+**Decisions the contract left open**
+
+- `map.issuesDir` is always `<map dir>/issues` (the parser cannot see the folder from one file).
+- Cross-file results (`links[].resolved`, `edges`, `diagnostics` of kind `LINK`, `FM_REF`, `DUP_NUM`) are written to copies of the records, so `updateIndex` never mutates the index it was given. An unresolved legacy ref is an `FM_REF` warning; a migrated one is an error.
+- `parseLegacy` also returns `warnings` (code `LEGACY_TYPE` for a dropped Type token); `parseFile` turns them into diagnostics.
