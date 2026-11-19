@@ -37,7 +37,7 @@ Reached when:
 **Planning destination reached on Nov 20, 2026.** Decisions 01–07 are closed. The build runs as slices 08–15 on the scaffolded app.
 
 1. **Done:** 08 (parser) merged. 13 (settings) merged, waiting on the owner's UI check.
-2. **Now, in parallel:** 09 (cache), 10 (document view) and 12 (views), in parallel.
+2. **Now, in parallel:** 09 (cache), 10 (document view) and 12 (views).
 3. **After 10:** 11 (side panel). After 10 and 12: 14 (graph, Mermaid, highlighting).
 4. **Last:** 15 (budgets, installer, v1 on the VM).
 
