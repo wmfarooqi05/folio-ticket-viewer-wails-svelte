@@ -3,6 +3,8 @@
    Light is the default. Dark applies when the user picked it (data-theme="dark"),
    or when the user picked nothing ("system") and the OS prefers dark. */
 
+@import './fonts.css';
+
 :root {
   --bg: #fafaf8;
   --side: #f3f3f0;
