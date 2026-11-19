@@ -65,7 +65,7 @@ Built on branch `worktree-agent-aa26125aa951ce786`, not merged.
 
 All under 400 KB and 25 KB, and none is in the initial chunk. Both fixtures (flowchart in `cash-handling-workflow/issues/04`, sequence diagram in `handoffs/ocm-cutover-handoff.md`) render in the built exe under the production CSP (no `unsafe-eval` needed) and in a browser harness in light and dark. `bin/folio.exe` is 15.5 MiB.
 
-**AC3, RAM.** Measured on `binolio.exe` with `FOLIO_ROOT=fixtures\docs`, summing private bytes over `folio.exe` and its `msedgewebview2.exe` children (7 processes), 35 s after launch:
+**AC3, RAM.** Measured on `bin\folio.exe` with `FOLIO_ROOT=fixtures\docs`, summing private bytes over `folio.exe` and its `msedgewebview2.exe` children (7 processes), 35 s after launch:
 
 | State | Private bytes |
 |---|---|
