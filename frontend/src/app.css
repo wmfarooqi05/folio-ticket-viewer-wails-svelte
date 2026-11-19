@@ -20,6 +20,25 @@ body {
 }
 
 /* Desktop feel: chrome is not selectable, document content is (see docs/map.md). */
+@keyframes dlgIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .chrome {
   user-select: none;
 }

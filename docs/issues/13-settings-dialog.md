@@ -20,15 +20,15 @@ afk: true
 
 ## To do
 
-- [ ] A modal dialog opened from the gear and Ctrl+, with sections Docs folder, Links and Appearance, driven by one schema so later fields are added in one place.
-- [ ] **Docs folder:** the repo root with the native picker, the docs folder name, root chips showing found or missing, and "Watching N files · last scan X ms".
-- [ ] **Links:** the ADO work-item and PR URL templates, with live previews. Validate `https://` and `{id}` inline.
-- [ ] **Appearance:** System, Light and Dark.
-- [ ] **Footer:** "Open settings file" (through OpenInVSCode on `settings.json`), Cancel, and Save, disabled until something changes.
-- [ ] **States from the mockup:** Default, Link error, No roots, Saved (a toast) and Dark. Esc closes, Enter saves, with an Indigo focus ring.
-- [ ] **Saving:** a new root triggers a rescan. A changed URL template updates the chips live.
-- [ ] Implement `ShellService.OpenExternal` (http and https only) for the ADO, PR and external links.
-- [ ] Test the first run end to end: no settings, then the picker, then CheckRoot, then SetConfig, then the scan.
+- [x] A modal dialog opened from the gear and Ctrl+, with sections Docs folder, Links and Appearance, driven by one schema so later fields are added in one place.
+- [x] **Docs folder:** the repo root with the native picker, the docs folder name, root chips showing found or missing, and "Watching N files · last scan X ms".
+- [x] **Links:** the ADO work-item and PR URL templates, with live previews. Validate `https://` and `{id}` inline.
+- [x] **Appearance:** System, Light and Dark.
+- [x] **Footer:** "Open settings file" (through OpenInVSCode on `settings.json`), Cancel, and Save, disabled until something changes.
+- [x] **States from the mockup:** Default, Link error, No roots, Saved (a toast) and Dark. Esc closes, Enter saves, with an Indigo focus ring.
+- [x] **Saving:** a new root triggers a rescan. A changed URL template updates the chips live.
+- [x] Implement `ShellService.OpenExternal` (http and https only) for the ADO, PR and external links.
+- [x] Test the first run end to end: no settings, then the picker, then CheckRoot, then SetConfig, then the scan.
 
 ## Done when
 

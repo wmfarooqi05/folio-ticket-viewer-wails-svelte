@@ -29,7 +29,11 @@ export const getConfig = (): Promise<Config> => ShellService.GetConfig()
 export const setConfig = (patch: ConfigPatch): Promise<Config> => ShellService.SetConfig(patch)
 export const pickFolder = (): Promise<string> => ShellService.PickFolder()
 export const checkRoot = (abs: string): Promise<RootCheck> => ShellService.CheckRoot(abs)
-export const openInVSCode = (path: string, line = 0): Promise<void> => ShellService.OpenInVSCode(path, line)
+export const checkDocs = (repoRoot: string, docsDir: string, roots: string[]): Promise<RootCheck> =>
+  ShellService.CheckDocs(repoRoot, docsDir, roots)
+export const openExternal = (url: string): Promise<void> => ShellService.OpenExternal(url)
+export const openSettingsFile = (): Promise<void> => ShellService.OpenSettingsFile()
+export const openInVSCode =(path: string, line = 0): Promise<void> => ShellService.OpenInVSCode(path, line)
 
 // ---- docs -----------------------------------------------------------------
 
