@@ -60,9 +60,15 @@ Decided Nov 20, 2026 (owner). The spec is [05-index-cache-draft.md](../assets/05
 - **v1 fields:** repo root (with the native picker), docs roots, the ADO work-item URL template, the PR URL template and the theme.
 - **Extensible:** sections and fields are driven by one schema, so later settings are added in one place.
 - **Saving:** through `ShellService.SetConfig`, which validates (an `https://` URL containing `{id}`, an existing root). Errors show inline.
-- **Storage:** config stays in `%APPDATA%\Folio\config.json`.
+- **Storage:** `%APPDATA%\Folio\settings.json` (see the design note below).
 - **Not ticket data:** it writes only the app's own config, never a ticket file, so the read-only rule holds.
-- **Design gap:** the dialog is not in the 03 mockup. It uses the existing tokens and components.
+- **Design (Nov 20, 2026):** the Claude Design follow-up is in [05-settings-dialog.png](../assets/05-settings-dialog.png), from the prompt in [design-prompt-settings.md](../design-prompt-settings.md).
+  - **Top bar:** a `READ-ONLY` badge, then the theme button, then the gear button at the far right.
+  - **Dialog header:** "Settings · writes settings.json only · tickets are never changed".
+  - **Body:** a section list on the left (Docs folder, Links, Appearance).
+  - **Footer:** "Open settings file" on the left; Cancel and Save on the right, with Save disabled until something changes.
+  - **Mockup states:** Default, Link error, No roots, Saved and Dark.
+- **The config file is named `settings.json`,** following the mockup: `%APPDATA%\Folio\settings.json`. This replaces `config.json` in the draft.
 
 ### <a id="d5"></a>D5 — Open in VS Code
 Go builds a `vscode://file/<abs path>:<line>` URL with `%20` escaping and opens it through the OS. There is no `code` binary dependency and no VS Code path setting.

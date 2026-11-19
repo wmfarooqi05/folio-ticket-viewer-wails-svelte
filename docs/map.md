@@ -65,7 +65,6 @@ Reached when:
 - **Build slicing:** how to cut the viewer into vertical slices once 05–07 close. The right panel and the cross-space views are now specified by 03's spec and 04's contract, and go into the slices.
 - **Upstream amendments:** D2 to D5 in ticket 04 change handoff §3. Someone has to carry them into the other repo's CONVENTIONS and the handoff when the parser moves there.
 - **Packaging:** build and distribution (a prebuilt `.exe` or the owner builds it), and WebView2 availability on other machines. 01 showed the exe needs only WebView2; installer packaging (NSIS or MSIX) is still undecided.
-- **Settings dialog design:** it is not in the Folio mockup (05 D4). Decide whether it needs a mockup pass, or is built from the existing tokens in its slice.
 
 ## Out of scope
 
