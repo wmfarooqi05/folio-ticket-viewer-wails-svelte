@@ -25,3 +25,4 @@ Thumbs.db
 
 # Throwaway prototypes (findings live in docs/assets)
 prototypes/
+.task/

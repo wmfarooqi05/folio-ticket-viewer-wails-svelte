@@ -1,0 +1,74 @@
+version: '3'
+
+# Folio is Windows-only (Wails v3, WebView2). Build files live in build/.
+
+vars:
+  APP_NAME: "folio"
+  BIN_DIR: "bin"
+  PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "npm"}}'
+  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+  # `task build PRODUCTION=true` is the default; `task build DEV=true` makes a debug build.
+  DEV: '{{.DEV | default "false"}}'
+
+includes:
+  common: ./build/Taskfile.yml
+  windows: ./build/windows/Taskfile.yml
+
+tasks:
+  dev:
+    summary: Runs the app in development mode (Vite hot reload, Go rebuild on change)
+    cmds:
+      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+
+  build:
+    summary: Builds the production exe into bin/ (regenerates the TS bindings first)
+    cmds:
+      - task: windows:build
+        vars:
+          DEV: '{{.DEV}}'
+
+  run:
+    summary: Runs the built exe (set FOLIO_ROOT to skip the folder picker)
+    cmds:
+      - task: windows:run
+
+  package:
+    summary: Builds an NSIS installer (needs NSIS on PATH)
+    cmds:
+      - task: windows:package
+
+  test:
+    summary: Runs the Go tests and the frontend tests
+    deps: [dist:stub, common:install:frontend:deps]
+    cmds:
+      - go test ./...
+      - task: test:frontend
+
+  test:frontend:
+    internal: true
+    dir: frontend
+    cmds:
+      - npm test
+
+  check:
+    summary: go vet plus svelte-check (regenerates the TS bindings first)
+    deps: [dist:stub, common:install:frontend:deps]
+    cmds:
+      - go vet ./...
+      - wails3 generate bindings -clean=true -ts -i
+      - task: check:frontend
+
+  check:frontend:
+    internal: true
+    dir: frontend
+    cmds:
+      - npm run check
+
+  dist:stub:
+    summary: Makes sure frontend/dist exists, because main.go embeds it (go vet fails without it)
+    internal: true
+    status:
+      - test -d frontend/dist
+    cmds:
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force frontend/dist | Out-Null; Set-Content -Path frontend/dist/.gitkeep -Value ''"
+        platforms: [windows]

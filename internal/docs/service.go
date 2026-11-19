@@ -1,0 +1,278 @@
+// Package docs is Folio's file-system side: it stats, reads and watches markdown
+// files and hands bytes to the frontend. It never parses them and never keeps file
+// text (docs/issues/05-index-cache-refresh.md, D1).
+package docs
+
+import (
+	"encoding/json"
+	"errors"
+	"io/fs"
+	"log"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+)
+
+// ChangedEvent is the one debounced event Go emits (a ChangeSet payload).
+const ChangedEvent = "docs:changed"
+
+// readWorkers bounds the ReadBatch pool. Tune on the slow VM (05 draft 1.2).
+const readWorkers = 4
+
+// SourceFile is the parser's input record, exactly as in the 04 contract.
+type SourceFile struct {
+	Path  string `json:"path"`  // POSIX, relative to the docs root
+	Text  string `json:"text"`  //
+	Mtime int64  `json:"mtime"` // unix ms
+}
+
+// ScanResult is what Scan reports to the frontend.
+type ScanResult struct {
+	Changed []string `json:"changed"` // new, or the stamp differs from what was delivered
+	Removed []string `json:"removed"` // known before, no longer on disk
+	Count   int      `json:"count"`   // .md files on disk
+	WalkMs  int64    `json:"walkMs"`
+}
+
+// BatchResult is the answer to ReadBatch.
+type BatchResult struct {
+	Files   []SourceFile `json:"files"`
+	Missing []string     `json:"missing"` // deleted between scan and read
+}
+
+// ChangeSet is the payload of the "docs:changed" event.
+type ChangeSet struct {
+	Changed []string `json:"changed"`
+	Removed []string `json:"removed"`
+	Rescan  bool     `json:"rescan"` // true after a watcher overflow or error
+}
+
+// Roots tells the service where to look. It is read on every call, so a settings
+// change takes effect without restarting.
+type Roots struct {
+	Docs  string   // absolute docs root; paths in the API are relative to it
+	Roots []string // folders under Docs to index, e.g. modules, handoffs, patterns
+}
+
+// stamp is the per-file identity Go remembers: never file text.
+type stamp struct {
+	Mtime int64
+	Size  int64
+}
+
+// DocsService is registered with Wails (the bindings use the type name).
+type DocsService struct {
+	roots func() Roots
+	emit  func(ChangeSet)
+
+	mu     sync.Mutex
+	stamps map[string]stamp // path -> last delivered (or cached) stamp
+	watch  *watcher
+}
+
+// NewService builds the service. roots is called on every request. emit sends
+// ChangedEvent to the frontend; it may be nil (tests).
+func NewService(roots func() Roots, emit func(ChangeSet)) *DocsService {
+	return &DocsService{roots: roots, emit: emit, stamps: map[string]stamp{}}
+}
+
+// ServiceShutdown stops the watcher when the app exits.
+func (s *DocsService) ServiceShutdown() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.watch != nil {
+		s.watch.close()
+		s.watch = nil
+	}
+	return nil
+}
+
+// LoadCache returns the cached index as raw JSON, or nil.
+//
+// TODO(ticket 05, D2): read %LOCALAPPDATA%\Folio\cache\<hash(docsRoot)>.json, check
+// parserVersion and docsRoot, and load the stamps into s.stamps.
+func (s *DocsService) LoadCache(parserVersion string) (json.RawMessage, error) {
+	return nil, errors.New("not implemented")
+}
+
+// SaveCache writes {envelope, stamps, index} atomically.
+//
+// TODO(ticket 05, D2): temp file then rename; Go writes the index bytes without decoding.
+func (s *DocsService) SaveCache(parserVersion string, index json.RawMessage) error {
+	return errors.New("not implemented")
+}
+
+// Rescan is the manual Rescan command (Ctrl+R) and the overflow fallback.
+//
+// TODO(ticket 05, D3): drop the stamps and run a full Scan.
+func (s *DocsService) Rescan() (ScanResult, error) {
+	return ScanResult{}, errors.New("not implemented")
+}
+
+// Scan walks the configured roots and diffs the result against the known stamps.
+// With no stamps, every file is in Changed. It also (re)starts the watcher, before
+// the walk, so no change can fall between the two.
+func (s *DocsService) Scan() (ScanResult, error) {
+	r := s.roots()
+	if r.Docs == "" {
+		return ScanResult{}, errors.New("no docs root is configured")
+	}
+	s.startWatcher(r)
+
+	start := time.Now()
+	found, err := walkMarkdown(r)
+	if err != nil {
+		return ScanResult{}, err
+	}
+	walkMs := time.Since(start).Milliseconds()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	res := ScanResult{Changed: []string{}, Removed: []string{}, Count: len(found), WalkMs: walkMs}
+	for p, st := range found {
+		if old, ok := s.stamps[p]; !ok || old != st {
+			res.Changed = append(res.Changed, p)
+		}
+	}
+	for p := range s.stamps {
+		if _, ok := found[p]; !ok {
+			res.Removed = append(res.Removed, p)
+			delete(s.stamps, p)
+		}
+	}
+	slices.Sort(res.Changed)
+	slices.Sort(res.Removed)
+	log.Printf("docs.Scan: %d .md files, %d changed, %d removed, walk %d ms", res.Count, len(res.Changed), len(res.Removed), walkMs)
+	return res, nil
+}
+
+// ReadBatch reads the files in one IPC call with a bounded pool. It stats before
+// reading and records that stamp as delivered.
+func (s *DocsService) ReadBatch(paths []string) (BatchResult, error) {
+	r := s.roots()
+	type outcome struct {
+		file    SourceFile
+		stamp   stamp
+		missing bool
+		err     error
+	}
+	out := make([]outcome, len(paths))
+
+	// Validate every path first, so one bad path fails the whole call before any I/O.
+	fulls := make([]string, len(paths))
+	for i, p := range paths {
+		full, err := ResolveMarkdown(r.Docs, p)
+		if err != nil {
+			return BatchResult{}, err
+		}
+		fulls[i] = full
+	}
+
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, readWorkers)
+	for i := range paths {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			st, err := os.Stat(fulls[i])
+			if errors.Is(err, fs.ErrNotExist) {
+				out[i].missing = true
+				return
+			}
+			if err != nil {
+				out[i].err = err
+				return
+			}
+			text, err := readText(fulls[i])
+			if errors.Is(err, fs.ErrNotExist) {
+				out[i].missing = true
+				return
+			}
+			if err != nil {
+				out[i].err = err
+				return
+			}
+			out[i].stamp = stamp{Mtime: st.ModTime().UnixMilli(), Size: st.Size()}
+			out[i].file = SourceFile{Path: paths[i], Text: text, Mtime: out[i].stamp.Mtime}
+		}()
+	}
+	wg.Wait()
+
+	res := BatchResult{Files: make([]SourceFile, 0, len(paths)), Missing: []string{}}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, o := range out {
+		switch {
+		case o.err != nil:
+			return BatchResult{}, o.err
+		case o.missing:
+			res.Missing = append(res.Missing, paths[i])
+			delete(s.stamps, paths[i])
+		default:
+			res.Files = append(res.Files, o.file)
+			s.stamps[paths[i]] = o.stamp
+		}
+	}
+	return res, nil
+}
+
+// ReadFile returns one file's text for rendering. It does not touch stamps.
+func (s *DocsService) ReadFile(path string) (string, error) {
+	full, err := ResolveMarkdown(s.roots().Docs, path)
+	if err != nil {
+		return "", err
+	}
+	return readText(full)
+}
+
+// walkMarkdown returns the stamp of every .md file under the configured roots,
+// keyed by POSIX path relative to the docs root. Missing roots are skipped.
+func walkMarkdown(r Roots) (map[string]stamp, error) {
+	found := map[string]stamp{}
+	for _, root := range r.Roots {
+		base := filepath.Join(r.Docs, filepath.FromSlash(root))
+		if st, err := os.Stat(base); err != nil || !st.IsDir() {
+			continue
+		}
+		err := filepath.WalkDir(base, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				if p == base {
+					return err
+				}
+				return nil // unreadable subfolder: skip it
+			}
+			if d.IsDir() {
+				if p != base && skipDir(d.Name()) {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !strings.EqualFold(filepath.Ext(p), ".md") {
+				return nil
+			}
+			info, err := d.Info()
+			if err != nil {
+				return nil
+			}
+			rel, err := filepath.Rel(r.Docs, p)
+			if err != nil {
+				return nil
+			}
+			found[filepath.ToSlash(rel)] = stamp{Mtime: info.ModTime().UnixMilli(), Size: info.Size()}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return found, nil
+}
+
+func skipDir(name string) bool {
+	return name == "node_modules" || strings.HasPrefix(name, ".")
+}
