@@ -1,7 +1,7 @@
 ---
 type: build
 status: blocked
-status_note: "merged Nov 20, 2026; waiting on the owner: a UI check in the app (AC2) and whether Board shows on every map or only view=kanban"
+status_note: "merged Nov 20, 2026; waiting on the owner's UI check in the app (AC2)"
 waiting_on: owner
 blocked_by: ["08"]
 blocked_note: null
@@ -54,7 +54,7 @@ The tree counts come from `pinnedCounts`: 8 waiting, 8 questions.
 **Decisions and gaps**
 - Ages come from `DocRecord.mtime`, which the index already carries, so nothing is stubbed. Tests pin mtimes because checkout time is the disk mtime.
 - `unknown`-status tickets (chw 15, 32, 33, 34, 35, 36) go in the Open column with their raw status note, so no ticket vanishes from a board. The spec has only five columns.
-- Board mode shows for every map, not only `map.kanban` ones. **Open question for the owner:** conventions.md, handoff §7 and spec G7 say the `view=kanban` hint gates the board, but only remove-service-account carries it, and legacy maps never will. Gate it, or show the board everywhere? The code shows it everywhere until decided.
+- Board mode shows for every map. **Decided by the owner, Nov 20, 2026:** every map opens in Doc mode (the ticket table), and the Board is one click away on the mode toggle, whether or not the map carries the `view=kanban` hint. The hint does not change the default.
 - Graph is a placeholder text until 14.
 - The tree's pinned rows are ticket 10's. This branch ships `pinnedCounts(index)` and a stopgap `PinnedViews.svelte` above the tree in `App.svelte`; at merge, 10's rows replace it (delete the component and its one line in `App.svelte`).
 - Icons are text glyphs (◔ ? ▶ ←), to be swapped for 10's inline icons.
