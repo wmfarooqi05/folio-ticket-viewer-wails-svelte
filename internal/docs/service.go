@@ -75,6 +75,7 @@ type DocsService struct {
 	announced map[string]stamp
 	watch     *watcher
 	closed    bool
+	gen       uint64 // bumped by every startWatcher; a scan from an older one is discarded
 	cacheDir  string // empty means %LOCALAPPDATA%\Folio\cache
 }
 
@@ -120,15 +121,24 @@ func (s *DocsService) Rescan() (ScanResult, error) {
 	return s.Scan()
 }
 
+// errSuperseded means a newer Scan (a Settings rescan, say) took over while this one ran.
+var errSuperseded = errors.New("scan superseded by a newer one")
+
 // Scan walks the configured roots and diffs the result against the known stamps.
 // With no stamps, every file is in Changed. It also (re)starts the watcher, before
 // the walk, so no change can fall between the two.
 func (s *DocsService) Scan() (ScanResult, error) {
+	return s.scan(false)
+}
+
+// scan is Scan. With announce set (the rescan after a watcher error) it also records
+// the walked stamps of the changed files as announced, without extra stat calls.
+func (s *DocsService) scan(announce bool) (ScanResult, error) {
 	r := s.roots()
 	if r.Docs == "" {
 		return ScanResult{}, errors.New("no docs root is configured")
 	}
-	s.startWatcher(r)
+	gen := s.startWatcher(r)
 
 	start := time.Now()
 	found, err := walkMarkdown(r)
@@ -139,10 +149,18 @@ func (s *DocsService) Scan() (ScanResult, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// A newer Scan (with its own watcher) or a roots change while we walked: our
+	// result describes the old roots, so it must not touch the stamps.
+	if s.gen != gen || !sameRoots(r, s.roots()) {
+		return ScanResult{}, errSuperseded
+	}
 	res := ScanResult{Changed: []string{}, Removed: []string{}, Count: len(found), WalkMs: walkMs}
 	for p, st := range found {
 		if old, ok := s.stamps[p]; !ok || old != st {
 			res.Changed = append(res.Changed, p)
+			if announce {
+				s.announced[p] = st
+			}
 		}
 	}
 	for p := range s.stamps {
@@ -160,6 +178,10 @@ func (s *DocsService) Scan() (ScanResult, error) {
 	slices.Sort(res.Removed)
 	log.Printf("docs.Scan: %d .md files, %d changed, %d removed, walk %d ms", res.Count, len(res.Changed), len(res.Removed), walkMs)
 	return res, nil
+}
+
+func sameRoots(a, b Roots) bool {
+	return a.Docs == b.Docs && slices.Equal(a.Roots, b.Roots)
 }
 
 // ReadBatch reads the files in one IPC call with a bounded pool. It stats before

@@ -36,7 +36,7 @@ class IndexStore {
 
   /** Warm or cold start, then live refresh. Safe to call again after a root change. */
   start(): Promise<StartTimings> {
-    this.stop()
+    this.stop(false) // a newer generation follows: the old engine must not save its index
     this.index = null
     const gen = ++this.#gen
     const live = () => gen === this.#gen
@@ -90,11 +90,11 @@ class IndexStore {
     return this.#engine ? this.#engine.rescan() : Promise.resolve()
   }
 
-  stop() {
+  stop(save = true) {
     this.#gen++ // invalidates the running engine's hooks at once
     this.#unsubscribe?.()
     this.#unsubscribe = null
-    void this.#engine?.dispose()
+    void this.#engine?.dispose(save)
     this.#engine = null
   }
 }

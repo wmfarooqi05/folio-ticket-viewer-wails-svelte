@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BATCH_SIZE, SAVE_DELAY_MS, createIndexEngine, type EngineDeps, type ScanInfo } from './index-engine'
+import { BATCH_SIZE, LATE_RETRY_MS, SAVE_DELAY_MS, createIndexEngine, type EngineDeps, type ScanInfo } from './index-engine'
 import { buildIndex, updateIndex, type Index, type SourceFile } from './parser'
 
 const PV = 'lib-test'
@@ -357,5 +357,30 @@ describe('failures heal themselves', () => {
     const before = r.calls.length
     await r.engine.applyChangeSet({ changed: [paths(2)[0]], removed: [], rescan: false })
     expect(r.calls.length).toBe(before)
+  })
+
+  it('a rescan that leaves files unreadable records them and retries once later, without recursing', async () => {
+    const unreadable = new Map([['modules/a/issues/060-lock.md', 3]])
+    const r = rig(paths(2), { unreadable })
+    await r.engine.start()
+    r.disk.set('modules/a/issues/060-lock.md', '# lock' + String.fromCharCode(10))
+    await r.engine.rescan() // read + its retry both fail
+    expect(Object.keys(r.engine.current()!.files)).not.toContain('modules/a/issues/060-lock.md')
+    expect(r.calls.filter((c) => c === 'rescan')).toHaveLength(1)
+    const late = r.timers.filter((t) => t.live && t.ms === LATE_RETRY_MS)
+    expect(late).toHaveLength(1)
+    late[0].fn()
+    await r.engine.flushSave()
+    await new Promise((res) => setTimeout(res, 10))
+    expect(Object.keys(r.engine.current()!.files)).toContain('modules/a/issues/060-lock.md')
+    expect(r.calls.filter((c) => c === 'rescan')).toHaveLength(1)
+  })
+
+  it('dispose(false) skips the final save', async () => {
+    const r = rig(paths(2))
+    await r.engine.start()
+    const before = r.calls.filter((c) => c.startsWith('save')).length
+    await r.engine.dispose(false)
+    expect(r.calls.filter((c) => c.startsWith('save')).length).toBe(before)
   })
 })

@@ -13,6 +13,8 @@ export const BATCH_SIZE = 100
 export const SAVE_DELAY_MS = 2000
 /** Wait before the one retry of files that could not be read. */
 export const RETRY_DELAY_MS = 500
+/** After a rescan, files that stayed unreadable are tried once more this long after. */
+export const LATE_RETRY_MS = 5000
 
 export interface ScanInfo {
   changed: string[]
@@ -216,7 +218,7 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
   }
 
   /** A debounced docs:changed from Go: read what changed, update, tell the UI. */
-  function applyChangeSet(cs: ChangeInfo): Promise<void> {
+  function applyChangeSet(cs: ChangeInfo, recoverOnFailure = true): Promise<void> {
     return enqueue(async () => {
       if (stopped || !index || (!cs.changed.length && !cs.removed.length)) return
       const t = deps.now()
@@ -225,14 +227,14 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
         r = await applyPaths(index, cs.changed, cs.removed, false, () => '')
       } catch (err) {
         // Go has already marked these paths delivered or removed: only a rescan is sure to heal.
-        recover(`ChangeSet failed: ${String(err)}`)
+        if (recoverOnFailure) recover(`ChangeSet failed: ${String(err)}`)
         throw err
       }
       publish(r.index)
       deps.log(`index: applied ChangeSet (${cs.changed.length} changed, ${cs.removed.length} removed) in ${Math.round(deps.now() - t)} ms`)
       hooks.onTouched(r.touched, r.gone)
       scheduleSave()
-      if (r.failed.length) recover(`${r.failed.length} files unreadable after a retry`)
+      if (r.failed.length && recoverOnFailure) recover(`${r.failed.length} files unreadable after a retry`)
     })
   }
 
@@ -259,17 +261,28 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
       const all = new Set<string>([...r.touched, ...Object.keys(before?.files ?? {})])
       hooks.onTouched([...all], [])
       scheduleSave(true)
+      if (r.failed.length) {
+        // A rescan never recurses into another one. Record what is missing and try once
+        // more later; until then these files are absent from the index.
+        deps.log(`index: ${r.failed.length} files unreadable during the rescan, retrying in ${LATE_RETRY_MS} ms`)
+        const failed = r.failed
+        deps.setTimer(() => {
+          void applyChangeSet({ changed: failed, removed: [], rescan: false }, false).catch((err) =>
+            deps.log(`index: late retry failed: ${String(err)}`),
+          )
+        }, LATE_RETRY_MS)
+      }
     })
   }
 
   /** Flushes a pending save now (window close) and stops the timer. */
-  async function dispose() {
+  async function dispose(flush = true) {
     stopped = true
     if (saveTimer !== null) {
       deps.clearTimer(saveTimer)
       saveTimer = null
     }
-    await flushSave()
+    if (flush) await flushSave()
     disposed = true
   }
 

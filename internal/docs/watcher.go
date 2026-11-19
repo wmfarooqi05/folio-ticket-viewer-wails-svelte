@@ -46,24 +46,30 @@ type watcher struct {
 	found chan []string // .md paths found under a new directory, posted by its walker
 }
 
-// startWatcher (re)creates the watcher for r. It registers every directory first;
-// Scan walks afterwards, so no change falls between the two. Registration runs
-// without s.mu held (the loop needs the lock to flush, and AddWith waits on the
-// reader), and the old watcher is closed asynchronously, never under the lock.
-func (s *DocsService) startWatcher(r Roots) {
+// startWatcher (re)creates the watcher for r and returns the generation it took. It
+// registers every directory first; Scan walks afterwards, so no change falls between
+// the two. Registration runs without s.mu held (the loop needs the lock to flush, and
+// AddWith waits on the reader). Only the newest generation is swapped in, so a slow
+// rescan on old roots cannot replace the watcher of a newer one. The old watcher is
+// closed asynchronously, never under the lock.
+func (s *DocsService) startWatcher(r Roots) uint64 {
+	s.mu.Lock()
+	s.gen++
+	gen := s.gen
+	s.mu.Unlock()
 	if s.emit == nil {
-		return
+		return gen
 	}
 	w, err := newWatcher(r, s)
 	if err != nil {
 		log.Printf("docs: watcher not started: %v", err)
-		return
+		return gen
 	}
 	s.mu.Lock()
-	if s.closed {
+	if s.closed || s.gen != gen {
 		s.mu.Unlock()
 		w.closeAsync()
-		return
+		return gen
 	}
 	old := s.watch
 	s.watch = w
@@ -71,6 +77,7 @@ func (s *DocsService) startWatcher(r Roots) {
 	if old != nil {
 		old.closeAsync()
 	}
+	return gen
 }
 
 func newWatcher(r Roots, svc *DocsService) (*watcher, error) {
@@ -93,15 +100,28 @@ func newWatcher(r Roots, svc *DocsService) (*watcher, error) {
 }
 
 // closeAsync stops the loop and closes fsnotify in the background. On Windows Close
-// can block while an error is pending, so it runs in its own goroutine, which keeps
-// draining Events and Errors until Close returns (or gives up after 5 s and leaks).
+// can block while an error is pending, and its "done" message is swallowed by a
+// reader parked in sendError. So first drain until Errors has been quiet for 200 ms,
+// then Close in its own goroutine while draining, and give up after 5 s (leak, not block).
 func (w *watcher) closeAsync() {
 	w.once.Do(func() {
 		close(w.done)
 		go func() {
+			t := time.After(5 * time.Second)
+		quiet:
+			for q := time.After(200 * time.Millisecond); ; {
+				select {
+				case <-w.w.Events:
+				case <-w.w.Errors:
+					q = time.After(200 * time.Millisecond)
+				case <-q:
+					break quiet
+				case <-t:
+					return
+				}
+			}
 			c := make(chan struct{})
 			go func() { _ = w.w.Close(); close(c) }()
-			t := time.After(5 * time.Second)
 			for {
 				select {
 				case <-c:
@@ -122,6 +142,11 @@ func (w *watcher) addTree(dir string) int {
 	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || !d.IsDir() {
 			return nil
+		}
+		select {
+		case <-w.done:
+			return filepath.SkipAll // closed meanwhile: stop registering
+		default:
 		}
 		if p != dir && skipDir(d.Name()) {
 			return filepath.SkipDir
@@ -251,12 +276,17 @@ func (w *watcher) loop() {
 			if !ok {
 				return
 			}
+			select {
+			case <-w.done: // select picks at random: a closed watcher must not rescan
+				return
+			default:
+			}
 			// Overflow or any other watcher error: the pending set is no longer
 			// trustworthy. Rebuild the watcher and diff the whole tree, off this
 			// goroutine, and let closeAsync drain what fsnotify still has to send.
 			log.Printf("docs: watch error, rescanning: %v", err)
 			w.closeAsync()
-			go w.svc.rescanAfterError()
+			go w.svc.rescanAfterError(w)
 			return
 		case <-quiet:
 			flush()
@@ -335,27 +365,23 @@ var rescanBackoff = []time.Duration{time.Second, 2 * time.Second, 4 * time.Secon
 // rescanAfterError runs after a watcher overflow or error. Scan starts a new watcher
 // (registering first) and diffs the walk against the stamps. The result goes out as
 // a ChangeSet with Rescan set. If Scan fails it is retried with backoff, so the app
-// is not left without a watcher.
-func (s *DocsService) rescanAfterError() {
+// is not left without a watcher. It gives up quietly when another scan has taken
+// over (a Settings root change, say), since the newer one owns the watcher and stamps.
+func (s *DocsService) rescanAfterError(failing *watcher) {
+	expect := failing
 	for attempt := 0; ; attempt++ {
 		s.mu.Lock()
-		closed := s.closed
+		stale := s.closed || s.watch != expect
 		s.mu.Unlock()
-		if closed {
+		if stale {
 			return
 		}
-		res, err := s.Scan()
+		res, err := s.scan(true)
 		if err == nil {
-			s.mu.Lock()
-			for _, p := range res.Changed {
-				if full, err := ResolveMarkdown(s.roots().Docs, p); err == nil {
-					if st, err := os.Stat(full); err == nil {
-						s.announced[p] = stamp{Mtime: st.ModTime().UnixMilli(), Size: st.Size()}
-					}
-				}
-			}
-			s.mu.Unlock()
 			s.send(ChangeSet{Changed: res.Changed, Removed: res.Removed, Rescan: true})
+			return
+		}
+		if errors.Is(err, errSuperseded) {
 			return
 		}
 		if attempt >= len(rescanBackoff) {
@@ -364,5 +390,8 @@ func (s *DocsService) rescanAfterError() {
 		}
 		log.Printf("docs: rescan after watcher error failed (%v), retrying in %s", err, rescanBackoff[attempt])
 		time.Sleep(rescanBackoff[attempt])
+		s.mu.Lock()
+		expect = s.watch // our own failed attempt may have installed a new watcher
+		s.mu.Unlock()
 	}
 }

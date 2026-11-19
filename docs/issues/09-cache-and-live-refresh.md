@@ -105,6 +105,14 @@ These are on the dev PC. The slow VM is unmeasured, and the warm path reading no
   - `vite.config.ts` resolves the lib config with `fileURLToPath`.
 - **Test timing.** The two debounce tests now measure from the last write with loose bounds.
 
+**Second review round (Nov 20, 2026)**
+- **Reader leak.** `closeAsync` now drains until Errors has been quiet for 200 ms before it calls `Close`, because on a double overflow the reader parked in `sendError` swallowed fsnotify's done message. A test floods a real double overflow, shuts down, waits 6 s and asserts no `readDirChangesW).readEvents` goroutine remains.
+- **Lock held during stat work.** `rescanAfterError` no longer stats files under `s.mu`. `scan(announce)` sets the announced stamps straight from the walk's stamps.
+- **Stale watcher after a Settings change.** `startWatcher` takes a generation under `s.mu` and swaps only if it is still the newest, otherwise it closes its new watcher. `scan` discards its result (`errSuperseded`) if the generation or the roots changed while it walked, so it cannot delete the new roots' stamps. `rescanAfterError(failing)` returns unless `s.watch` is still that watcher. The loop checks `w.done` before handling an error, and `addTree` checks it before each `AddWith`. Tests: a stale rescan is dropped, and a scan whose roots changed is superseded.
+- **Files that fail to read during a rescan.** A recovery rescan never recurses. It records them, logs them, and retries them once 5 s later through a ChangeSet that does not itself trigger a rescan. Until then they are absent from the index.
+- **Old engine.** `start()` disposes the previous engine with `dispose(false)`, so it no longer runs a final `SaveCache` once a newer generation exists.
+- **Merge with ticket 10.** `vite.config.ts` keeps both the async `__PARSER_VERSION__` define and 10's dev-only CSP plugin. `App.svelte` still passes `{index}`, `{fragment}` and `pinnedCounts(index)`, and a root change now also resets `fragment`. JS bundle after the merge: 255,110 bytes, 96,032 bytes gzipped (93.8 KiB).
+
 **Not done or open**
 - The window-close flush is not wired: a quit within 2 s of the last change skips the save, and the next start just reconciles.
 - Ctrl+R shows no UI beyond the footer text "Rescanning…".
