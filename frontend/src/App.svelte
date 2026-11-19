@@ -10,8 +10,8 @@
   import WaitingOn from './components/views/WaitingOn.svelte'
   import OpenQuestions from './components/views/OpenQuestions.svelte'
   import MapModes from './components/views/MapModes.svelte'
-  import PinnedViews from './components/views/PinnedViews.svelte'
-  import type { ViewId } from './lib/views'
+  import { pinnedItems } from './lib/pinned'
+  import { pinnedCounts, type ViewId } from './lib/views'
 
   let { initial }: { initial: Config | null } = $props()
 
@@ -26,6 +26,7 @@
   let selected = $state<string | null>(null)
   let view = $state<ViewId | null>(null) // a cross-space view (ticket 12) replaces the document
   let text = $state<string | null>(null)
+  let fragment = $state<string | null>(null) // a heading or item to scroll to (link clicks)
   let docError = $state<string | null>(null)
 
   let settingsOpen = $state(false)
@@ -129,6 +130,7 @@
     if (rescan && next.repoRoot) {
       selected = null
       view = null
+      fragment = null
       text = null
       try {
         await indexStore.rescan()
@@ -150,9 +152,10 @@
     }
   }
 
-  async function select(path: string) {
+  async function select(path: string, frag: string | null = null) {
     view = null
     selected = path
+    fragment = frag
     text = null
     docError = null
     try {
@@ -177,7 +180,7 @@
 </script>
 
 {#snippet docView()}
-  <DocView path={selected} {text} error={docError} />
+  <DocView path={selected} {text} error={docError} {index} {config} {fragment} onnavigate={select} />
 {/snippet}
 
 <svelte:window onkeydown={onwindowkeydown} />
@@ -215,8 +218,14 @@
   <div class="flex min-h-0 flex-1">
     <aside class="chrome flex w-280 shrink-0 flex-col border-r border-line bg-side">
       {#if phase === 'ready'}
-        {#if index}<PinnedViews {index} {view} onview={(v) => (view = v)} />{/if}
-        <Tree {files} selected={view ? null : selected} onselect={select} />
+        <Tree
+          {files}
+          selected={view ? null : selected}
+          onselect={select}
+          pinned={pinnedItems(index ? pinnedCounts(index) : null)}
+          activeView={view}
+          onview={(v) => (view = v)}
+        />
         <footer class="border-t border-line px-12 py-6 text-[11px] text-fg3">{status}</footer>
       {:else}
         <p class="p-12 text-sm text-fg3">{phase === 'loading' ? status || 'Loading…' : ''}</p>

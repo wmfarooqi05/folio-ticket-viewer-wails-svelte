@@ -1,0 +1,360 @@
+/* The rendered document body (ticket 10). The HTML comes from render/markdown.ts as a string,
+   so Svelte scoping cannot reach it: these rules are global and live under .doc.
+   Sizes, weights and spacing are the mockup's (docs/assets/03-design-spec.md section 1.3). */
+
+.doc {
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+.doc h1 {
+  margin: 8px 0 12px;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  text-wrap: pretty;
+}
+.doc h2 {
+  margin: 30px 0 10px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+.doc h3 {
+  margin: 22px 0 6px;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.doc h4,
+.doc h5,
+.doc h6 {
+  margin: 18px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg2);
+}
+.doc :is(h1, h2, h3, h4, h5, h6)[data-anchor] {
+  scroll-margin-top: 12px;
+}
+.doc p {
+  margin: 0 0 12px;
+  text-wrap: pretty;
+}
+.doc strong {
+  font-weight: 600;
+}
+.doc hr {
+  margin: 24px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.doc blockquote {
+  margin: 12px 0;
+  padding: 0 0 0 14px;
+  border-left: 3px solid var(--line2);
+  color: var(--fg2);
+}
+.doc ul,
+.doc ol {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+.doc li {
+  margin: 2px 0;
+}
+.doc li > p {
+  margin: 0;
+}
+
+/* links: one style, three states (03 spec 4.1) */
+.doc a.lk {
+  color: var(--acc);
+  font-weight: 500;
+  text-decoration: none;
+  border-bottom: 1px dotted var(--acc);
+  cursor: pointer;
+}
+.doc a.lk:hover {
+  border-bottom-style: solid;
+}
+.doc .lk-broken {
+  color: var(--s-block);
+  border-bottom: 1px dashed var(--s-block);
+  cursor: not-allowed;
+}
+.doc a.lk-broken:hover {
+  border-bottom-style: dashed;
+}
+.doc .lk-outside,
+.doc a.lk-inert {
+  color: var(--fg2);
+  border-bottom: 1px dotted var(--fg3);
+  cursor: default;
+  font-weight: 400;
+}
+.doc .ref-plain {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--fg2);
+}
+.doc a[data-anchor] {
+  scroll-margin-top: 12px;
+}
+
+/* code */
+.doc :not(pre) > code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--chip);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.doc .code {
+  margin: 14px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--code);
+  overflow: hidden;
+}
+.doc .code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--fg3);
+  user-select: none;
+}
+.doc .code .copy {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.doc .code .copy:hover {
+  color: var(--fg);
+}
+.doc pre {
+  margin: 0;
+  padding: 12px 16px 14px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--fg);
+}
+.doc pre code {
+  font: inherit;
+}
+.doc > pre {
+  margin: 14px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--code);
+}
+
+/* tables */
+.doc .tbl {
+  margin: 14px 0;
+  overflow-x: auto;
+}
+.doc table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.doc th {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line2);
+  color: var(--fg2);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+.doc td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+/* task lists: display-only (03 spec 4.2) */
+.doc ul.task-list {
+  padding-left: 0;
+  list-style: none;
+}
+.doc li.task-item {
+  position: relative;
+  padding: 7px 0 7px 25px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+.doc .task-box {
+  appearance: none;
+  position: absolute;
+  left: 0;
+  top: 11px;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  box-sizing: border-box;
+  border: 1.5px solid var(--line2);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.doc .task-box:checked {
+  border-color: var(--acc);
+  background: var(--acc);
+}
+.doc .task-box:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0.5px;
+  width: 3.5px;
+  height: 7px;
+  border: solid var(--acc-ink);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+/* items: Q, D and R headings carry an id tag; AC rows are list items */
+.doc .idtag,
+.doc li.ac a[data-anchor] + strong {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--chip);
+  color: var(--fg2);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  line-height: 1.5;
+  vertical-align: 1px;
+}
+.doc .item-h {
+  margin: 24px 0 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.doc .item-h .idtag {
+  margin-right: 10px;
+}
+.doc ul:has(> li.ac) {
+  padding-left: 0;
+  list-style: none;
+}
+.doc li.ac {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  margin: 0;
+}
+.doc li.ac a[data-anchor] + strong {
+  margin-right: 8px;
+}
+.doc li.ac[data-state='closed'] {
+  color: var(--fg2);
+}
+.doc li.ac[data-state='dropped'] {
+  color: var(--fg3);
+  text-decoration: line-through;
+}
+
+/* the marker line: **Answered 2026-10-09 (owner):** ... */
+.doc p.marker {
+  --mk: var(--s-rev);
+  color: var(--fg2);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.doc p.marker > strong:first-child {
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.doc p.marker > strong:first-child::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--mk);
+  vertical-align: 1px;
+}
+.doc p.marker[data-state='answered'] {
+  --mk: var(--s-done);
+}
+.doc p.marker[data-state='closed'],
+.doc p.marker[data-state='dropped'] {
+  --mk: var(--s-mute);
+}
+.doc p.marker[data-state='superseded'] > strong:first-child::before {
+  background: transparent;
+  box-sizing: border-box;
+  border: 1.5px solid var(--s-rev);
+}
+
+/* images */
+.doc .doc-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.doc .img-missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 18px 0 0;
+  min-height: 110px;
+  padding: 12px;
+  box-sizing: border-box;
+  border: 1px dashed var(--line2);
+  border-radius: 10px;
+  background: repeating-linear-gradient(135deg, var(--chip) 0 8px, transparent 8px 16px);
+  font-size: 11.5px;
+  color: var(--fg3);
+  text-align: center;
+}
+.doc .img-missing-path {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg2);
+}
+
+/* html the sanitiser refused, shown as text */
+.doc .raw-html {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg3);
+  white-space: pre-wrap;
+}
+
+/* the heading a link just jumped to */
+@keyframes anchor-hit {
+  from {
+    background: var(--sel);
+  }
+  to {
+    background: transparent;
+  }
+}
+.doc .anchor-hit {
+  animation: anchor-hit 1.6s ease-out;
+  border-radius: 4px;
+}

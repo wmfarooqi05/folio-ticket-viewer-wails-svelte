@@ -27,5 +27,16 @@ export default defineConfig(async () => ({
     strictPort: true,
   },
   define: { __PARSER_VERSION__: JSON.stringify(await parserVersion()) },
-  plugins: [tailwindcss(), svelte(), wails('./bindings')],
+  plugins: [
+    tailwindcss(),
+    svelte(),
+    wails('./bindings'),
+    {
+      // The CSP in index.html is the production one. Vite's hot reload needs a loopback websocket.
+      name: 'folio-dev-csp',
+      apply: 'serve',
+      transformIndexHtml: (html: string) =>
+        html.replace("connect-src 'self'", "connect-src 'self' ws://127.0.0.1:* ws://localhost:*"),
+    },
+  ],
 }))

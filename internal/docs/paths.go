@@ -3,6 +3,7 @@ package docs
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +22,8 @@ func SafeJoin(root, rel string) (string, error) {
 	if root == "" {
 		return "", errors.New("no docs root is configured")
 	}
-	if rel == "" || strings.ContainsRune(rel, 0) {
+	// ":" would name an NTFS alternate data stream (file.png::$DATA) or a drive; no real doc has one.
+	if rel == "" || strings.ContainsRune(rel, 0) || strings.ContainsRune(rel, ':') {
 		return "", ErrEscapesRoot
 	}
 	if strings.HasPrefix(rel, "/") || strings.HasPrefix(rel, `\`) || filepath.IsAbs(rel) || filepath.VolumeName(rel) != "" {
@@ -37,16 +39,38 @@ func SafeJoin(root, rel string) (string, error) {
 	if err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
 		return "", ErrEscapesRoot
 	}
-	// Symlink check, only when the target exists.
-	if realFull, err := filepath.EvalSymlinks(full); err == nil {
-		realRoot, err := filepath.EvalSymlinks(root)
+	// Junctions. Go's EvalSymlinks does not follow them (it fails or returns them unchanged),
+	// and Lstat reports them as irregular files, so any such folder on the way is refused.
+	cur := root
+	for _, seg := range strings.FieldsFunc(rel, func(r rune) bool { return r == '/' || r == '\\' }) {
+		cur = filepath.Join(cur, seg)
+		fi, err := os.Lstat(cur)
 		if err != nil {
-			return "", err
-		}
-		rr, err := filepath.Rel(realRoot, realFull)
-		if err != nil || rr == ".." || strings.HasPrefix(rr, ".."+string(filepath.Separator)) {
+			if errors.Is(err, fs.ErrNotExist) {
+				break
+			}
 			return "", ErrEscapesRoot
 		}
+		if fi.Mode()&os.ModeIrregular != 0 {
+			return "", ErrEscapesRoot
+		}
+	}
+	// Symlink check. A target that does not exist yet is fine; any other
+	// failure to resolve it is refused, so an unreadable link never passes as inside.
+	realFull, err := filepath.EvalSymlinks(full)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return full, nil
+		}
+		return "", ErrEscapesRoot
+	}
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", err
+	}
+	rr, err := filepath.Rel(realRoot, realFull)
+	if err != nil || rr == ".." || strings.HasPrefix(rr, ".."+string(filepath.Separator)) {
+		return "", ErrEscapesRoot
 	}
 	return full, nil
 }
