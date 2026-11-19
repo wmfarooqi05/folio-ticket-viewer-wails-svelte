@@ -1,0 +1,58 @@
+<script lang="ts">
+  import type { Snippet } from 'svelte'
+  import type { Index } from '../../lib/parser'
+  import Board from './Board.svelte'
+
+  interface Props {
+    index: Index
+    /** path of the open map.md */
+    path: string
+    onselect: (path: string) => void
+    /** the rendered map document (Doc mode) */
+    doc: Snippet
+  }
+  let { index, path, onselect, doc }: Props = $props()
+
+  type Mode = 'doc' | 'board' | 'graph'
+  const MODES: { id: Mode; label: string }[] = [
+    { id: 'doc', label: 'Doc' },
+    { id: 'board', label: 'Board' },
+    { id: 'graph', label: 'Graph' },
+  ]
+
+  // Reset to Doc when another map opens.
+  let mode = $state<Mode>('doc')
+  let forPath = $state('')
+  $effect.pre(() => {
+    if (path !== forPath) {
+      forPath = path
+      mode = 'doc'
+    }
+  })
+</script>
+
+<div class="chrome sticky top-0 z-10 flex justify-end bg-bg px-40 pt-12">
+  <div class="inline-flex gap-2 rounded-lg bg-chip p-2" role="tablist" aria-label="Map view">
+    {#each MODES as m (m.id)}
+      <button
+        type="button"
+        role="tab"
+        aria-selected={mode === m.id}
+        class="h-22 rounded-md px-12 text-xs font-medium transition-colors duration-[var(--dur)] {mode === m.id
+          ? 'bg-card text-fg shadow-hair'
+          : 'text-fg2 hover:text-fg'}"
+        onclick={() => (mode = m.id)}
+      >
+        {m.label}
+      </button>
+    {/each}
+  </div>
+</div>
+
+{#if mode === 'board'}
+  <Board {index} mapPath={path} {onselect} />
+{:else if mode === 'graph'}
+  <p class="chrome mx-auto max-w-[900px] px-40 pt-26 text-md text-fg3">The dependency graph arrives with ticket 14.</p>
+{:else}
+  {@render doc()}
+{/if}

@@ -5,6 +5,9 @@
 
 import type { DocRecord, Index, Item, Person, Status, TicketMeta } from './parser'
 
+/** The cross-space views reachable from the tree's pinned rows. */
+export type ViewId = 'waiting' | 'questions'
+
 export const PEOPLE: readonly Person[] = ['owner', 'client', 'dba', 'infra', 'ops']
 
 export const PERSON_LABEL: Record<Person, string> = {
@@ -180,6 +183,20 @@ export function liveBlockers(index: Index, rec: TicketRec): Blocker[] {
     out.push({ ref: e.ref, path: target ? target.path : null })
   }
   return out
+}
+
+// ---- presentation helpers --------------------------------------------------------
+
+/** The CSS variable that colours a status (spec 1.2). `unknown` is drawn as an outline dot by the views. */
+export const STATUS_VAR: Record<Status, string> = {
+  open: 'var(--s-open)',
+  'in-progress': 'var(--s-prog)',
+  blocked: 'var(--s-block)',
+  'in-review': 'var(--s-rev)',
+  done: 'var(--s-done)',
+  dropped: 'var(--s-mute)',
+  superseded: 'var(--s-mute)',
+  unknown: 'var(--s-open)',
 }
 
 // ---- tree pinned entries ---------------------------------------------------------
