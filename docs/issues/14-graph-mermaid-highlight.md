@@ -1,8 +1,8 @@
 ---
 type: build
-status: in-review
-status_note: "built on branch worktree-agent-aa26125aa951ce786, not merged"
-waiting_on: null
+status: blocked
+status_note: "merged Nov 20, 2026; waiting on the owner's look at Graph mode in the app; RAM re-measured in 15"
+waiting_on: owner
 blocked_by: ["10", "12"]
 blocked_note: null
 related: ["06"]

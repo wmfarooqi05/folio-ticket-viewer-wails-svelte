@@ -36,10 +36,8 @@ Reached when:
 
 **Planning destination reached on Nov 20, 2026.** Decisions 01–07 are closed. The build runs as slices 08–15 on the scaffolded app.
 
-1. **Done:** 08 (parser) merged. 13 (settings) merged, waiting on the owner's UI check.
-2. **Now, in parallel:** 09 (cache), 10 (document view) and 12 (views).
-3. **After 10:** 11 (side panel). After 10 and 12: 14 (graph, Mermaid, highlighting).
-4. **Last:** 15 (budgets, installer, v1 on the VM).
+1. **Merged Nov 20, 2026:** 08–14. 08 is done; 09–14 wait on the owner's checks in the app (see each ticket's `status_note`).
+2. **Next:** 15 (budgets, installer, v1 on the VM). It needs the owner, and it re-measures RAM (B crept to about 177 MB over 09–13; Mermaid adds about 40 MB).
 
 ## Tickets
 
@@ -59,7 +57,7 @@ Reached when:
 | 11 | [Right side panel: link targets, fragments and back stack](issues/11-side-panel.md) | build | [10](issues/10-document-view.md) | — | blocked — merged, waiting on owner UI check | — |
 | 12 | [Views: Waiting on, Board and Open questions](issues/12-cross-space-views.md) | build | [08](issues/08-parser.md) | — | blocked — merged, waiting on owner UI check | — |
 | 13 | [Settings dialog and first-run flow](issues/13-settings-dialog.md) | build | — | — | blocked — merged, waiting on owner UI check | — |
-| 14 | [Dependency graph, Mermaid and syntax highlighting](issues/14-graph-mermaid-highlight.md) | build | [10](issues/10-document-view.md), [12](issues/12-cross-space-views.md) | — | blocked | — |
+| 14 | [Dependency graph, Mermaid and syntax highlighting](issues/14-graph-mermaid-highlight.md) | build | [10](issues/10-document-view.md), [12](issues/12-cross-space-views.md) | — | blocked — merged, waiting on owner Graph check | — |
 | 15 | [Budgets enforced, installer, v1 release](issues/15-budgets-and-packaging.md) | build | [09](issues/09-cache-and-live-refresh.md), [11](issues/11-side-panel.md), [13](issues/13-settings-dialog.md), [14](issues/14-graph-mermaid-highlight.md) | — | blocked | — |
 <!-- tickets:end -->
 
