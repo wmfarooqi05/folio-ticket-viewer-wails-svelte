@@ -4,7 +4,6 @@
 package docs
 
 import (
-	"encoding/json"
 	"errors"
 	"io/fs"
 	"log"
@@ -70,13 +69,17 @@ type DocsService struct {
 
 	mu     sync.Mutex
 	stamps map[string]stamp // path -> last delivered (or cached) stamp
-	watch  *watcher
+	// announced is the stamp the watcher last reported for a path, so a second flush
+	// of the same state is dropped before the frontend has read the file.
+	announced map[string]stamp
+	watch     *watcher
+	cacheDir  string // empty means %LOCALAPPDATA%\Folio\cache
 }
 
 // NewService builds the service. roots is called on every request. emit sends
 // ChangedEvent to the frontend; it may be nil (tests).
 func NewService(roots func() Roots, emit func(ChangeSet)) *DocsService {
-	return &DocsService{roots: roots, emit: emit, stamps: map[string]stamp{}}
+	return &DocsService{roots: roots, emit: emit, stamps: map[string]stamp{}, announced: map[string]stamp{}}
 }
 
 // ServiceShutdown stops the watcher when the app exits.
@@ -90,21 +93,6 @@ func (s *DocsService) ServiceShutdown() error {
 	return nil
 }
 
-// LoadCache returns the cached index as raw JSON, or nil.
-//
-// TODO(ticket 05, D2): read %LOCALAPPDATA%\Folio\cache\<hash(docsRoot)>.json, check
-// parserVersion and docsRoot, and load the stamps into s.stamps.
-func (s *DocsService) LoadCache(parserVersion string) (json.RawMessage, error) {
-	return nil, errors.New("not implemented")
-}
-
-// SaveCache writes {envelope, stamps, index} atomically.
-//
-// TODO(ticket 05, D2): temp file then rename; Go writes the index bytes without decoding.
-func (s *DocsService) SaveCache(parserVersion string, index json.RawMessage) error {
-	return errors.New("not implemented")
-}
-
 // Rescan is the manual Rescan command (Ctrl+R) and the overflow fallback.
 //
 // It drops the stamps and runs a full Scan, so every file is in Changed. The
@@ -112,6 +100,7 @@ func (s *DocsService) SaveCache(parserVersion string, index json.RawMessage) err
 func (s *DocsService) Rescan() (ScanResult, error) {
 	s.mu.Lock()
 	s.stamps = map[string]stamp{}
+	s.announced = map[string]stamp{}
 	s.mu.Unlock()
 	return s.Scan()
 }
@@ -217,6 +206,7 @@ func (s *DocsService) ReadBatch(paths []string) (BatchResult, error) {
 		case o.missing:
 			res.Missing = append(res.Missing, paths[i])
 			delete(s.stamps, paths[i])
+			delete(s.announced, paths[i])
 		default:
 			res.Files = append(res.Files, o.file)
 			s.stamps[paths[i]] = o.stamp
@@ -277,6 +267,8 @@ func walkMarkdown(r Roots) (map[string]stamp, error) {
 	return found, nil
 }
 
+// skipDir is the scope rule shared by the walk and the watcher: node_modules, dot
+// folders and "_"-prefixed folders (such as _templates) are never indexed.
 func skipDir(name string) bool {
-	return name == "node_modules" || strings.HasPrefix(name, ".")
+	return name == "node_modules" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")
 }
