@@ -4,7 +4,6 @@
 package docs
 
 import (
-	"encoding/json"
 	"errors"
 	"io/fs"
 	"log"
@@ -41,6 +40,7 @@ type ScanResult struct {
 type BatchResult struct {
 	Files   []SourceFile `json:"files"`
 	Missing []string     `json:"missing"` // deleted between scan and read
+	Failed  []string     `json:"failed"`  // could not be read now (a sharing violation); retry
 }
 
 // ChangeSet is the payload of the "docs:changed" event.
@@ -70,39 +70,43 @@ type DocsService struct {
 
 	mu     sync.Mutex
 	stamps map[string]stamp // path -> last delivered (or cached) stamp
-	watch  *watcher
+	// announced is the stamp the watcher last reported for a path, so a second flush
+	// of the same state is dropped before the frontend has read the file.
+	announced map[string]stamp
+	watch     *watcher
+	closed    bool
+	gen       uint64 // bumped by every startWatcher; a scan from an older one is discarded
+	cacheDir  string // empty means %LOCALAPPDATA%\Folio\cache
 }
 
 // NewService builds the service. roots is called on every request. emit sends
 // ChangedEvent to the frontend; it may be nil (tests).
 func NewService(roots func() Roots, emit func(ChangeSet)) *DocsService {
-	return &DocsService{roots: roots, emit: emit, stamps: map[string]stamp{}}
+	return &DocsService{roots: roots, emit: emit, stamps: map[string]stamp{}, announced: map[string]stamp{}}
 }
 
-// ServiceShutdown stops the watcher when the app exits.
+// ServiceShutdown stops the watcher when the app exits. It never closes fsnotify
+// under the lock or waits for it: Close can block on Windows while an error is pending.
 func (s *DocsService) ServiceShutdown() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.watch != nil {
-		s.watch.close()
-		s.watch = nil
+	s.closed = true
+	w := s.watch
+	s.watch = nil
+	s.mu.Unlock()
+	if w != nil {
+		w.closeAsync()
 	}
 	return nil
 }
 
-// LoadCache returns the cached index as raw JSON, or nil.
-//
-// TODO(ticket 05, D2): read %LOCALAPPDATA%\Folio\cache\<hash(docsRoot)>.json, check
-// parserVersion and docsRoot, and load the stamps into s.stamps.
-func (s *DocsService) LoadCache(parserVersion string) (json.RawMessage, error) {
-	return nil, errors.New("not implemented")
-}
-
-// SaveCache writes {envelope, stamps, index} atomically.
-//
-// TODO(ticket 05, D2): temp file then rename; Go writes the index bytes without decoding.
-func (s *DocsService) SaveCache(parserVersion string, index json.RawMessage) error {
-	return errors.New("not implemented")
+// send emits a ChangeSet unless the service has shut down.
+func (s *DocsService) send(cs ChangeSet) {
+	s.mu.Lock()
+	closed := s.closed
+	s.mu.Unlock()
+	if !closed && s.emit != nil {
+		s.emit(cs)
+	}
 }
 
 // Rescan is the manual Rescan command (Ctrl+R) and the overflow fallback.
@@ -112,19 +116,37 @@ func (s *DocsService) SaveCache(parserVersion string, index json.RawMessage) err
 func (s *DocsService) Rescan() (ScanResult, error) {
 	s.mu.Lock()
 	s.stamps = map[string]stamp{}
+	s.announced = map[string]stamp{}
 	s.mu.Unlock()
 	return s.Scan()
 }
+
+// errSuperseded means a newer Scan (a Settings rescan, say) took over while this one ran.
+var errSuperseded = errors.New("scan superseded by a newer one")
 
 // Scan walks the configured roots and diffs the result against the known stamps.
 // With no stamps, every file is in Changed. It also (re)starts the watcher, before
 // the walk, so no change can fall between the two.
 func (s *DocsService) Scan() (ScanResult, error) {
+	// A scan started by the watcher's error recovery can overlap this one. The newer
+	// generation wins, so a superseded frontend scan is simply run again: errSuperseded
+	// never reaches the frontend.
+	for attempt := 0; ; attempt++ {
+		res, err := s.scan(false)
+		if !errors.Is(err, errSuperseded) || attempt >= 3 {
+			return res, err
+		}
+	}
+}
+
+// scan is Scan. With announce set (the rescan after a watcher error) it also records
+// the walked stamps of the changed files as announced, without extra stat calls.
+func (s *DocsService) scan(announce bool) (ScanResult, error) {
 	r := s.roots()
 	if r.Docs == "" {
 		return ScanResult{}, errors.New("no docs root is configured")
 	}
-	s.startWatcher(r)
+	gen := s.startWatcher(r)
 
 	start := time.Now()
 	found, err := walkMarkdown(r)
@@ -135,10 +157,18 @@ func (s *DocsService) Scan() (ScanResult, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// A newer Scan (with its own watcher) or a roots change while we walked: our
+	// result describes the old roots, so it must not touch the stamps.
+	if s.gen != gen || !sameRoots(r, s.roots()) {
+		return ScanResult{}, errSuperseded
+	}
 	res := ScanResult{Changed: []string{}, Removed: []string{}, Count: len(found), WalkMs: walkMs}
 	for p, st := range found {
 		if old, ok := s.stamps[p]; !ok || old != st {
 			res.Changed = append(res.Changed, p)
+			if announce {
+				s.announced[p] = st
+			}
 		}
 	}
 	for p := range s.stamps {
@@ -147,10 +177,19 @@ func (s *DocsService) Scan() (ScanResult, error) {
 			delete(s.stamps, p)
 		}
 	}
+	for p := range s.announced {
+		if _, ok := found[p]; !ok {
+			delete(s.announced, p)
+		}
+	}
 	slices.Sort(res.Changed)
 	slices.Sort(res.Removed)
 	log.Printf("docs.Scan: %d .md files, %d changed, %d removed, walk %d ms", res.Count, len(res.Changed), len(res.Removed), walkMs)
 	return res, nil
+}
+
+func sameRoots(a, b Roots) bool {
+	return a.Docs == b.Docs && slices.Equal(a.Roots, b.Roots)
 }
 
 // ReadBatch reads the files in one IPC call with a bounded pool. It stats before
@@ -207,16 +246,21 @@ func (s *DocsService) ReadBatch(paths []string) (BatchResult, error) {
 	}
 	wg.Wait()
 
-	res := BatchResult{Files: make([]SourceFile, 0, len(paths)), Missing: []string{}}
+	res := BatchResult{Files: make([]SourceFile, 0, len(paths)), Missing: []string{}, Failed: []string{}}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, o := range out {
 		switch {
 		case o.err != nil:
-			return BatchResult{}, o.err
+			// One unreadable file (a sharing violation, say) must not fail the batch.
+			// It is reported, and its announced stamp is cleared so a retry is seen.
+			log.Printf("docs.ReadBatch: %s: %v", paths[i], o.err)
+			res.Failed = append(res.Failed, paths[i])
+			delete(s.announced, paths[i])
 		case o.missing:
 			res.Missing = append(res.Missing, paths[i])
 			delete(s.stamps, paths[i])
+			delete(s.announced, paths[i])
 		default:
 			res.Files = append(res.Files, o.file)
 			s.stamps[paths[i]] = o.stamp
@@ -277,6 +321,8 @@ func walkMarkdown(r Roots) (map[string]stamp, error) {
 	return found, nil
 }
 
+// skipDir is the scope rule shared by the walk and the watcher: node_modules, dot
+// folders and "_"-prefixed folders (such as _templates) are never indexed.
 func skipDir(name string) bool {
-	return name == "node_modules" || strings.HasPrefix(name, ".")
+	return name == "node_modules" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")
 }

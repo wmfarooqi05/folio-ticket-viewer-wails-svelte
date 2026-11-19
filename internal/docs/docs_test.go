@@ -134,16 +134,6 @@ func TestReadsRefuseEscapesAndNonMarkdown(t *testing.T) {
 	}
 }
 
-func TestCacheMethodsAreStubs(t *testing.T) {
-	s, _ := newTestService(t)
-	if _, err := s.LoadCache("v"); err == nil {
-		t.Error("LoadCache should be a stub")
-	}
-	if err := s.SaveCache("v", nil); err == nil {
-		t.Error("SaveCache should be a stub")
-	}
-}
-
 // Rescan forgets what was delivered, so a changed root set rebuilds the whole index.
 func TestRescanReturnsEveryFile(t *testing.T) {
 	s, _ := newTestService(t)

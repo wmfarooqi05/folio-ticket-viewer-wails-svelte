@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
   import * as api from './lib/api'
   import type { Config } from './lib/api'
-  import { buildIndex, type Index } from './lib/parser'
+  import { indexStore } from './lib/index-store.svelte'
   import { applyTheme, resolvedTheme } from './lib/theme/theme'
   import Tree from './components/Tree.svelte'
   import DocView from './components/DocView.svelte'
@@ -19,8 +19,8 @@
 
   let phase = $state<Phase>('loading')
   let config = $state.raw<Config | null>(null)
-  let index = $state.raw<Index | null>(null) // the only index (05 D1): $state.raw, never deep
-  let status = $state('')
+  const index = $derived(indexStore.index) // the only index (05 D1), owned by the store
+  const status = $derived(indexStore.status.text)
   let problem = $state<string | null>(null)
 
   let selected = $state<string | null>(null)
@@ -30,7 +30,7 @@
   let docError = $state<string | null>(null)
 
   let settingsOpen = $state(false)
-  let scanInfo = $state.raw<{ count: number; walkMs: number } | null>(null)
+  const scanInfo = $derived(indexStore.scanInfo)
   let toast = $state<string | null>(null)
   let toastTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -58,19 +58,44 @@
     phase = 'error'
   }
 
-  /** The thin path: Scan, ReadBatch, buildIndex. Cache and watching come with ticket 05. */
-  async function load(full = false) {
+  /** Warm or cold start (ticket 09). The tree shows as soon as the store has an index. */
+  async function load() {
     phase = 'loading'
-    status = 'Scanning…'
-    // A root change needs a full Rescan: Scan alone lists only files that differ from
-    // what was already delivered, which would build a partial or empty index.
-    const scan = await (full ? api.rescan() : api.scan())
-    status = `Reading ${scan.changed?.length ?? 0} files…`
-    const { files: read } = await api.readAll(scan.changed ?? [])
-    index = buildIndex(read)
-    status = `${scan.count} files`
-    scanInfo = { count: scan.count, walkMs: scan.walkMs }
+    await indexStore.start()
     phase = 'ready'
+  }
+
+  // A cache hit or the first cold batch makes the index appear before start() resolves.
+  $effect(() => {
+    if (indexStore.index && phase === 'loading') phase = 'ready'
+  })
+
+  // Re-render the open document silently when its file changed or vanished.
+  $effect(() => {
+    void indexStore.docVersion
+    const path = untrack(() => selected)
+    if (untrack(() => view)) return // a cross-space view is showing, not the document
+    if (path && indexStore.touched(path)) void reloadSelected(path, indexStore.removed(path))
+  })
+
+  let reloadToken = 0 // the newest reload wins; a slow read must not undo a deletion
+
+  async function reloadSelected(path: string, gone: boolean) {
+    const mine = ++reloadToken
+    if (gone) {
+      text = null
+      docError = 'This file was deleted.'
+      return
+    }
+    try {
+      const content = await api.readFile(path)
+      if (mine === reloadToken && selected === path && content !== text) {
+        text = content // same path, so DocView keeps its scroll position
+        docError = null
+      }
+    } catch (err) {
+      if (mine === reloadToken && selected === path) docError = err instanceof Error ? err.message : String(err)
+    }
   }
 
   async function choose() {
@@ -104,9 +129,11 @@
     showToast('Settings saved')
     if (rescan && next.repoRoot) {
       selected = null
+      view = null
+      fragment = null
       text = null
       try {
-        await load(true)
+        await indexStore.rescan()
       } catch (err) {
         fail(err)
       }
@@ -114,6 +141,11 @@
   }
 
   function onwindowkeydown(e: KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') {
+      e.preventDefault() // never reload the webview; rescan instead
+      if (phase === 'ready') indexStore.rescan().catch(fail)
+      return
+    }
     if ((e.ctrlKey || e.metaKey) && e.key === ',') {
       e.preventDefault()
       if (config) settingsOpen = true
