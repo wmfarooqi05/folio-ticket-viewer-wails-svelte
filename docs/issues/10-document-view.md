@@ -1,8 +1,8 @@
 ---
 type: build
-status: in-review
-status_note: "on branch worktree-agent-a9105567b2c93a48e, not merged"
-waiting_on: null
+status: blocked
+status_note: "merged Nov 20, 2026; waiting on the owner: check the real exe once (CSP vs Wails IPC, pulse, theme fade, long scroll)"
+waiting_on: owner
 blocked_by: ["08"]
 blocked_note: null
 related: ["03", "06", "07"]
