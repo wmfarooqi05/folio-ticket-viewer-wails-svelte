@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -218,10 +219,64 @@ func (s *ShellService) OpenInVSCode(path string, line int) error {
 	return application.Get().Browser.OpenURL(VSCodeURL(abs, line))
 }
 
-// OpenExternal opens an http(s) link in the default browser.
-//
-// TODO(ticket 05, 1.3): validate http/https only and open through the Wails browser
-// manager. It waits for the slice that renders ADO, PR and external link chips.
+// OpenExternal opens an http(s) link in the default browser. Anything else is
+// rejected (see ValidateExternalURL), so a ticket cannot make Folio launch a
+// file:, javascript: or custom-protocol handler.
 func (s *ShellService) OpenExternal(url string) error {
-	return errors.New("not implemented")
+	clean, err := ValidateExternalURL(url)
+	if err != nil {
+		return err
+	}
+	return application.Get().Browser.OpenURL(clean)
+}
+
+// OpenSettingsFile opens settings.json in VS Code (the same vscode:// route as
+// OpenInVSCode, but for the app's own config, which is outside the docs root).
+// The file is created with the current settings first if it does not exist yet.
+func (s *ShellService) OpenSettingsFile() error {
+	s.mu.Lock()
+	path, saved := s.path, s.saved
+	s.mu.Unlock()
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		if err := settings.Save(path, saved); err != nil {
+			return err
+		}
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	return application.Get().Browser.OpenURL(VSCodeURL(abs, 0))
+}
+
+// CheckDocs reports which of roots exist under repoRoot/docsDir, for the settings
+// dialog's chips. It changes nothing.
+func (s *ShellService) CheckDocs(repoRoot, docsDir string, roots []string) (RootCheck, error) {
+	return InspectDocs(repoRoot, docsDir, roots), nil
+}
+
+// InspectDocs is the pure part of ShellService.CheckDocs. OK means at least one
+// root exists.
+func InspectDocs(repoRoot, docsDir string, roots []string) RootCheck {
+	if len(roots) == 0 {
+		roots = settings.DefaultDocsRoots
+	}
+	rc := RootCheck{Found: []string{}, Missing: slices.Clone(roots), RepoRoot: repoRoot, DocsDir: docsDir}
+	if st, err := os.Stat(repoRoot); err != nil || !st.IsDir() {
+		rc.Message = "that is not a folder"
+		return rc
+	}
+	if docsDir == "" {
+		docsDir = settings.DefaultDocsDir
+	}
+	if filepath.IsAbs(docsDir) || strings.HasPrefix(filepath.ToSlash(docsDir), "..") {
+		rc.Message = "the docs folder must be inside the repo root"
+		return rc
+	}
+	rc.Found, rc.Missing = probe(filepath.Join(repoRoot, filepath.FromSlash(docsDir)), roots)
+	rc.OK = len(rc.Found) > 0
+	if !rc.OK {
+		rc.Message = "expects " + joinRoots(roots) + " inside the folder"
+	}
+	return rc
 }
