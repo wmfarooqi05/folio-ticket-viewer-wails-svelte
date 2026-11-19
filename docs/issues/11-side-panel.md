@@ -45,6 +45,6 @@ Built on branch `worktree-agent-aca622383b057057e`.
 - **VS Code line**: `OpenInVSCode(path, line)` and `VSCodeURL` already took a line, so Go is unchanged. The panel passes the item's first line (or 0 for a whole file).
 
 ### Verification
-- Vitest 289 tests pass, including the stack (push, 3 hops back, promote, close, dedupe) and happy-dom tests for click routing (plain, Ctrl, middle, broken) and fragment-only rendering of fixture `05 Q1` (with its answer marker) and `05 Q3`.
-- `go test ./...`, `go vet ./...`, `npm run check` and `task build` are green. Initial JS is 96.9 KB gzip (limit 120).
+- Vitest 309 tests pass (after merging main with ticket 09), including the stack (push, 3 hops back, promote, close, dedupe) and happy-dom tests for click routing (plain, Ctrl, middle, broken) and fragment-only rendering of fixture `05 Q1` (with its answer marker) and `05 Q3`.
+- `go test ./...`, `go vet ./...`, `npm run check` and `task build` are green. Initial JS is 99.2 KB gzip (limit 120).
 - Not checked by eye in the real exe: the panel slide and the trail layout.
