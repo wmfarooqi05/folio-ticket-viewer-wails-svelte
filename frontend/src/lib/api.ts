@@ -33,11 +33,13 @@ export const checkDocs = (repoRoot: string, docsDir: string, roots: string[]): P
   ShellService.CheckDocs(repoRoot, docsDir, roots)
 export const openExternal = (url: string): Promise<void> => ShellService.OpenExternal(url)
 export const openSettingsFile = (): Promise<void> => ShellService.OpenSettingsFile()
-export const openInVSCode =(path: string, line = 0): Promise<void> => ShellService.OpenInVSCode(path, line)
+export const openInVSCode = (path: string, line = 0): Promise<void> => ShellService.OpenInVSCode(path, line)
 
 // ---- docs -----------------------------------------------------------------
 
 export const scan = (): Promise<ScanResult> => DocsService.Scan()
+/** Forgets what was delivered and lists every file as changed (after a root change). */
+export const rescan = (): Promise<ScanResult> => DocsService.Rescan()
 export const readFile = (path: string): Promise<string> => DocsService.ReadFile(path)
 
 /** Reads the paths in chunks. Files deleted since the scan come back in `missing`. */

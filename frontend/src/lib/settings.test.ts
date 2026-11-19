@@ -71,6 +71,9 @@ describe('saveDisabled', () => {
     d.theme = 'light'
     expect(saveDisabled(d, saved())).toBe(true)
   })
+  it('is disabled when no docs root is selected', () => {
+    expect(saveDisabled({ ...saved(), docsRoots: [] }, saved())).toBe(true)
+  })
   it('notices a changed root selection', () => {
     expect(saveDisabled({ ...saved(), docsRoots: ['modules'] }, saved())).toBe(false)
   })

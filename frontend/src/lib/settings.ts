@@ -135,19 +135,18 @@ export function validateDraft(d: Draft): Partial<Record<keyof Draft, string>> {
   if (p) errs.adoPrUrl = p
   const dd = validateDocsDir(d.docsDir)
   if (dd) errs.docsDir = dd
+  if (d.docsRoots.length === 0) errs.docsRoots = 'Select at least one folder'
   return errs
 }
 
-const same = (a: Draft, b: Draft) =>
-  a.repoRoot === b.repoRoot &&
-  a.docsDir === b.docsDir &&
-  a.adoWorkItemUrl === b.adoWorkItemUrl &&
-  a.adoPrUrl === b.adoPrUrl &&
-  a.theme === b.theme &&
-  a.docsRoots.length === b.docsRoots.length &&
-  a.docsRoots.every((r, i) => r === b.docsRoots[i])
+/** Every field key in the schema, so a new field is compared and patched with no other edit. */
+const FIELD_KEYS: (keyof Draft)[] = SECTIONS.flatMap((s) => s.fields.map((f) => f.key))
 
-export const isDirty = (draft: Draft, saved: Draft): boolean => !same(draft, saved)
+const fieldEqual = (a: Draft[keyof Draft], b: Draft[keyof Draft]): boolean =>
+  Array.isArray(a) && Array.isArray(b) ? a.length === b.length && a.every((v, i) => v === b[i]) : a === b
+
+export const isDirty = (draft: Draft, saved: Draft): boolean =>
+  FIELD_KEYS.some((k) => !fieldEqual(draft[k], saved[k]))
 
 /** Save is disabled until something changed, and while any field is invalid (the mockup rule). */
 export function saveDisabled(draft: Draft, saved: Draft): boolean {
@@ -156,14 +155,13 @@ export function saveDisabled(draft: Draft, saved: Draft): boolean {
 
 /** Only what changed, so a patch cannot overwrite what the user did not touch. */
 export function patchFrom(draft: Draft, saved: Draft): Partial<Draft> {
-  const patch: Partial<Draft> = {}
-  if (draft.repoRoot !== saved.repoRoot) patch.repoRoot = draft.repoRoot
-  if (draft.docsDir !== saved.docsDir) patch.docsDir = draft.docsDir.trim()
-  if (draft.docsRoots.join('\n') !== saved.docsRoots.join('\n')) patch.docsRoots = [...draft.docsRoots]
-  if (draft.adoWorkItemUrl !== saved.adoWorkItemUrl) patch.adoWorkItemUrl = draft.adoWorkItemUrl
-  if (draft.adoPrUrl !== saved.adoPrUrl) patch.adoPrUrl = draft.adoPrUrl
-  if (draft.theme !== saved.theme) patch.theme = draft.theme
-  return patch
+  const patch: Record<string, unknown> = {}
+  for (const k of FIELD_KEYS) {
+    if (fieldEqual(draft[k], saved[k])) continue
+    const v = draft[k]
+    patch[k] = Array.isArray(v) ? [...v] : typeof v === 'string' && k === 'docsDir' ? v.trim() : v
+  }
+  return patch as Partial<Draft>
 }
 
 /** A different repo, docs folder or set of roots means the index must be rebuilt. */

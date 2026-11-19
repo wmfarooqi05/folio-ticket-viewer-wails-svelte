@@ -45,9 +45,12 @@
   const disabled = $derived(busy || saveDisabled(draft, saved))
   const hasRepo = $derived(draft.repoRoot !== '')
   const candidates = $derived(rootCandidates(draft.docsRoots))
-  const noRoots = $derived(hasRepo && check !== null && (check.found ?? []).length === 0)
+  // The selected roots decide it, not the found candidates: a found but unticked root does not count.
+  const noRoots = $derived(
+    hasRepo && check !== null && draft.docsRoots.length > 0 && !draft.docsRoots.some((r) => (check?.found ?? []).includes(r)),
+  )
   const issues = $derived({
-    folder: noRoots,
+    folder: noRoots || !!errors.docsRoots || !!errors.docsDir,
     links: !!errors.adoWorkItemUrl || !!errors.adoPrUrl,
     appearance: false,
   })
@@ -111,13 +114,22 @@
     }
   }
 
-  const message = (err: unknown) => (err instanceof Error ? err.message : String(err))
+  /** "invalid settings: docsRoots: none of …" becomes the plain sentence. */
+  const message = (err: unknown) =>
+    (err instanceof Error ? err.message : String(err))
+      .replace(/^invalid settings: /, '')
+      .split('; ')
+      .map((p) => p.replace(/^[A-Za-z]+: /, ''))
+      .join('. ')
 
-  function onkeydown(e: KeyboardEvent) {
+  // On window, not on the dialog: when a focused button unmounts (Choose again) focus
+  // falls to <body>, and the keys must still work. The app behind is inert.
+  function onwindowkeydown(e: KeyboardEvent) {
+    if (!dlg.contains(document.activeElement)) dlg.focus()
     if (e.key === 'Escape') {
       e.preventDefault()
       onclose()
-    } else if (e.key === 'Enter' && !(e.target instanceof HTMLButtonElement)) {
+    } else if (e.key === 'Enter' && !e.isComposing && !(e.target instanceof HTMLButtonElement)) {
       e.preventDefault()
       void save()
     } else if (e.key === 'Tab') {
@@ -151,6 +163,8 @@
   }
 </script>
 
+<svelte:window onkeydown={onwindowkeydown} />
+
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div
   class="scrim"
@@ -165,7 +179,6 @@
     aria-label="Settings"
     tabindex="-1"
     bind:this={dlg}
-    {onkeydown}
   >
     <div class="head">
       <span class="title">Settings</span>
@@ -174,18 +187,25 @@
     </div>
 
     <div class="mid">
-      <nav class="secs" aria-label="Settings sections">
+      <div class="secs" role="tablist" aria-orientation="vertical" aria-label="Settings sections">
         {#each SECTIONS as s (s.id)}
-          <button type="button" class="sec" class:on={sec === s.id} onclick={() => (sec = s.id)}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={sec === s.id}
+            class="sec"
+            class:on={sec === s.id}
+            onclick={() => (sec = s.id)}
+          >
             <span style="flex:1">{s.label}</span>
             {#if issues[s.id]}<span class="dot" style="background:{issueColor(s.id)}"></span>{/if}
           </button>
         {/each}
-      </nav>
+      </div>
 
       <div class="pane" role="tabpanel" aria-label={section.label}>
         {#key sec}
-          <div class="fields">
+          <div class="fields" style:gap={sec === 'links' ? '20px' : undefined}>
             {#each section.fields as f (f.key)}
               {#if f.kind === 'folder'}
                 <div>
@@ -196,9 +216,9 @@
                   </div>
                   {#if noRoots}
                     <div class="warn" role="alert">
-                      <span class="dot" style="background:var(--s-rev)"></span>
+                      <span class="dot" style="width:7px;height:7px;background:var(--s-rev)"></span>
                       <span style="flex:1;min-width:0">
-                        This folder has none of <span class="mono">{candidates.map((r) => r + '/').join(' · ')}</span>
+                        This folder has none of <span class="mono" style="font-size:11.5px">{draft.docsRoots.map((r) => r + '/').join(' · ')}</span>
                       </span>
                       <button type="button" class="link" onclick={choose}>Choose again</button>
                     </div>
@@ -220,7 +240,7 @@
                   {#if errors.docsDir}
                     <div class="err"><span class="dot" style="background:var(--s-block)"></span>{errors.docsDir}</div>
                   {:else}
-                    <div class="hint">Looked up inside the repo root. Default <span class="mono">docs</span>.</div>
+                    <div class="hint">{f.hint}</div>
                   {/if}
                 </div>
               {:else if f.kind === 'roots'}
@@ -239,11 +259,18 @@
                         <span class="box">{on ? '✓' : ''}</span>
                         <span>{r}/</span>
                         <span class="found">
-                          <span class="fdot" class:missing={!found(r)}></span>{found(r) ? 'found' : 'missing'}
+                          {#if check === null}
+                            <span class="fdot unknown"></span>{hasRepo ? 'checking…' : ''}
+                          {:else}
+                            <span class="fdot" class:missing={!found(r)}></span>{found(r) ? 'found' : 'missing'}
+                          {/if}
                         </span>
                       </button>
                     {/each}
                   </div>
+                  {#if errors.docsRoots}
+                    <div class="err"><span class="dot" style="background:var(--s-block)"></span>{errors.docsRoots}</div>
+                  {/if}
                 </div>
                 <div class="watch">
                   <span class="dot" style="background:{noRoots || !hasRepo ? 'var(--s-rev)' : 'var(--s-done)'}"></span>{watchLine}
@@ -291,15 +318,15 @@
                       </button>
                     {/each}
                   </div>
-                  <div class="hint">{f.hint}</div>
+                  <div class="hint" style="margin-top:6px">{f.hint}</div>
                 </div>
               {/if}
             {/each}
             {#if sec === 'links'}
               <div class="hint" style="line-height:1.5">
                 <span class="mono" style="color:var(--fg2)">{'{id}'}</span> is replaced with the number from a ticket’s
-                <span class="mono" style="color:var(--fg2)">ado:</span> or
-                <span class="mono" style="color:var(--fg2)">pr:</span> field.
+                <span class="mono">ado:</span> or
+                <span class="mono">pr:</span> field.
               </div>
             {/if}
             {#if saveError}
@@ -613,6 +640,10 @@
     box-sizing: border-box;
     border-radius: 50%;
     background: var(--s-done);
+  }
+  .fdot.unknown {
+    background: var(--fg3);
+    opacity: 0.5;
   }
   .fdot.missing {
     background: transparent;

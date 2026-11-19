@@ -50,10 +50,12 @@
   }
 
   /** The thin path: Scan, ReadBatch, buildIndex. Cache and watching come with ticket 05. */
-  async function load() {
+  async function load(full = false) {
     phase = 'loading'
     status = 'Scanning…'
-    const scan = await api.scan()
+    // A root change needs a full Rescan: Scan alone lists only files that differ from
+    // what was already delivered, which would build a partial or empty index.
+    const scan = await (full ? api.rescan() : api.scan())
     status = `Reading ${scan.changed?.length ?? 0} files…`
     const { files: read } = await api.readAll(scan.changed ?? [])
     index = buildIndex(read)
@@ -95,7 +97,7 @@
       selected = null
       text = null
       try {
-        await load()
+        await load(true)
       } catch (err) {
         fail(err)
       }
@@ -136,7 +138,7 @@
 
 <svelte:window onkeydown={onwindowkeydown} />
 
-<div class="flex h-full flex-col bg-bg text-fg">
+<div class="flex h-full flex-col bg-bg text-fg" inert={settingsOpen}>
   <header class="chrome flex h-44 shrink-0 items-center gap-12 border-b border-line bg-side px-14">
     <span class="text-[13.5px] font-semibold tracking-[-0.01em]">Folio</span>
     <ol class="flex min-w-0 flex-1 items-center gap-6 text-sm text-fg2" aria-label="Breadcrumb">
@@ -213,7 +215,7 @@
 
 {#if toast}
   <div
-    class="fixed bottom-64 left-1/2 z-30 animate-toast rounded-[9px] bg-fg px-14 py-8 font-mono text-xs whitespace-nowrap text-bg shadow-lift"
+    class="fixed bottom-64 left-1/2 z-30 animate-toast rounded-[9px] bg-fg px-14 py-8 font-mono text-[12px] whitespace-nowrap text-bg shadow-lift [transform:translateX(-50%)]"
     role="status"
   >
     {toast}
