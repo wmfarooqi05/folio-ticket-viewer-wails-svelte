@@ -4,6 +4,7 @@
   import type { Config } from './lib/api'
   import { indexStore } from './lib/index-store.svelte'
   import { applyTheme, resolvedTheme } from './lib/theme/theme'
+  import Logo from './components/Logo.svelte'
   import Tree from './components/Tree.svelte'
   import DocView from './components/DocView.svelte'
   import SettingsDialog from './components/SettingsDialog.svelte'
@@ -308,7 +309,7 @@
 
 <div class="flex h-full flex-col bg-bg text-fg {dragging ? 'cursor-col-resize select-none' : ''}" inert={settingsOpen}>
   <header class="chrome flex h-44 shrink-0 items-center gap-12 border-b border-line bg-side px-14">
-    <span class="text-[13.5px] font-semibold tracking-[-0.01em]">Folio</span>
+    <Logo />
     <ol class="flex min-w-0 flex-1 items-center gap-6 text-sm text-fg2" aria-label="Breadcrumb">
       {#each crumb as part, i (i)}
         <li class="truncate" class:text-fg={i === crumb.length - 1}>
