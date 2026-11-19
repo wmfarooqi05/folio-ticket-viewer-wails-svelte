@@ -113,6 +113,8 @@ func (s *ShellService) SetConfig(p ConfigPatch) (Config, error) {
 		if disk, err := settings.Load(s.path); err == nil {
 			disk.Window = s.saved.Window
 			disk.SidebarWidth = s.saved.SidebarWidth
+			disk.PanelWidth = s.saved.PanelWidth
+			disk.SidebarCollapsed = s.saved.SidebarCollapsed
 			base = disk
 		}
 	}
@@ -146,27 +148,59 @@ func (s *ShellService) SetConfig(p ConfigPatch) (Config, error) {
 	return s.effective(), nil
 }
 
-// SetSidebarWidth saves the tree width (UI state, called once when a drag ends). It
-// reloads settings.json first so hand edits survive, changes only that field, and
-// clamps the value. A missing file is created; a corrupt one is left alone.
-func (s *ShellService) SetSidebarWidth(width int) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// updateUI changes one piece of UI state in settings.json. It reloads the file first
+// so hand edits survive, applies only `change`, and saves. A missing file is created;
+// a corrupt one is left alone. Caller holds mu.
+func (s *ShellService) updateUI(change func(*settings.Settings)) error {
 	base := s.saved
 	if _, err := os.Stat(s.path); err == nil {
 		disk, err := settings.Load(s.path) // a corrupt file is quarantined and yields defaults
 		if err != nil {
-			return 0, err
+			return err
 		}
 		disk.Window = s.saved.Window
 		base = disk
 	}
-	base.SidebarWidth = settings.ClampSidebarWidth(width)
+	change(&base)
 	if err := settings.Save(s.path, base); err != nil {
-		return 0, err
+		return err
 	}
 	s.saved = base
-	return base.SidebarWidth, nil
+	return nil
+}
+
+// SetSidebarWidth saves the tree width (UI state, called once when a drag ends). It
+// changes only that field and clamps the value.
+func (s *ShellService) SetSidebarWidth(width int) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w := settings.ClampSidebarWidth(width)
+	if err := s.updateUI(func(c *settings.Settings) { c.SidebarWidth = w }); err != nil {
+		return 0, err
+	}
+	return w, nil
+}
+
+// SetPanelWidth saves the side panel width (called once when a drag ends), the same
+// way as SetSidebarWidth.
+func (s *ShellService) SetPanelWidth(width int) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	w := settings.ClampPanelWidth(width)
+	if err := s.updateUI(func(c *settings.Settings) { c.PanelWidth = w }); err != nil {
+		return 0, err
+	}
+	return w, nil
+}
+
+// SetSidebarCollapsed saves whether the tree is hidden, the same way as SetSidebarWidth.
+func (s *ShellService) SetSidebarCollapsed(collapsed bool) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.updateUI(func(c *settings.Settings) { c.SidebarCollapsed = collapsed }); err != nil {
+		return false, err
+	}
+	return collapsed, nil
 }
 
 // PickFolder opens the native folder dialog. "" means cancelled.

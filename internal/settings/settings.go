@@ -52,6 +52,16 @@ const (
 // ClampSidebarWidth limits w to the allowed range.
 func ClampSidebarWidth(w int) int { return min(max(w, MinSidebarWidth), MaxSidebarWidth) }
 
+// Side panel width bounds in px. The upper bound is only a sanity limit: the real
+// maximum is 60% of the window, which only the frontend knows (lib/resize.ts).
+const (
+	MinPanelWidth = 320
+	MaxPanelWidth = 4000
+)
+
+// ClampPanelWidth limits w to the allowed range.
+func ClampPanelWidth(w int) int { return min(max(w, MinPanelWidth), MaxPanelWidth) }
+
 // Settings is the content of settings.json.
 type Settings struct {
 	V              int      `json:"v"`
@@ -67,6 +77,11 @@ type Settings struct {
 	// beside Window, is not in the Settings dialog and is not patchable through
 	// SetConfig. 0 means the default.
 	SidebarWidth int `json:"sidebarWidth"`
+	// PanelWidth is the right side panel's width in px, same rules as SidebarWidth
+	// (0 means the default, 360).
+	PanelWidth int `json:"panelWidth"`
+	// SidebarCollapsed is true when the user hid the tree. Same rules as SidebarWidth.
+	SidebarCollapsed bool `json:"sidebarCollapsed"`
 
 	// Extra holds keys this version does not know. They are written back unchanged.
 	Extra map[string]json.RawMessage `json:"-"`
@@ -104,7 +119,7 @@ func Path() (string, error) {
 // The bad file has been renamed to settings.json.bad and defaults are returned.
 var ErrCorrupt = errors.New("settings file is corrupt")
 
-var knownKeys = []string{"v", "repoRoot", "docsDir", "docsRoots", "adoWorkItemUrl", "adoPrUrl", "theme", "window", "sidebarWidth"}
+var knownKeys = []string{"v", "repoRoot", "docsDir", "docsRoots", "adoWorkItemUrl", "adoPrUrl", "theme", "window", "sidebarWidth", "panelWidth", "sidebarCollapsed"}
 
 // Load reads path. A missing file yields Defaults and no error. A corrupt file is
 // renamed to <path>.bad, and Load returns Defaults with an error wrapping ErrCorrupt.
