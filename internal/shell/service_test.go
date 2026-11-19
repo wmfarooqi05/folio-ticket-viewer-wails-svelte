@@ -3,6 +3,7 @@ package shell
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/settings"
@@ -105,5 +106,49 @@ func TestEnvOverrideIsNotPersisted(t *testing.T) {
 	saved, _ := settings.Load(path)
 	if saved.RepoRoot != "" {
 		t.Fatalf("FOLIO_ROOT leaked into settings.json: %+v", saved)
+	}
+}
+
+func TestSidebarWidthRoundTripsAndSurvivesSetConfig(t *testing.T) {
+	t.Setenv(EnvRoot, "")
+	repo := t.TempDir()
+	mkdir(t, repo, "docs", "patterns")
+	path := filepath.Join(t.TempDir(), "settings.json")
+	svc := New(path)
+
+	if c, _ := svc.GetConfig(); c.SidebarWidth != 0 {
+		t.Fatalf("default should be unset (0): %d", c.SidebarWidth)
+	}
+	if got, err := svc.SetSidebarWidth(340); err != nil || got != 340 {
+		t.Fatalf("save: %d %v", got, err)
+	}
+	if got, _ := svc.SetSidebarWidth(9999); got != settings.MaxSidebarWidth {
+		t.Fatalf("not clamped: %d", got)
+	}
+	if _, err := svc.SetSidebarWidth(340); err != nil {
+		t.Fatal(err)
+	}
+
+	// a hand edit made while the app runs must survive the width save
+	data, _ := os.ReadFile(path)
+	edited := strings.Replace(string(data), `"theme": "system"`, `"theme": "dark"`, 1)
+	if err := os.WriteFile(path, []byte(edited), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetSidebarWidth(300); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := svc.GetConfig(); c.Theme != settings.ThemeDark {
+		t.Fatalf("hand edit lost: %+v", c)
+	}
+
+	// SetConfig must not clobber the width
+	auto := settings.DefaultDocsDir
+	got, err := svc.SetConfig(ConfigPatch{RepoRoot: &repo, DocsDir: &auto})
+	if err != nil || got.SidebarWidth != 300 {
+		t.Fatalf("SetConfig lost the width: %+v %v", got, err)
+	}
+	if c, _ := New(path).GetConfig(); c.SidebarWidth != 300 || c.RepoRoot != repo || c.Window.Width == 0 {
+		t.Fatalf("not persisted: %+v", c)
 	}
 }
