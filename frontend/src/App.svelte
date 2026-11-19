@@ -7,6 +7,11 @@
   import Tree from './components/Tree.svelte'
   import DocView from './components/DocView.svelte'
   import SettingsDialog from './components/SettingsDialog.svelte'
+  import WaitingOn from './components/views/WaitingOn.svelte'
+  import OpenQuestions from './components/views/OpenQuestions.svelte'
+  import MapModes from './components/views/MapModes.svelte'
+  import PinnedViews from './components/views/PinnedViews.svelte'
+  import type { ViewId } from './lib/views'
 
   let { initial }: { initial: Config | null } = $props()
 
@@ -19,6 +24,7 @@
   let problem = $state<string | null>(null)
 
   let selected = $state<string | null>(null)
+  let view = $state<ViewId | null>(null) // a cross-space view (ticket 12) replaces the document
   let text = $state<string | null>(null)
   let docError = $state<string | null>(null)
 
@@ -31,7 +37,9 @@
   const rightPanelOpen = false
 
   const files = $derived(index ? Object.values(index.files) : [])
-  const crumb = $derived(selected ? selected.split('/') : [])
+  const crumb = $derived(
+    view ? [view === 'waiting' ? 'Waiting on' : 'Open questions'] : selected ? selected.split('/') : [],
+  )
   const dark = $derived(resolvedTheme(config?.theme) === 'dark')
 
   onMount(async () => {
@@ -112,6 +120,7 @@
   }
 
   async function select(path: string) {
+    view = null
     selected = path
     text = null
     docError = null
@@ -135,6 +144,10 @@
     }
   }
 </script>
+
+{#snippet docView()}
+  <DocView path={selected} {text} error={docError} />
+{/snippet}
 
 <svelte:window onkeydown={onwindowkeydown} />
 
@@ -171,6 +184,7 @@
   <div class="flex min-h-0 flex-1">
     <aside class="chrome flex w-280 shrink-0 flex-col border-r border-line bg-side">
       {#if phase === 'ready'}
+        {#if index}<PinnedViews {index} {view} onview={(v) => (view = v)} />{/if}
         <Tree {files} {selected} onselect={select} />
         <footer class="border-t border-line px-12 py-6 text-[11px] text-fg3">{status}</footer>
       {:else}
@@ -199,7 +213,17 @@
       {:else if phase === 'error'}
         <p class="p-24 text-md text-s-block" role="alert">{problem}</p>
       {:else if phase === 'ready'}
-        <DocView path={selected} {text} error={docError} />
+        {#if view === 'waiting' && index}
+          <WaitingOn {index} onselect={select} />
+        {:else if view === 'questions' && index}
+          <OpenQuestions {index} onselect={select} />
+        {:else if index && selected && index.files[selected]?.kind === 'map'}
+          <MapModes {index} path={selected} onselect={select}>
+            {#snippet doc()}{@render docView()}{/snippet}
+          </MapModes>
+        {:else}
+          {@render docView()}
+        {/if}
       {/if}
     </main>
 
