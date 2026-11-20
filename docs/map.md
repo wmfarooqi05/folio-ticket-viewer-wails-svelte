@@ -70,6 +70,7 @@ Reached when:
 | 23 | [First run on the company VM](issues/23-first-company-vm-install.md) | verify | [24](issues/24-node-web-mode.md) | — | blocked | — |
 | 24 | [Web mode: a zero-dependency Node server, published to npm](issues/24-node-web-mode.md) | build | — | — | blocked — merged, waiting on owner (try tarball, publish) | — |
 | 25 | [Any docs layout, and choosing the docs roots in Settings](issues/25-generic-docs-layout.md) | build | — | owner | blocked — merged, waiting on owner (open this repo by hand) | — |
+| 26 | [Retire the Go desktop app, keep the code](issues/26-retire-the-desktop-app.md) | build | — | — | open | — |
 <!-- tickets:end -->
 
 ## Decisions so far
