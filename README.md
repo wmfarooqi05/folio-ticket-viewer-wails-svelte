@@ -1,6 +1,6 @@
 # Folio
 
-Folio is a read-only desktop viewer for file-based tickets: markdown files with a small frontmatter convention, kept in a repo under `docs/modules/`, `docs/handoffs/` and `docs/patterns/`. It shows the tree, the status of each ticket, and (as the slices land) boards, a dependency graph, waiting-on and open-question views. It never writes to a ticket. The only files it writes are its own `%APPDATA%\Folio\settings.json`, a disposable index cache, and the WebView2 profile in `%APPDATA%\folio.exe`.
+Folio is a read-only desktop viewer for file-based tickets: markdown files with a small frontmatter convention, kept in a repo under `docs/modules/`, `docs/handoffs/` and `docs/patterns/`. It shows the tree, the status of each ticket, and (as the slices land) boards, a dependency graph, waiting-on and open-question views. It never writes to a ticket. The only files it writes are its own settings, a disposable index cache and the WebView2 profile; [Where Folio writes](#where-folio-writes) lists every place, for the exe and for web mode.
 
 Folio is lightweight on purpose: idle RAM is the priority (about 169 MB private for the whole process tree, WebView2 included), the exe is about 14 MiB, and a ticket 15 check keeps it that way (see [Budgets](#budgets)).
 
@@ -11,7 +11,7 @@ Folio installs for the current user only: no admin prompt, files in `%LOCALAPPDA
 1. Get `folio-amd64-installer.exe` (build it with `task package`, see below, or take it from whoever built it) and run it.
 2. Start Folio from the Start menu.
 
-Needs Windows 10 or 11 with the WebView2 runtime (Windows 11 has it; the installer fetches it if it is missing). Uninstalling removes the program and its shortcut and leaves your settings and index cache alone (`%APPDATA%\Folio` and `%LOCALAPPDATA%\Folio`); delete those folders by hand for a clean slate.
+Needs Windows 10 or 11 with the WebView2 runtime (Windows 11 has it; the installer fetches it if it is missing). Uninstalling removes the program, its shortcut and the browser profile, and asks whether to delete the index cache and settings too (`%LOCALAPPDATA%\Folio` and `%APPDATA%\Folio`). A silent uninstall keeps them; **Settings > Data > Clear data** or deleting those folders does it by hand.
 
 Without the installer, `bin\folio.exe` runs on its own after `task build`.
 
@@ -19,7 +19,7 @@ Without the installer, `bin\folio.exe` runs on its own after `task build`.
 
 1. The first launch shows a **Choose folder** screen. Pick the **repo root**, the folder that contains `docs/` (not `docs/` itself). Folio checks that `docs/modules`, `docs/handoffs` and `docs/patterns` can be found and shows what it found.
 2. Folio scans the folder, builds an index, and shows the tree. The index is cached under `%LOCALAPPDATA%\Folio\cache`, so the next start is quick, and the tree stays live: edits, new files and deletions show up within a second or two.
-3. Folio never writes to your tickets. The only file it writes is `%APPDATA%\Folio\settings.json` (and the disposable cache).
+3. Folio never writes to your tickets. What it does write is listed under [Where Folio writes](#where-folio-writes).
 
 ## Using it
 
@@ -31,18 +31,43 @@ Without the installer, `bin\folio.exe` runs on its own after `task build`.
 
 ## Settings
 
-Open them with the gear in the header or Ctrl+,. The dialog has three sections; Save stays disabled until something changes, Esc closes, Enter saves.
+Open them with the gear in the header or Ctrl+,. The dialog has four sections; Save stays disabled until something changes, Esc closes, Enter saves.
 
 - **Docs folder:** the repo root (with the picker), the docs folder name (default `docs`), and the docs roots to index (default `modules`, `handoffs`, `patterns`), with "found/missing" chips and the last scan time.
 - **Links:** the Azure DevOps work item and pull request URL templates (`https://` with an `{id}`), with a live preview.
-- **Appearance:** System, Light or Dark, and **Show memory use** (on by default).
+- **Appearance:** System, Light or Dark, and **Show memory use** (off by default).
+- **Data:** **Clear data**, see [Clear data](#clear-data).
 - **Open settings file** opens `settings.json` in VS Code. It is plain JSON; unknown keys are kept.
 
 Window position and size, the pane widths and the collapsed tree are saved there too.
 
 ### Memory readout
 
-The bottom of the tree shows one muted figure, for example `165 MB`: the private bytes of Folio plus its WebView2 processes, summed the way `scripts/ram-check.ps1` does it, so the two agree (Task Manager's Memory column is a different measure, which the tooltip says). Go measures (`internal/mem`) and only sends a number when it moved by 1 MB or more since the last one it sent. It polls every 5 s, re-reading just the known processes and listing every process on the machine once a minute to find new children, and it pauses while the window is minimised or hidden. Turn it off with **Show memory use** in Settings (`showMemory` in `settings.json`): nothing is polled then, and no goroutine or timer exists. The readout is also off while the tree is hidden or collapsed.
+The bottom of the tree shows one muted figure, for example `165 MB`: the private bytes of Folio plus its WebView2 processes, summed the way `scripts/ram-check.ps1` does it, so the two agree (Task Manager's Memory column is a different measure, which the tooltip says). Go measures (`internal/mem`) and only sends a number when it moved by 1 MB or more since the last one it sent. It polls every 5 s, re-reading just the known processes and listing every process on the machine once a minute to find new children, and it pauses while the window is minimised or hidden. It is **off by default**, because listing processes can trip endpoint-security heuristics; switch it on with **Show memory use** in Settings (`showMemory` in `settings.json`). While it is off nothing is polled, and no goroutine or timer exists. The readout is also off while the tree is hidden or collapsed.
+
+### Safety rules for settings and folders
+
+- **`settings.json` is checked when it is loaded**, field by field. A field with the wrong type, an `http:` link template, a `..` or absolute `docsDir` or docs root, an unknown theme, or a network repo root falls back to its default and is logged (`bin\folio.exe > folio.log 2>&1` shows it). The rest of the file is kept. Only a file that is not a JSON object at all is moved aside to `settings.json.bad`.
+- **A network or device path is not accepted as the repo root:** `\\server\share`, `\\?\...` and `\\.\...` make Windows talk SMB with your sign-in. In the exe, one you pick yourself in the folder dialog is allowed for that run, with a warning in the sidebar and in Settings; Folio forgets it when it closes, so you pick it again next time. Only the dialog (which Go runs) can grant that: typing a path, editing `settings.json` or setting `FOLIO_ROOT` cannot. Web mode has no dialog, so there it is always refused (map the share to a drive letter, or open a local copy).
+- **Files over 5 MB are not read.** A `.md` larger than that stays in the tree, tagged "too large" with its size, and opening it says why. The check is a stat, so a huge file costs nothing.
+
+### Clear data
+
+**Settings > Data > Clear data** deletes the index cache (a copy of your ticket text) at once. In the exe it also deletes the WebView2 profile, but a running WebView2 locks that folder, so that part happens the next time Folio starts (the dialog says so). After a clear the cache is not written again until Folio restarts. `settings.json` and your tickets are never touched, and only Folio's own folders are ever deleted. In web mode there is no profile, so it is the cache only.
+
+## Where Folio writes
+
+Nothing in your tickets repo, ever. Everything else, by mode:
+
+| What | Where | Written by |
+| --- | --- | --- |
+| Settings, plus the window bounds and pane widths | `%APPDATA%\Folio\settings.json` (and `settings.json.bad` if the file was not JSON; a temp `.settings-*.tmp` for an instant while saving) | exe and web mode |
+| Index cache: parsed ticket text and file stamps, plaintext | `%LOCALAPPDATA%\Folio\cache\<12 hex>.json`, one per docs folder | exe and web mode |
+| Clear data request | `%LOCALAPPDATA%\Folio\purge-profile.pending`, an empty note that makes the next start delete the profile | exe only |
+| WebView2 profile: cookies, cache and local storage of the embedded browser | `%LOCALAPPDATA%\Folio\WebView2` (older builds: `%APPDATA%\folio.exe`) | exe only |
+| The program | `%LOCALAPPDATA%\Programs\Folio` (per-user install) | installer |
+
+Web mode (`npx folio-viewer`) writes only the first two rows (the same files, the same places, from Node). It has no WebView2 profile and starts no other process than your browser, which keeps its own data. On a non-Windows machine the settings file is under `~/.config/Folio` (or `$XDG_CONFIG_HOME`) and the cache under `~/.cache/Folio` (`$XDG_CACHE_HOME`).
 
 ## Web mode (no exe)
 
@@ -62,7 +87,7 @@ What is the same: the tree, every view, the side panel, Mermaid, live refresh (e
 
 What is different:
 
-- The folder is a path you type (first run and Settings), or `--docs`; there is no native dialog.
+- The folder is a path you type (first run and Settings), or `--docs`; there is no native dialog, so a network or device path (`\\server\share`) is always refused.
 - External links open in a new browser tab (`http` and `https` only). "Open in VS Code" is a `vscode://` link; Edge asks once.
 - No window bounds, no RAM readout, no "Open settings file".
 - Only the browser that used the printed link can talk to the server: it listens on `127.0.0.1` only, accepts only `127.0.0.1:<port>` and `localhost:<port>` as the host, and wants a cookie it gets from the token in the link. Cross-site requests are refused. Images are served under `/doc/` with the same path rules as the desktop app.
@@ -94,6 +119,7 @@ To run the built exe you only need the WebView2 runtime, which Windows 11 alread
 ```
 task dev                 # Vite hot reload + Go rebuild
 task build               # production exe in bin\folio.exe (regenerates the TS bindings first)
+task build:bench         # bin\folio-bench.exe: the same plus the RAM bench hook, for task ram only
 task test                # go test ./... and vitest
 task check               # go vet, regenerate bindings, svelte-check
 task run                 # run bin\folio.exe
@@ -128,7 +154,7 @@ Notes:
 
 Run it alone with `task size` (or `node scripts/size-check.mjs`; `node --test scripts/size-check.test.mjs` is its self-test). It needs `frontend/dist` and `frontend/.vite/manifest.json`, both written by `npm run build` in `frontend/`.
 
-RAM, where **B** is the idle, indexed process-tree private memory (about 169 MB): two documents open at most B + 15 MB, after a Mermaid document at most B + 45 MB, 50 different documents at most B + 30 MB, and a second pass over 50 other documents must not grow it by more than 5 MB (the leak check). `task ram` (`scripts/ram-check.ps1`) launches `bin\folio.exe` on `fixtures\docs` with a throw-away `%APPDATA%`, sums private bytes and working set over `folio.exe` and every `msedgewebview2.exe` descendant after 30 s idle, three runs per case, and prints medians plus idle CPU with a pulsing status pill on screen. It drives the UI through a dev-only hook, `FOLIO_BENCH=1` with `FOLIO_BENCH_DIR` (see `internal/shell/bench.go`): off unless both are set, no listener, one polled command file. Close other WebView2 apps first for a quieter machine, and do not run builds while it runs. The numbers from the last full run are in [docs/issues/15-budgets-and-packaging.md](docs/issues/15-budgets-and-packaging.md).
+RAM, where **B** is the idle, indexed process-tree private memory (about 169 MB): two documents open at most B + 15 MB, after a Mermaid document at most B + 45 MB, 50 different documents at most B + 30 MB, and a second pass over 50 other documents must not grow it by more than 5 MB (the leak check). `task ram` (`scripts/ram-check.ps1`) launches `bin\folio-bench.exe` (build it with `task build:bench`) on `fixtures\docs` with a throw-away `%APPDATA%`, sums private bytes and working set over `folio.exe` and every `msedgewebview2.exe` descendant after 30 s idle, three runs per case, and prints medians plus idle CPU with a pulsing status pill on screen. It drives the UI through a dev-only hook, `FOLIO_BENCH=1` with `FOLIO_BENCH_DIR` (see `internal/shell/bench.go`): off unless both are set, no listener, one polled command file. The hook sits behind the `bench` build tag, so the shipped `bin\folio.exe` contains none of it (the bench exe is a separate build). Close other WebView2 apps first for a quieter machine, and do not run builds while it runs. The numbers from the last full run are in [docs/issues/15-budgets-and-packaging.md](docs/issues/15-budgets-and-packaging.md).
 
 ## Layout
 

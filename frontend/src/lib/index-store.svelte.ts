@@ -18,6 +18,8 @@ class IndexStore {
   docVersion = $state(0)
   /** Files on disk and the walk time of the latest scan, for Settings. */
   scanInfo = $state.raw<{ count: number; walkMs: number } | null>(null)
+  /** Files over the 5 MB cap (ticket 18): path -> bytes. The tree tags them "too large". */
+  tooLarge = $state.raw<Record<string, number>>({})
 
   #engine: IndexEngine | null = null
   #gen = 0 // bumped by every start(); an older engine can no longer write here
@@ -38,6 +40,7 @@ class IndexStore {
   start(): Promise<StartTimings> {
     this.stop(false) // a newer generation follows: the old engine must not save its index
     this.index = null
+    this.tooLarge = {}
     const gen = ++this.#gen
     const live = () => gen === this.#gen
     this.#engine = createIndexEngine(
@@ -60,6 +63,7 @@ class IndexStore {
         onIndex: (i) => live() && (this.index = i),
         onStatus: (s) => live() && (this.status = s),
         onScan: (i) => live() && (this.scanInfo = i),
+        onTooLarge: (f) => live() && (this.tooLarge = f),
         onTouched: (changed, removed) => {
           if (!live()) return
           this.#changed = new Set(changed)
@@ -100,7 +104,7 @@ class IndexStore {
 }
 
 function normalise(s: api.ScanResult) {
-  return { changed: s.changed ?? [], removed: s.removed ?? [], count: s.count, walkMs: s.walkMs }
+  return { changed: s.changed ?? [], removed: s.removed ?? [], count: s.count, walkMs: s.walkMs, tooLarge: s.tooLarge ?? [] }
 }
 
 export const indexStore = new IndexStore()

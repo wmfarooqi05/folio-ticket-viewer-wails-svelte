@@ -53,6 +53,14 @@ type ShellService struct {
 	mu       sync.Mutex
 	saved    settings.Settings // what is on disk (or defaults)
 	override *RootCheck        // FOLIO_ROOT, applied on top of saved, never persisted
+
+	// The explicit-pick exception for network folders (L2). Both fields are set by Go from what
+	// the native dialog returned and are never reachable from the frontend: PickFolder remembers
+	// the folder the user chose, CheckRoot turns it into the repo root it resolves to, and only
+	// that root is accepted by SetConfig and CheckDocs. Held in memory for this run only: a
+	// network root in settings.json is rejected again when the file is next loaded.
+	pickedNet  []string // the network folders the user chose in the dialog
+	allowedNet []string // the repo roots those choices resolved to
 }
 
 // New loads settings from path and applies the FOLIO_ROOT override if set.
@@ -116,6 +124,7 @@ func (s *ShellService) SetConfig(p ConfigPatch) (Config, error) {
 			disk.SidebarWidth = s.saved.SidebarWidth
 			disk.PanelWidth = s.saved.PanelWidth
 			disk.SidebarCollapsed = s.saved.SidebarCollapsed
+			s.keepPickedRoot(&disk)
 			base = disk
 		}
 	}
@@ -142,7 +151,7 @@ func (s *ShellService) SetConfig(p ConfigPatch) (Config, error) {
 	if p.Theme != nil {
 		next.Theme = *p.Theme
 	}
-	if err := settings.Validate(next); err != nil {
+	if err := settings.ValidateAllowing(next, s.allowedNet); err != nil {
 		return Config{}, err
 	}
 	if err := settings.Save(s.path, next); err != nil {
@@ -150,6 +159,15 @@ func (s *ShellService) SetConfig(p ConfigPatch) (Config, error) {
 	}
 	s.saved = next
 	return s.effective(), nil
+}
+
+// keepPickedRoot puts back the network repo root the user picked in this run: settings.Load
+// rejects such a root when it re-reads the file, which would otherwise wipe it on the next save.
+// Caller holds mu.
+func (s *ShellService) keepPickedRoot(disk *settings.Settings) {
+	if settings.IsNetworkPath(s.saved.RepoRoot) && settings.InPaths(s.allowedNet, s.saved.RepoRoot) && disk.RepoRoot == "" {
+		disk.RepoRoot = s.saved.RepoRoot
+	}
 }
 
 // updateUI changes one piece of UI state in settings.json. It reloads the file first
@@ -163,6 +181,7 @@ func (s *ShellService) updateUI(change func(*settings.Settings)) error {
 			return err
 		}
 		disk.Window = s.saved.Window
+		s.keepPickedRoot(&disk)
 		base = disk
 	}
 	change(&base)
@@ -208,12 +227,30 @@ func (s *ShellService) SetSidebarCollapsed(collapsed bool) (bool, error) {
 }
 
 // PickFolder opens the native folder dialog. "" means cancelled.
+//
+// It is the only place that can make a network folder acceptable (L2): a UNC or device path
+// the user chose here is remembered in Go, and the frontend's later CheckRoot and SetConfig for
+// that same path then succeed. A path typed or scripted anywhere else never does.
 func (s *ShellService) PickFolder() (string, error) {
-	return application.Get().Dialog.OpenFile().
+	picked, err := application.Get().Dialog.OpenFile().
 		CanChooseDirectories(true).
 		CanChooseFiles(false).
 		SetTitle("Choose the ticket repo (or its docs folder)").
 		PromptForSingleSelection()
+	if err == nil {
+		s.notePick(picked)
+	}
+	return picked, err
+}
+
+// notePick records the dialog's answer. A network folder joins the picks of this run; a local
+// folder or a cancel changes nothing, so a root accepted earlier stays valid for later saves.
+func (s *ShellService) notePick(picked string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if settings.IsNetworkPath(picked) && !settings.InPaths(s.pickedNet, picked) {
+		s.pickedNet = append(s.pickedNet, picked)
+	}
 }
 
 // CheckRoot inspects a folder the user picked (first run, 05 draft section 4). It
@@ -222,17 +259,35 @@ func (s *ShellService) PickFolder() (string, error) {
 func (s *ShellService) CheckRoot(abs string) (RootCheck, error) {
 	s.mu.Lock()
 	roots := slices.Clone(s.saved.DocsRoots)
+	picked := slices.Clone(s.pickedNet)
 	s.mu.Unlock()
-	return InspectRoot(abs, roots), nil
+	rc := InspectRootAllowing(abs, roots, picked)
+	if rc.OK && settings.IsNetworkPath(rc.RepoRoot) {
+		s.mu.Lock()
+		if !settings.InPaths(s.allowedNet, rc.RepoRoot) {
+			s.allowedNet = append(s.allowedNet, rc.RepoRoot) // SetConfig and CheckDocs now accept it
+		}
+		s.mu.Unlock()
+	}
+	return rc, nil
 }
 
 // InspectRoot is the pure part of ShellService.CheckRoot.
-func InspectRoot(abs string, roots []string) RootCheck {
+func InspectRoot(abs string, roots []string) RootCheck { return InspectRootAllowing(abs, roots, nil) }
+
+// InspectRootAllowing is InspectRoot, except that the network or device paths in allowNetwork (the
+// folders picked in the native dialog) are accepted. Any other network path is refused before
+// the file system is touched: even a stat on a UNC path starts SMB with the user's credentials.
+func InspectRootAllowing(abs string, roots []string, allowNetwork []string) RootCheck {
 	if len(roots) == 0 {
 		roots = settings.DefaultDocsRoots
 	}
 	fail := RootCheck{Found: []string{}, Missing: slices.Clone(roots),
 		Message: "expects " + joinRoots(roots) + " inside the folder"}
+	if settings.IsNetworkPath(abs) && !settings.InPaths(allowNetwork, abs) {
+		fail.Message = settings.NetworkRootMessage
+		return fail
+	}
 	if st, err := os.Stat(abs); err != nil || !st.IsDir() {
 		fail.Message = "that is not a folder"
 		return fail
@@ -323,16 +378,28 @@ func (s *ShellService) OpenSettingsFile() error {
 // CheckDocs reports which of roots exist under repoRoot/docsDir, for the settings
 // dialog's chips. It changes nothing.
 func (s *ShellService) CheckDocs(repoRoot, docsDir string, roots []string) (RootCheck, error) {
-	return InspectDocs(repoRoot, docsDir, roots), nil
+	s.mu.Lock()
+	allowed := slices.Clone(s.allowedNet)
+	s.mu.Unlock()
+	return InspectDocsAllowing(repoRoot, docsDir, roots, allowed), nil
 }
 
 // InspectDocs is the pure part of ShellService.CheckDocs. OK means at least one
 // root exists.
 func InspectDocs(repoRoot, docsDir string, roots []string) RootCheck {
+	return InspectDocsAllowing(repoRoot, docsDir, roots, nil)
+}
+
+// InspectDocsAllowing is InspectDocs with the one network root the user picked accepted.
+func InspectDocsAllowing(repoRoot, docsDir string, roots []string, allowNetwork []string) RootCheck {
 	if len(roots) == 0 {
 		roots = settings.DefaultDocsRoots
 	}
 	rc := RootCheck{Found: []string{}, Missing: slices.Clone(roots), RepoRoot: repoRoot, DocsDir: docsDir}
+	if settings.IsNetworkPath(repoRoot) && !settings.InPaths(allowNetwork, repoRoot) {
+		rc.Message = settings.NetworkRootMessage
+		return rc
+	}
 	if st, err := os.Stat(repoRoot); err != nil || !st.IsDir() {
 		rc.Message = "that is not a folder"
 		return rc

@@ -2,6 +2,7 @@
 // generated bindings, so the rest of the app can be tested with a fake. The backend itself
 // (the Wails exe, or the Node server in web mode) is picked in one place: lib/backend.ts.
 import { backend, isWeb } from './backend'
+import type { ClearDataResult, TooLargeFile } from './backend-types'
 import type {
   ChangeSet,
   ScanResult,
@@ -13,7 +14,7 @@ import type {
 } from '../../bindings/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/shell'
 import type { Settings } from '../../bindings/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/settings'
 
-export type { ChangeSet, ConfigPatch, RootCheck, ScanResult, SourceFile }
+export type { ChangeSet, ClearDataResult, ConfigPatch, RootCheck, ScanResult, SourceFile, TooLargeFile }
 export type Config = Settings
 export type Theme = 'system' | 'light' | 'dark'
 
@@ -54,9 +55,11 @@ export const saveCache = (parserVersion: string, index: unknown): Promise<void> 
 /** Writes a timing line to the Go log. */
 export const logTimings = (line: string): Promise<void> => backend.logTimings(line)
 /** One ReadBatch call. The caller keeps batches to BATCH_SIZE paths. */
-export const readBatch = async (paths: string[]): Promise<{ files: SourceFile[]; missing: string[]; failed: string[] }> => {
+export const readBatch = async (
+  paths: string[],
+): Promise<{ files: SourceFile[]; missing: string[]; failed: string[]; tooLarge: TooLargeFile[] }> => {
   const res = await backend.readBatch(paths)
-  return { files: res.files ?? [], missing: res.missing ?? [], failed: res.failed ?? [] }
+  return { files: res.files ?? [], missing: res.missing ?? [], failed: res.failed ?? [], tooLarge: res.tooLarge ?? [] }
 }
 
 /** Reads the paths in chunks. Files deleted since the scan come back in `missing`. */
@@ -76,6 +79,12 @@ export const docsFromCommandLine = (): Promise<string | null> => backend.docsFro
 
 /** Subscribes to the debounced `docs:changed` event. Returns an unsubscribe function. */
 export const onDocsChanged = (handler: (cs: ChangeSet) => void): (() => void) => backend.onDocsChanged(handler)
+
+/**
+ * "Clear data" (ticket 18): deletes the index cache now. On the desktop it also schedules the WebView2
+ * profile for deletion at the next start (a running WebView2 locks it). settings.json stays.
+ */
+export const clearData = (): Promise<ClearDataResult> => backend.clearData()
 
 // ---- memory readout (Go measures, see internal/mem; desktop only) ------------
 

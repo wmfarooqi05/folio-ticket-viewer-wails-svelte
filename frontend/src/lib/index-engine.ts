@@ -16,11 +16,32 @@ export const RETRY_DELAY_MS = 500
 /** After a rescan, files that stayed unreadable are tried once more this long after. */
 export const LATE_RETRY_MS = 5000
 
+/** A .md over the per-file cap (ticket 18, L6): Go skips it, and the tree says "too large". */
+export interface TooLargeInfo {
+  path: string
+  /** bytes */
+  size: number
+}
+
 export interface ScanInfo {
   changed: string[]
   removed: string[]
   count: number
   walkMs: number
+  /** every .md on disk over the cap, not a delta */
+  tooLarge?: TooLargeInfo[]
+}
+
+/** "12.3 MB", the way both backends print a size in their messages. */
+export const formatSize = (bytes: number): string => `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+
+/**
+ * What the index holds for a file that was not read: a one-line document, so the file still shows in
+ * the tree (with the "too large" tag) and the doc view says why there is nothing to read.
+ */
+export function tooLargeStub(f: TooLargeInfo): SourceFile {
+  const name = f.path.split('/').pop()!.replace(/\.md$/i, '')
+  return { path: f.path, mtime: 0, text: `# ${name}\n\nToo large to show: ${formatSize(f.size)}. Folio does not read files over 5 MB.\n` }
 }
 export interface ChangeInfo {
   changed: string[]
@@ -35,7 +56,7 @@ export interface EngineDeps {
   scan(): Promise<ScanInfo>
   rescan(): Promise<ScanInfo>
   /** `failed` lists files that could not be read right now (a sharing violation). */
-  readBatch(paths: string[]): Promise<{ files: SourceFile[]; missing: string[]; failed?: string[] }>
+  readBatch(paths: string[]): Promise<{ files: SourceFile[]; missing: string[]; failed?: string[]; tooLarge?: TooLargeInfo[] }>
   sleep(ms: number): Promise<void>
   updateIndex(index: Index, changed: SourceFile[], removed: string[]): Index
   emptyIndex(): Index
@@ -55,6 +76,8 @@ export interface EngineHooks {
   onTouched(changed: string[], removed: string[]): void
   /** The latest scan or rescan answered: files on disk and how long the walk took. */
   onScan?(info: { count: number; walkMs: number }): void
+  /** The set of files over the size cap changed: path -> bytes. */
+  onTooLarge?(files: Record<string, number>): void
 }
 
 export interface StartTimings {
@@ -87,6 +110,30 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
   let disposed = false
   let stopped = false
   let dirty = false
+  /** files over the size cap, path -> bytes: the scan says which, a read confirms */
+  let tooLarge = new Map<string, number>()
+  let tooLargeSent = ''
+
+  function publishTooLarge() {
+    const snapshot = Object.fromEntries([...tooLarge].sort(([a], [b]) => (a < b ? -1 : 1)))
+    const key = JSON.stringify(snapshot)
+    if (key === tooLargeSent) return
+    tooLargeSent = key
+    hooks.onTooLarge?.(snapshot)
+  }
+  /** The scan names every file over the cap, so a warm start (nothing re-read) still knows. */
+  function setTooLarge(list: TooLargeInfo[] | undefined) {
+    tooLarge = new Map((list ?? []).map((f) => [f.path, f.size]))
+  }
+  /** One batch result: skipped files get a stub in the index, and a file read in full is no longer "too large". */
+  function takeBatch(res: { files?: SourceFile[]; missing?: string[]; tooLarge?: TooLargeInfo[] }): { files: SourceFile[]; paths: string[] } {
+    const big = res.tooLarge ?? []
+    const files = res.files ?? []
+    for (const f of files) tooLarge.delete(f.path)
+    for (const p of res.missing ?? []) tooLarge.delete(p)
+    for (const f of big) tooLarge.set(f.path, f.size)
+    return { files: [...files, ...big.map(tooLargeStub)], paths: [...files.map((f) => f.path), ...big.map((f) => f.path)] }
+  }
 
   /** Runs fn after everything queued before it. A failure rejects the caller only. */
   function enqueue<T>(fn: () => Promise<T>): Promise<T> {
@@ -109,6 +156,7 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
     label: (done: number, total: number) => string,
   ): Promise<{ index: Index; touched: string[]; gone: string[]; failed: string[] }> {
     const batches = chunk(paths, BATCH_SIZE)
+    for (const p of removed) tooLarge.delete(p)
     let cur = removed.length ? deps.updateIndex(base, [], removed) : base
     const touched: string[] = []
     const gone = [...removed]
@@ -120,8 +168,9 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
       // Start the next read before parsing this one: one batch in flight, parse overlaps IPC.
       inflight = i + 1 < batches.length ? deps.readBatch(batches[i + 1]) : null
       const missing = res.missing ?? []
-      cur = deps.updateIndex(cur, res.files ?? [], missing)
-      touched.push(...(res.files ?? []).map((f) => f.path))
+      const got = takeBatch(res)
+      cur = deps.updateIndex(cur, got.files, missing)
+      touched.push(...got.paths)
       gone.push(...missing)
       failed.push(...(res.failed ?? []))
       done += batches[i].length
@@ -134,8 +183,9 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
       // Sharing violations are routine on Windows: retry the misses once, shortly after.
       await deps.sleep(RETRY_DELAY_MS)
       const again = await deps.readBatch(failed)
-      cur = deps.updateIndex(cur, again.files ?? [], again.missing ?? [])
-      touched.push(...(again.files ?? []).map((f) => f.path))
+      const gotAgain = takeBatch(again)
+      cur = deps.updateIndex(cur, gotAgain.files, again.missing ?? [])
+      touched.push(...gotAgain.paths)
       gone.push(...(again.missing ?? []))
       failed = again.failed ?? []
       if (progressive) publish(cur)
@@ -205,8 +255,10 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
       deps.log(`index: scan returned in ${scanMs} ms (walk ${scan.walkMs} ms, ${scan.changed.length} changed, ${scan.removed.length} removed)`)
 
       hooks.onScan?.({ count: scan.count, walkMs: scan.walkMs })
+      setTooLarge(scan.tooLarge)
       const r = await applyPaths(base, scan.changed, scan.removed, !warm, (d, n) => `Reading ${d} of ${n} files…`)
       if (r.index !== index) publish(r.index)
+      publishTooLarge()
       if (!warm || scan.changed.length || scan.removed.length) scheduleSave(!warm)
       const currentMs = Math.round(deps.now() - t0)
       hooks.onStatus({ text: `${scan.count} files`, checking: false })
@@ -231,6 +283,7 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
         throw err
       }
       publish(r.index)
+      publishTooLarge()
       deps.log(`index: applied ChangeSet (${cs.changed.length} changed, ${cs.removed.length} removed) in ${Math.round(deps.now() - t)} ms`)
       hooks.onTouched(r.touched, r.gone)
       scheduleSave()
@@ -252,10 +305,12 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
       hooks.onStatus({ text: 'Rescanning…', checking: true })
       const scan = await deps.rescan()
       hooks.onScan?.({ count: scan.count, walkMs: scan.walkMs })
+      setTooLarge(scan.tooLarge)
       // Built privately and published once, so the tree does not flash empty.
       const r = await applyPaths(deps.emptyIndex(), scan.changed, [], false, () => '')
       const before = index
       publish(r.index)
+      publishTooLarge()
       hooks.onStatus({ text: `${scan.count} files`, checking: false })
       // Every previously known or new path may have changed text.
       const all = new Set<string>([...r.touched, ...Object.keys(before?.files ?? {})])

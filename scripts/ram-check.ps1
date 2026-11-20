@@ -16,14 +16,14 @@ Cases (each run is a fresh launch):
 
 Isolation: the exe runs with APPDATA and LOCALAPPDATA pointing into a temp folder, so settings.json,
 the index cache and the WebView2 profile are throw-away and %APPDATA%\Folio is never touched. The docs
-root comes from FOLIO_ROOT and is only read. To open documents it uses the FOLIO_BENCH hook
+root comes from FOLIO_ROOT and is only read. To open documents it uses the FOLIO_BENCH hook, which only a bench build (task build:bench, go build -tags bench) has
 (internal/shell/bench.go): a command file in a temp folder, no listener.
 
 Every process started is killed at the end of its run, and a final sweep kills anything whose command
 line points into the temp folder.
 #>
 param(
-  [string]$Exe = (Join-Path $PSScriptRoot '..\bin\folio.exe'),
+  [string]$Exe = (Join-Path $PSScriptRoot '..\bin\folio-bench.exe'),  # task build:bench; the shipped folio.exe has no bench hook
   [string]$Docs = (Join-Path $PSScriptRoot '..\fixtures\docs'),
   [string[]]$Cases = @('a', 'b', 'c', 'd', 'cpu'),
   [int]$Runs = 3,

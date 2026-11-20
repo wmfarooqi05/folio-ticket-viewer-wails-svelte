@@ -52,7 +52,7 @@ export function defaults(): Settings {
     adoWorkItemUrl: '',
     adoPrUrl: '',
     theme: 'system',
-    showMemory: true,
+    showMemory: false, // L1: process enumeration can trip endpoint security, so it is opt-in
     window: { x: 0, y: 0, width: 1440, height: 900, maximised: false },
     sidebarWidth: 0,
     panelWidth: 0,
@@ -76,73 +76,122 @@ const KNOWN = ['v', 'repoRoot', 'docsDir', 'docsRoots', 'adoWorkItemUrl', 'adoPr
 
 export class CorruptError extends Error {}
 
-/** Applies a parsed file over `s` the way Go's json.Unmarshal does: null is skipped, a wrong type is an error. */
-function apply(s: Settings, o: Record<string, unknown>): void {
-  const bad = (k: string) => new Error(`json: cannot unmarshal into field ${k}`)
-  const str = (k: 'repoRoot' | 'docsDir' | 'adoWorkItemUrl' | 'adoPrUrl' | 'theme') => {
-    const v = o[k]
-    if (v === undefined || v === null) return
-    if (typeof v !== 'string') throw bad(k)
-    s[k] = v
+export interface Rejected {
+  field: string
+  message: string
+}
+
+/** What a rejected network or device repo root says. The same sentence as Go's settings.NetworkRootMessage. */
+export const NETWORK_ROOT_MESSAGE = String.raw`network and device paths (\\server\share, \\?\, \\.\) are not allowed as the repo root`
+
+/** A UNC path (\\host\share) or a device path (\\?\, \\.\, \??\). Either slash counts, as on Windows. */
+export const isNetworkPath = (p: string) => /^[\\/]{2}/.test(p) || p.startsWith('\\??\\')
+
+/**
+ * Applies a parsed file over `s` the way Go's LoadReport does: field by field. A missing or null key
+ * is skipped; a wrong type is rejected (the field keeps its default), and so is a value that validate()
+ * would refuse (L2). Returns what was rejected.
+ */
+function apply(s: Settings, o: Record<string, unknown>): Rejected[] {
+  const rejected: Rejected[] = []
+  const reject = (field: string, message: string) => rejected.push({ field, message })
+  const present = (v: unknown) => v !== undefined && v !== null
+  const take = <T,>(src: Record<string, unknown>, field: string, key: string, ok: (v: unknown) => v is T): T | undefined => {
+    const v = src[key]
+    if (!present(v)) return undefined
+    if (!ok(v)) {
+      reject(field, 'wrong type')
+      return undefined
+    }
+    return v
   }
-  const int = (target: Record<string, unknown>, src: Record<string, unknown>, k: string) => {
-    const v = src[k]
-    if (v === undefined || v === null) return
-    if (typeof v !== 'number' || !Number.isInteger(v)) throw bad(k)
-    target[k] = v
+  const isStr = (v: unknown): v is string => typeof v === 'string'
+  const isInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v)
+  const isBool = (v: unknown): v is boolean => typeof v === 'boolean'
+  const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+  const isStrs = (v: unknown): v is string[] => Array.isArray(v) && v.every(isStr)
+
+  for (const k of ['repoRoot', 'docsDir', 'adoWorkItemUrl', 'adoPrUrl', 'theme'] as const) s[k] = take(o, k, k, isStr) ?? s[k]
+  for (const k of ['v', 'sidebarWidth', 'panelWidth'] as const) s[k] = take(o, k, k, isInt) ?? s[k]
+  for (const k of ['showMemory', 'sidebarCollapsed'] as const) s[k] = take(o, k, k, isBool) ?? s[k]
+  const roots = take(o, 'docsRoots', 'docsRoots', isStrs)
+  if (roots) s.docsRoots = [...roots]
+  const w = take(o, 'window', 'window', isObj)
+  if (w) {
+    for (const k of ['x', 'y', 'width', 'height'] as const) s.window[k] = take(w, 'window.' + k, k, isInt) ?? s.window[k]
+    s.window.maximised = take(w, 'window.maximised', 'maximised', isBool) ?? s.window.maximised
   }
-  const bool = (target: Record<string, unknown>, src: Record<string, unknown>, k: string) => {
-    const v = src[k]
-    if (v === undefined || v === null) return
-    if (typeof v !== 'boolean') throw bad(k)
-    target[k] = v
+
+  // Values of the right type that validate() would refuse. repoRoot is checked for its shape only.
+  const d = defaults()
+  if (!['system', 'light', 'dark'].includes(s.theme)) {
+    reject('theme', 'must be system, light or dark')
+    s.theme = d.theme
   }
-  str('repoRoot')
-  str('docsDir')
-  str('adoWorkItemUrl')
-  str('adoPrUrl')
-  str('theme')
-  int(s as unknown as Record<string, unknown>, o, 'v')
-  int(s as unknown as Record<string, unknown>, o, 'sidebarWidth')
-  int(s as unknown as Record<string, unknown>, o, 'panelWidth')
-  bool(s as unknown as Record<string, unknown>, o, 'showMemory')
-  bool(s as unknown as Record<string, unknown>, o, 'sidebarCollapsed')
-  if (o.docsRoots !== undefined && o.docsRoots !== null) {
-    if (!Array.isArray(o.docsRoots) || o.docsRoots.some((r) => typeof r !== 'string')) throw bad('docsRoots')
-    s.docsRoots = [...(o.docsRoots as string[])]
+  if (!isRelativeInside(s.docsDir)) {
+    reject('docsDir', 'must be a relative folder inside the repo root')
+    s.docsDir = d.docsDir
   }
-  const w = o.window
-  if (w !== undefined && w !== null) {
-    if (typeof w !== 'object' || Array.isArray(w)) throw bad('window')
-    const wo = w as Record<string, unknown>
-    const tw = s.window as unknown as Record<string, unknown>
-    for (const k of ['x', 'y', 'width', 'height']) int(tw, wo, k)
-    bool(tw, wo, 'maximised')
+  const rootsMsg = rootsError(s.docsRoots)
+  if (rootsMsg) {
+    reject('docsRoots', rootsMsg)
+    s.docsRoots = d.docsRoots
   }
+  const w1 = templateError(s.adoWorkItemUrl)
+  if (w1) {
+    reject('adoWorkItemUrl', w1)
+    s.adoWorkItemUrl = ''
+  }
+  const p1 = templateError(s.adoPrUrl)
+  if (p1) {
+    reject('adoPrUrl', p1)
+    s.adoPrUrl = ''
+  }
+  if (isNetworkPath(s.repoRoot)) {
+    reject('repoRoot', NETWORK_ROOT_MESSAGE)
+    s.repoRoot = ''
+  }
+  if (s.sidebarWidth !== 0 && clampSidebarWidth(s.sidebarWidth) !== s.sidebarWidth) {
+    reject('sidebarWidth', 'out of range')
+    s.sidebarWidth = clampSidebarWidth(s.sidebarWidth)
+  }
+  if (s.panelWidth !== 0 && clampPanelWidth(s.panelWidth) !== s.panelWidth) {
+    reject('panelWidth', 'out of range')
+    s.panelWidth = clampPanelWidth(s.panelWidth)
+  }
+  return rejected
+}
+
+/** "" when there is at least one docs root and each is a relative folder inside the docs folder. */
+function rootsError(roots: string[]): string {
+  if (roots.length === 0) return 'must list at least one folder'
+  for (const r of roots) if (!isRelativeInside(r)) return `"${r}" must be a relative folder inside the docs folder`
+  return ''
 }
 
 /**
- * Reads path. A missing file gives the defaults. A corrupt one is renamed to <path>.bad and
- * the defaults come back with `corrupt` set (Go returns an error wrapping ErrCorrupt).
+ * Reads path. A missing file gives the defaults. A file that is not a JSON object is renamed to
+ * <path>.bad and the defaults come back with `corrupt` set (Go returns an error wrapping ErrCorrupt).
+ * A bad field keeps its default and is listed in `rejected`; the rest of the file is kept (L2).
  */
-export function load(file: string): Loaded & { corrupt?: string } {
+export function load(file: string): Loaded & { corrupt?: string; rejected: Rejected[] } {
   const s = defaults()
   let data: string
   try {
     data = readFileSync(file, 'utf8')
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { settings: s, extra: {} }
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { settings: s, extra: {}, rejected: [] }
     throw e
   }
   if (data.charCodeAt(0) === 0xfeff) data = data.slice(1)
   try {
     const o = JSON.parse(data) as unknown
     if (o === null || typeof o !== 'object' || Array.isArray(o)) throw new Error('not an object')
-    apply(s, o as Record<string, unknown>)
+    const rejected = apply(s, o as Record<string, unknown>)
     const extra: Extra = {}
     for (const [k, v] of Object.entries(o as Record<string, unknown>)) if (!KNOWN.includes(k)) extra[k] = v
     if (s.v === 0) s.v = VERSION
-    return { settings: s, extra }
+    return { settings: s, extra, rejected }
   } catch (cause) {
     const bad = file + '.bad'
     let note = `${(cause as Error).message}; moved to ${bad}`
@@ -151,7 +200,7 @@ export function load(file: string): Loaded & { corrupt?: string } {
     } catch (e) {
       note = `${(cause as Error).message}; could not move it aside: ${(e as Error).message}`
     }
-    return { settings: defaults(), extra: {}, corrupt: `settings file is corrupt (${note})` }
+    return { settings: defaults(), extra: {}, rejected: [], corrupt: `settings file is corrupt (${note})` }
   }
 }
 
@@ -249,7 +298,11 @@ export function validate(s: Settings): void {
   if (w) add('adoWorkItemUrl', w)
   const p = templateError(s.adoPrUrl)
   if (p) add('adoPrUrl', p)
-  if (s.repoRoot !== '') {
+  if (isNetworkPath(s.repoRoot)) {
+    // Web mode has no native folder dialog, so there is no explicit pick: always refused, and before
+    // any file-system call (a stat on a UNC path starts SMB with the user's credentials).
+    add('repoRoot', NETWORK_ROOT_MESSAGE)
+  } else if (s.repoRoot !== '') {
     if (!isDir(s.repoRoot)) add('repoRoot', 'must be an existing folder')
     else if (pathsOK) {
       const docs = docsPath(s)

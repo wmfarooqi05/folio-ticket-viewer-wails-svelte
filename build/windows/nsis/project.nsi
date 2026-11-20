@@ -138,12 +138,21 @@ SectionEnd
 Section "uninstall" 
     !insertmacro wails.setShellContext
 
-    RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
+    # The WebView2 profile: the folder Wails uses by default (%APPDATA%\folio.exe) and the one Folio
+    # moves it to (%LOCALAPPDATA%\Folio\WebView2, ticket 16). Nothing in it is worth keeping.
+    RMDir /r "$AppData\${PRODUCT_EXECUTABLE}"
+    RMDir /r "$LOCALAPPDATA\Folio\WebView2"
+    Delete "$LOCALAPPDATA\Folio\purge-profile.pending" # a pending "Clear data" request, now moot
 
     RMDir /r $INSTDIR
 
-    # Settings (%APPDATA%\Folio\settings.json) and the index cache (%LOCALAPPDATA%\Folio\cache) are the
-    # user's and are left alone; the cache is disposable and the settings hold their folder choice.
+    # Clear data (ticket 18, L5). The index cache holds a plaintext copy of the ticket text, so the
+    # uninstaller offers to delete it, and the settings file with it. A silent uninstall keeps both
+    # (/SD IDNO); Settings > Data > Clear data, or deleting the folders, does it by hand.
+    MessageBox MB_YESNO|MB_ICONQUESTION "Also delete Folio's index cache (a copy of your ticket text) and its settings?$\r$\n$\r$\n$LOCALAPPDATA\Folio$\r$\n$APPDATA\Folio" /SD IDNO IDNO keepFolioData
+        RMDir /r "$LOCALAPPDATA\Folio"
+        RMDir /r "$APPDATA\Folio"
+    keepFolioData:
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
 
     !insertmacro wails.unassociateFiles

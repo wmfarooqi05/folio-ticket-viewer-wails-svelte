@@ -3,6 +3,7 @@ package docs
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -90,9 +91,21 @@ func ResolveMarkdown(root, rel string) (string, error) {
 // readText reads a file and strips a UTF-8 byte order mark, so the parser's
 // leading "---" check is not defeated by editors that write one.
 func readText(full string) (string, error) {
-	b, err := os.ReadFile(full)
+	f, err := os.Open(full)
 	if err != nil {
 		return "", err
 	}
+	defer f.Close()
+	// One byte past the cap tells a file that grew after its stat from one that fits.
+	b, err := io.ReadAll(io.LimitReader(f, MaxFileBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if len(b) > MaxFileBytes {
+		return "", errFileGrew
+	}
 	return strings.TrimPrefix(string(b), "\ufeff"), nil
 }
+
+// errFileGrew means a file passed the size check and was over the cap by the time it was read.
+var errFileGrew = errors.New("file grew past the size cap while it was read")

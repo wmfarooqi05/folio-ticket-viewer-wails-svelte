@@ -122,6 +122,7 @@ export async function main(argv: string[], version = ''): Promise<void> {
     process.exit(1)
   }
   if (running.shell.loadError) console.error(`folio: ${running.shell.loadError}`)
+  for (const w of running.shell.loadWarnings) console.error(`folio: ${w}`)
   console.log(`Folio is running. Open this link (the token in it works once):\n\n  ${running.url}\n\nPress Ctrl+C to stop.`)
   if (args.open) openBrowser(running.url)
 

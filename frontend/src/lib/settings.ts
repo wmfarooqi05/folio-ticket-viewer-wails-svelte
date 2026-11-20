@@ -35,7 +35,7 @@ export interface Field {
 }
 
 export interface Section {
-  id: 'folder' | 'links' | 'appearance'
+  id: 'folder' | 'links' | 'appearance' | 'data'
   label: string
   fields: Field[]
 }
@@ -73,10 +73,12 @@ export const SECTIONS: Section[] = [
         key: 'showMemory',
         kind: 'toggle',
         label: 'Show memory use',
-        hint: 'A small RAM figure in the sidebar footer. Off stops the measuring.',
+        hint: 'A small RAM figure in the sidebar footer. Off by default: measuring it looks at other processes. Off stops the measuring.',
       },
     ],
   },
+  // Not a settings.json field: the dialog draws the "Clear data" action for this one (ticket 18).
+  { id: 'data', label: 'Data', fields: [] },
 ]
 
 export const THEMES: { value: Theme; label: string }[] = [
@@ -94,7 +96,7 @@ export function draftFrom(cfg: DraftSource): Draft {
     adoWorkItemUrl: cfg.adoWorkItemUrl ?? '',
     adoPrUrl: cfg.adoPrUrl ?? '',
     theme,
-    showMemory: cfg.showMemory !== false,
+    showMemory: cfg.showMemory === true, // off unless the config says so (ticket 18, L1)
   }
 }
 

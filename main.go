@@ -4,11 +4,11 @@ package main
 import (
 	"embed"
 	"log"
-	"os"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/docs"
+	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/localdata"
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/mem"
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/settings"
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/shell"
@@ -24,6 +24,11 @@ func init() {
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds) // the cache timings are read from this log
+	// "Clear data" (L5) leaves a request to delete the WebView2 profile. It has to run before the
+	// first window exists, because a running WebView2 locks its profile folder.
+	if _, err := localdata.Default().RunPending(); err != nil {
+		log.Printf("folio: clear data: %v", err)
+	}
 	path, err := settings.Path()
 	if err != nil {
 		log.Fatalf("folio: settings path: %v", err)
@@ -37,7 +42,7 @@ func main() {
 	)
 
 	// The RAM readout (ticket 16): idle until the frontend turns it on from the showMemory setting.
-	benchLog := os.Getenv("FOLIO_BENCH") == "1" // lets ram-check.ps1 compare the readout with its own number
+	benchLog := shell.BenchMemLog() // bench builds only: lets ram-check.ps1 compare the readout with its own number
 	memMon := mem.NewMonitor(func(b uint64) {
 		if benchLog {
 			log.Printf("folio.mem: bytes=%d", b)
@@ -52,6 +57,7 @@ func main() {
 			application.NewService(docsSvc),
 			application.NewService(shellSvc),
 			application.NewService(mem.NewMemoryService(memMon)),
+			application.NewService(localdata.NewLocalDataService(docsSvc)),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -87,7 +93,8 @@ func main() {
 	}))
 	shell.RememberWindow(shellSvc, win)
 	mem.Attach(memMon, win) // paused while the window is minimised or hidden
-	// Dev-only RAM bench hook (ticket 15): off unless FOLIO_BENCH=1 and FOLIO_BENCH_DIR are set.
+	// RAM bench hook (ticket 15): compiled in only with -tags bench, and then off unless FOLIO_BENCH=1
+	// and FOLIO_BENCH_DIR are set.
 	shell.StartBench(func(event, path string) { app.Event.Emit(event, path) })
 
 	if err := app.Run(); err != nil {

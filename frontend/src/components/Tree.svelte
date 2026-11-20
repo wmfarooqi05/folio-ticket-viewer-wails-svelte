@@ -4,10 +4,13 @@
   import type { PinnedItem } from '../lib/pinned'
   import { STATUS_LABEL, isStruck } from '../lib/status'
   import { ancestors, buildRows, searchRecords, visibleRows } from '../lib/tree'
+  import { formatSize } from '../lib/index-engine'
   import StatusDot from './StatusDot.svelte'
 
   interface Props {
     files: DocRecord[]
+    /** files over the size cap (ticket 18): path -> bytes. Shown with a "too large" tag. */
+    tooLarge?: Record<string, number>
     selected: string | null
     onselect: (path: string) => void
     /** the pinned views list; ticket 12 feeds the real counts. Rows are drawn, links are stubs. */
@@ -15,7 +18,7 @@
     activeView?: PinnedItem["id"] | null
     onview?: (id: PinnedItem["id"]) => void
   }
-  let { files, selected, onselect, pinned = [], activeView = null, onview }: Props = $props()
+  let { files, tooLarge = {}, selected, onselect, pinned = [], activeView = null, onview }: Props = $props()
 
   const rows = $derived(buildRows(files))
 
@@ -115,7 +118,7 @@
           {#if status}<StatusDot {status} />{/if}
           <span class="min-w-0 flex-1 py-4">
             <span class="block truncate" class:line-through={status && isStruck(status)}>{rec.title}</span>
-            <span class="block truncate font-mono text-2xs text-fg3">{rec.path.replace(/^modules\//, '')}</span>
+            <span class="block truncate font-mono text-2xs text-fg3">{rec.path.replace(/^modules\//, '')}{#if tooLarge[rec.path]} · too large, {formatSize(tooLarge[rec.path])}{/if}</span>
           </span>
         </button>
       {/each}
@@ -157,7 +160,7 @@
                 : 'text-fg2'}"
             style:padding-left="{8 + row.depth * 14}px"
             aria-current={selected === rec.path ? 'true' : undefined}
-            title={rec.title}
+            title={tooLarge[rec.path] !== undefined ? `${rec.title}: too large (${formatSize(tooLarge[rec.path])}), not read` : rec.title}
             onclick={() => onselect(rec.path)}
           >
             {#if status}
@@ -169,7 +172,13 @@
             {#if status}
               <span class="hidden text-[11px] whitespace-nowrap text-fg2 group-hover:inline">{STATUS_LABEL[status]}</span>
             {/if}
-            {#if rec.legacy && rec.kind === 'ticket'}
+            {#if tooLarge[rec.path] !== undefined}
+              <span
+                class="shrink-0 rounded-xs border border-line2 px-4 font-mono text-[9.5px] whitespace-nowrap text-s-block"
+                title="Over the 5 MB limit: Folio does not read this file"
+                >too large · {formatSize(tooLarge[rec.path])}</span
+              >
+            {:else if rec.legacy && rec.kind === 'ticket'}
               <span class="rounded-xs border border-line2 px-4 font-mono text-[9.5px] text-fg3">legacy</span>
             {/if}
           </button>

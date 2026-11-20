@@ -43,18 +43,26 @@ func normRoot(docs string) string {
 	return strings.ToLower(filepath.ToSlash(filepath.Clean(docs)))
 }
 
-func (s *DocsService) cachePath(r Roots) (string, error) {
-	dir := s.cacheDir
-	if dir == "" {
-		base := os.Getenv("LOCALAPPDATA")
-		if base == "" {
-			ucd, err := os.UserCacheDir()
-			if err != nil {
-				return "", err
-			}
-			base = ucd
+// cacheFolder is where cache files go: the override, or %LOCALAPPDATA%\Folio\cache.
+func (s *DocsService) cacheFolder() (string, error) {
+	if s.cacheDir != "" {
+		return s.cacheDir, nil
+	}
+	base := os.Getenv("LOCALAPPDATA")
+	if base == "" {
+		ucd, err := os.UserCacheDir()
+		if err != nil {
+			return "", err
 		}
-		dir = filepath.Join(base, "Folio", "cache")
+		base = ucd
+	}
+	return filepath.Join(base, "Folio", "cache"), nil
+}
+
+func (s *DocsService) cachePath(r Roots) (string, error) {
+	dir, err := s.cacheFolder()
+	if err != nil {
+		return "", err
 	}
 	sum := sha1.Sum([]byte(normRoot(r.Docs)))
 	return filepath.Join(dir, hex.EncodeToString(sum[:])[:12]+".json"), nil
@@ -117,6 +125,10 @@ func (s *DocsService) SaveCache(parserVersion string, index json.RawMessage) err
 		return errors.New("empty index")
 	}
 	s.mu.Lock()
+	if s.noSave {
+		s.mu.Unlock()
+		return nil // "Clear data" ran: the cache stays gone until Folio restarts
+	}
 	path, err := s.cachePath(r)
 	if err != nil {
 		s.mu.Unlock()

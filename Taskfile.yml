@@ -37,8 +37,17 @@ tasks:
       - node scripts/size-check.mjs
       - node --test scripts/size-check.test.mjs
 
+  build:bench:
+    summary: Builds bin/folio-bench.exe, the exe scripts/ram-check.ps1 drives. It has the bench hook (go build -tags bench); the shipped folio.exe does not.
+    cmds:
+      - task: common:build:frontend
+      - cmd: go build -tags production,bench -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui" -o bin/folio-bench.exe
+        platforms: [windows]
+        env:
+          CGO_ENABLED: "0"
+
   ram:
-    summary: RAM and CPU benchmark of bin/folio.exe on the fixtures (about 25 minutes; see README)
+    summary: RAM and CPU benchmark of bin/folio-bench.exe on the fixtures (about 25 minutes; run task build:bench first; see README)
     cmds:
       - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ram-check.ps1 {{.CLI_ARGS}}
 

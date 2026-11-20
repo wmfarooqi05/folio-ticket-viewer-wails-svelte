@@ -97,8 +97,8 @@ describe('patch and rescan', () => {
 })
 
 describe('showMemory (the hide setting)', () => {
-  it('is on unless the config says false, including older configs without the key', () => {
-    expect(draftFrom({}).showMemory).toBe(true)
+  it('is off unless the config says true, including older configs without the key (L1)', () => {
+    expect(draftFrom({}).showMemory).toBe(false)
     expect(draftFrom({ showMemory: true }).showMemory).toBe(true)
     expect(draftFrom({ showMemory: false }).showMemory).toBe(false)
   })
@@ -106,14 +106,14 @@ describe('showMemory (the hide setting)', () => {
     const f = SECTIONS.find((s) => s.id === 'appearance')?.fields.find((x) => x.key === 'showMemory')
     expect(f?.kind).toBe('toggle')
   })
-  it('turning it off enables Save and sends only that key, with no rescan', () => {
-    const d = { ...saved(), showMemory: false }
+  it('turning it on enables Save and sends only that key, with no rescan', () => {
+    const d = { ...saved(), showMemory: true }
     expect(saveDisabled(d, saved())).toBe(false)
-    expect(patchFrom(d, saved())).toEqual({ showMemory: false })
+    expect(patchFrom(d, saved())).toEqual({ showMemory: true })
     expect(needsRescan(patchFrom(d, saved()))).toBe(false)
   })
-  it('turning it off and on again changes nothing', () => {
-    expect(saveDisabled({ ...saved(), showMemory: true }, saved())).toBe(true)
+  it('turning it on and off again changes nothing', () => {
+    expect(saveDisabled({ ...saved(), showMemory: false }, saved())).toBe(true)
   })
 })
 

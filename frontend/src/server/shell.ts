@@ -81,6 +81,9 @@ const joinRoots = (roots: string[]) => roots.map((r) => r + '/').join(' · ')
 export function inspectRoot(abs: string, roots: string[]): RootCheck {
   if (roots.length === 0) roots = S.DEFAULT_DOCS_ROOTS
   const fail: RootCheck = { ok: false, repoRoot: '', docsDir: '', found: [], missing: [...roots], message: 'expects ' + joinRoots(roots) + ' inside the folder' }
+  // Web mode has no native folder dialog, so no network folder is ever "picked": always refused,
+  // and before any file-system call (a stat on a UNC path starts SMB with the user's credentials).
+  if (S.isNetworkPath(abs)) return { ...fail, message: S.NETWORK_ROOT_MESSAGE }
   if (!isDir(abs)) return { ...fail, message: 'that is not a folder' }
   abs = clean(abs)
   let p = probe(path.join(abs, S.DEFAULT_DOCS_DIR), roots)
@@ -94,6 +97,7 @@ export function inspectRoot(abs: string, roots: string[]): RootCheck {
 export function inspectDocs(repoRoot: string, docsDir: string, roots: string[]): RootCheck {
   if (roots.length === 0) roots = S.DEFAULT_DOCS_ROOTS
   const rc: RootCheck = { ok: false, repoRoot, docsDir, found: [], missing: [...roots], message: '' }
+  if (S.isNetworkPath(repoRoot)) return { ...rc, message: S.NETWORK_ROOT_MESSAGE }
   if (!isDir(repoRoot)) return { ...rc, message: 'that is not a folder' }
   if (docsDir === '') docsDir = S.DEFAULT_DOCS_DIR
   if (!S.isRelativeInside(docsDir)) return { ...rc, message: 'the docs folder must be inside the repo root' }
@@ -112,6 +116,8 @@ export class ShellService {
   private override: { repoRoot: string; docsDir: string } | null = null
   /** Set when settings.json was corrupt and moved aside (the first-run screen follows). */
   loadError: string | null = null
+  /** One line per settings.json field that was rejected on load and replaced by its default (L2). */
+  loadWarnings: string[] = []
 
   constructor(
     private file: string,
@@ -121,6 +127,7 @@ export class ShellService {
     this.saved = l.settings
     this.extra = l.extra
     this.loadError = l.corrupt ?? null
+    this.loadWarnings = l.rejected.map((r) => `settings: ${file}: ${r.field}: ${r.message}; using the default`)
     if (docsOverride) {
       const rc = inspectRoot(docsOverride, this.saved.docsRoots)
       if (!rc.ok) throw new Error(`--docs ${docsOverride}: ${rc.message}`)

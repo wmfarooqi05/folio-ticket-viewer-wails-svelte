@@ -16,7 +16,7 @@
   import { pinnedCounts, type ViewId } from './lib/views'
   import * as panelStack from './lib/panel'
   import { Layout } from './lib/layout.svelte'
-  import { checkPath, pickRoot, rootsLabel } from './lib/folder'
+  import { checkPath, isNetworkPath, pickRoot, rootsLabel } from './lib/folder'
   import { docsRootPath, splitPath } from './lib/path'
   import { MEMORY_TIP, formatMemory } from './lib/memory'
   import Icon from './lib/icons/Icon.svelte'
@@ -219,7 +219,7 @@
     try {
       const res = await pickRoot()
       if (res.kind === 'no-roots') {
-        folderNotice = { roots: true, message: res.message } // the Settings warning; nothing changed
+        folderNotice = { roots: !res.refused, message: res.message } // the Settings warning; nothing changed
       } else if (res.kind === 'ok' && (res.repoRoot !== config.repoRoot || res.docsDir !== config.docsDir)) {
         config = await api.setConfig({ repoRoot: res.repoRoot, docsDir: res.docsDir })
         showToast('Folder changed')
@@ -392,12 +392,26 @@
       {#if phase === 'ready'}
         <Tree
           {files}
+          tooLarge={indexStore.tooLarge}
           selected={view ? null : selected}
           onselect={select}
           pinned={pinnedItems(index ? pinnedCounts(index) : null)}
           activeView={view}
           onview={(v) => (view = v)}
         />
+        {#if config && isNetworkPath(config.repoRoot)}
+          <!-- a network folder the user picked in the dialog (ticket 18, L2): say what that means, every time -->
+          <div
+            class="mx-8 mb-8 flex items-start gap-8 rounded-md border border-[color-mix(in_oklab,var(--s-rev)_45%,transparent)] bg-[color-mix(in_oklab,var(--s-rev)_10%,transparent)] px-10 py-8 text-xs"
+            role="note"
+          >
+            <span class="mt-4 size-7 shrink-0 rounded-full bg-s-rev"></span>
+            <span class="min-w-0 flex-1">
+              Network folder: Folio reads it over the network with your Windows sign-in. It is forgotten when Folio closes; choose it
+              again next time.
+            </span>
+          </div>
+        {/if}
         {#if folderNotice}
           <!-- the same warning as the Settings dialog, in the sidebar -->
           <div
