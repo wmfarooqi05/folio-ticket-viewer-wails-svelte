@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkPath, isNetworkPath, pickRoot, rootsLabel, type PickApi } from './folder'
+import { checkPath, isNetworkPath, pickRoot, rootsLabel, unquotePath, type PickApi } from './folder'
 
 const fake = (picked: string, check: Partial<Awaited<ReturnType<PickApi['checkRoot']>>>): PickApi => ({
   pickFolder: async () => picked,
@@ -59,6 +59,14 @@ describe('checkPath (the typed path of web mode)', () => {
     const deps = { checkRoot: async (p: string) => ((asked = p), { ok: true, repoRoot: 'E:/repo', docsDir: 'docs', found: [], missing: [], message: '', suggested: [], folders: [] }) }
     expect(await checkPath('  E:/repo ', deps)).toEqual({ kind: 'ok', repoRoot: 'E:/repo', docsDir: 'docs' })
     expect(asked).toBe('E:/repo')
+  })
+  it('drops the quotes of File Explorer\'s "Copy as path"', async () => {
+    let asked = ''
+    const deps = { checkRoot: async (p: string) => ((asked = p), { ok: true, repoRoot: 'E:/repo', docsDir: 'docs', found: [], missing: [], message: '', suggested: [], folders: [] }) }
+    await checkPath(' "E:\\projects\\ticket_ui" ', deps)
+    expect(asked).toBe('E:\\projects\\ticket_ui')
+    expect(unquotePath('"')).toBe('"')
+    expect(unquotePath('E:\\a "b"')).toBe('E:\\a "b"')
   })
   it('passes on the roots CheckRoot suggested for a map.md or issues/ layout', async () => {
     const r = await pickRoot(fake('E:\repo', { ok: true, repoRoot: 'E:\repo', docsDir: 'docs', suggested: ['.'] }))

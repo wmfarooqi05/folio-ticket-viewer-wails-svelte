@@ -25,12 +25,18 @@ export interface PickApi {
  * picked in the desktop dialog that merely lacks the docs roots gets the ordinary no-roots message.
  */
 export async function checkPath(picked: string, deps: Pick<PickApi, 'checkRoot'> = api, typed = false): Promise<PickResult> {
-  picked = picked.trim()
+  picked = unquotePath(picked)
   if (!picked) return { kind: 'cancelled' }
   const check = await deps.checkRoot(picked)
   if (!check.ok) return { kind: 'no-roots', picked, message: check.message, ...(typed && isNetworkPath(picked) ? { refused: true } : {}) }
   const suggested = check.suggested ?? []
   return { kind: 'ok', repoRoot: check.repoRoot, docsDir: check.docsDir, ...(suggested.length > 0 ? { docsRoots: [...suggested] } : {}) }
+}
+
+/** Trims a typed or pasted path, and drops the quotes File Explorer's "Copy as path" puts around it. */
+export const unquotePath = (p: string): string => {
+  const t = p.trim()
+  return t.length >= 2 && t.startsWith('"') && t.endsWith('"') ? t.slice(1, -1).trim() : t
 }
 
 /**

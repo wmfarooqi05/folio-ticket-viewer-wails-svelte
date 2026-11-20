@@ -210,6 +210,7 @@
 
   // Web mode: a browser cannot hand back a folder's path, so "Change folder" opens a small path
   // box above the footer instead of a native dialog, filled in with the current folder.
+  const PATH_TIP = 'Tip: in File Explorer, right-click the folder › Copy as path, then paste it here.'
   let folderBoxOpen = $state(false)
   let folderBoxValue = $state('')
 
@@ -481,6 +482,7 @@
                 }
               }}
             />
+            <p class="text-[10.5px] leading-[1.4] text-fg3">{PATH_TIP}</p>
             <div class="flex justify-end gap-8">
               <button
                 type="button"
@@ -543,6 +545,7 @@
                 Open
               </button>
             </form>
+            <p class="-mt-6 text-xs text-fg3">{PATH_TIP}</p>
           {:else}
             <button
               type="button"
