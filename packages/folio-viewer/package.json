@@ -1,0 +1,26 @@
+{
+  "name": "folio-viewer",
+  "version": "0.1.0",
+  "description": "Read-only viewer for Markdown tickets. Runs a local web server and opens your browser. No dependencies.",
+  "keywords": ["tickets", "markdown", "viewer"],
+  "license": "MIT",
+  "author": "Waleed Mehmood",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte.git",
+    "directory": "packages/folio-viewer"
+  },
+  "type": "module",
+  "bin": {
+    "folio": "folio-web.mjs"
+  },
+  "files": [
+    "folio-web.mjs",
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}
