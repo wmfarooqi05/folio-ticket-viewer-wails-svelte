@@ -57,7 +57,7 @@ func main() {
 	// it is Folio's page. win is set below; the closures only run once the window exists.
 	var win *application.WebviewWindow
 	watchdog := shell.NewWatchdog(origin,
-		func() { win.ExecJS(shell.PingJS) },
+		func(js string) { win.ExecJS(js) },
 		func() { win.SetURL("/") })
 
 	app = application.New(application.Options{
