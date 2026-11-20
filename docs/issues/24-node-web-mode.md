@@ -1,8 +1,8 @@
 ---
 type: build
-status: in-review
-status_note: "Built on branch worktree-agent-ab391769d24973bff; waiting for the owner to review, merge, and run npm publish (not published)."
-waiting_on: null
+status: blocked
+status_note: "merged Nov 20, 2026; waiting on the owner: try the packed tarball on the PC, then npm publish"
+waiting_on: owner
 blocked_by: []
 blocked_note: null
 related: ["09", "16", "18", "22", "23"]
