@@ -92,7 +92,7 @@ export function draftFrom(cfg: DraftSource): Draft {
   return {
     repoRoot: cfg.repoRoot ?? '',
     docsDir: cfg.docsDir ?? 'docs',
-    docsRoots: [...(cfg.docsRoots?.length ? cfg.docsRoots : DEFAULT_ROOTS)],
+    docsRoots: [...new Set((cfg.docsRoots?.length ? cfg.docsRoots : DEFAULT_ROOTS).map(normalizeRoot))],
     adoWorkItemUrl: cfg.adoWorkItemUrl ?? '',
     adoPrUrl: cfg.adoPrUrl ?? '',
     theme,
@@ -211,5 +211,20 @@ export function parseTypedRoot(text: string): { root: string } | { error: string
   if (/^([a-zA-Z]:|\/)/.test(t) || t.split('/').includes('..')) return { error: 'Must be a folder inside the docs folder' }
   const clean = t.split('/').filter((p) => p !== '' && p !== '.').join('/')
   if (clean === '') return { error: 'Use the "Whole docs folder" chip for that' }
+  if (clean.split('/').some((p) => p === 'node_modules' || p.startsWith('_') || p.startsWith('.')))
+    return { error: 'Folio skips node_modules and folders that start with _ or .' }
   return { root: clean }
+}
+
+/** "./" and "a/.." are the whole docs folder, "a/./b" is "a/b". A root that leaves the folder is left as written. */
+export function normalizeRoot(r: string): string {
+  const out: string[] = []
+  for (const p of r.replaceAll('\\', '/').split('/')) {
+    if (p === '' || p === '.') continue
+    if (p === '..') {
+      if (out.length === 0) return r
+      out.pop()
+    } else out.push(p)
+  }
+  return out.length === 0 ? WHOLE_ROOT : out.join('/')
 }

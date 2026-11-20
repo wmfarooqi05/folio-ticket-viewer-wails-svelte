@@ -4,7 +4,7 @@
 // `index` is $state.raw on purpose (05 D1): one copy of the index, never proxied.
 import * as api from './api'
 import { createIndexEngine, type IndexEngine, type StartTimings } from './index-engine'
-import { buildIndex, updateIndex, type Index } from './parser'
+import { buildIndex, rootNameFor, updateIndex, type Index } from './parser'
 
 class IndexStore {
   /** The only index. Replaced, never mutated. */
@@ -46,7 +46,8 @@ class IndexStore {
 
   async #readRootName() {
     try {
-      this.#rootName = repoName((await api.getConfig()).repoRoot)
+      const cfg = await api.getConfig()
+      this.#rootName = rootNameFor(cfg.repoRoot, cfg.docsDir)
     } catch {
       this.#rootName = ''
     }
@@ -117,12 +118,6 @@ class IndexStore {
     void this.#engine?.dispose(save)
     this.#engine = null
   }
-}
-
-/** The last folder of the repo root, either slash: the name of the docs folder's own space. */
-export function repoName(repoRoot: string): string {
-  const parts = repoRoot.split(/[\/]/).filter((p) => p !== '')
-  return parts[parts.length - 1] ?? ''
 }
 
 function normalise(s: api.ScanResult) {

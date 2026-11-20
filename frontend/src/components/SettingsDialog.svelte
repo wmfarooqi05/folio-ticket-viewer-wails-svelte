@@ -4,7 +4,7 @@
   import { onDestroy, onMount, untrack } from 'svelte'
   import * as api from '../lib/api'
   import type { Config, RootCheck } from '../lib/api'
-  import { checkPath, isNetworkPath, pickRoot, rootsLabel } from '../lib/folder'
+  import { checkPath, isNetworkPath, noRootsText, pickRoot } from '../lib/folder'
   import {
     SECTIONS,
     THEMES,
@@ -50,7 +50,8 @@
   // Folders typed in the box this session stay as chips when unticked. The check asks about these only: the
   // folders it finds come back in check.folders and are added to the chips, so they never feed the check again.
   let added = $state<string[]>([])
-  const askRoots = $derived(rootCandidates(draft.docsRoots, [], added))
+  // Not the ticked roots: a tick must not walk the docs folder again.
+  const askRoots = $derived(rootCandidates(saved.docsRoots, [], added))
   const candidates = $derived(rootCandidates(draft.docsRoots, check?.folders ?? [], added))
   let typedRoot = $state('')
   let typedRootError = $state<string | null>(null)
@@ -62,12 +63,14 @@
     }
     typedRootError = null
     typedRoot = ''
-    if (!candidates.includes(r.root)) added = [...added, r.root]
-    if (!draft.docsRoots.includes(r.root)) draft.docsRoots = toggleRoot(draft.docsRoots, r.root, rootCandidates(draft.docsRoots, check?.folders ?? [], [...added, r.root]))
+    // The file system may be case-insensitive: "Modules" is the "modules" chip, not a second root.
+    const root = candidates.find((c) => c.toLowerCase() === r.root.toLowerCase()) ?? r.root
+    if (!candidates.includes(root)) added = [...added, root]
+    if (!draft.docsRoots.includes(root)) draft.docsRoots = toggleRoot(draft.docsRoots, root, rootCandidates(draft.docsRoots, check?.folders ?? [], [...added, root]))
   }
   // The selected roots decide it, not the found candidates: a found but unticked root does not count.
   const noRoots = $derived(
-    hasRepo && check !== null && draft.docsRoots.length > 0 && !draft.docsRoots.some((r) => (check?.found ?? []).includes(r)),
+    hasRepo && check !== null && draft.docsRoots.length > 0 && !draft.docsRoots.some((r) => found(r)),
   )
   const issues = $derived({
     folder: noRoots || !!errors.docsRoots || !!errors.docsDir,
@@ -313,7 +316,7 @@
                     <div class="warn" role="alert">
                       <span class="dot" style="width:7px;height:7px;background:var(--s-rev)"></span>
                       <span style="flex:1;min-width:0">
-                        This folder has none of <span class="mono" style="font-size:11.5px">{rootsLabel(draft.docsRoots)}</span>
+                        This folder has <span class="mono" style="font-size:11.5px">{noRootsText(draft.docsRoots)}</span>
                         {#if (check?.folders ?? []).length > 0}. Tick a folder below, or the whole docs folder.{/if}
                       </span>
                       {#if !api.isWeb}<button type="button" class="link" onclick={choose}>Choose again</button>{/if}

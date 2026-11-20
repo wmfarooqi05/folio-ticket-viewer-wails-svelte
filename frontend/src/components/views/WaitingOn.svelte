@@ -33,7 +33,7 @@
     <p class="m-0 text-md text-fg2">
       {total}
       {total === 1 ? 'ticket' : 'tickets'} across {spaces}
-      {spaces === 1 ? 'module' : 'modules'}. You first, then everyone else, oldest at the top.
+      {spaces === 1 ? 'space' : 'spaces'}. You first, then everyone else, oldest at the top.
     </p>
     {#each groups as g, gi (g.person)}
       <div class="mt-26">

@@ -1,8 +1,8 @@
 // Node adapter for the parser (not part of lib.mjs): reads a docs root from disk.
 // The upstream CLI uses the same shape; the tests and the perf run use it too.
 import { readdir, readFile, stat } from 'node:fs/promises'
-import { basename, join, relative, resolve, sep } from 'node:path'
-import { buildIndex, type Index, type SourceFile } from './index'
+import { basename, dirname, join, relative, resolve, sep } from 'node:path'
+import { buildIndex, rootNameFor, type Index, type SourceFile } from './index'
 
 async function* walkMd(dir: string): AsyncGenerator<string> {
   for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
@@ -24,8 +24,8 @@ export async function readDocsRoot(docsRoot: string, roots = ['modules', 'handof
   return [...files.values()]
 }
 
-/** The space of the docs folder itself is named after the repo folder: docs/'s parent. */
-export const rootNameOf = (docsRoot: string): string => basename(resolve(docsRoot, '..'))
+/** The docs folder's own space is named like the app names it: repo folder, or the docs folder when it is not "docs". */
+export const rootNameOf = (docsRoot: string): string => rootNameFor(dirname(resolve(docsRoot)), basename(resolve(docsRoot)))
 
 export async function buildIndexFromDisk(docsRoot: string, roots?: string[]): Promise<Index> {
   return buildIndex(await readDocsRoot(docsRoot, roots), rootNameOf(docsRoot))

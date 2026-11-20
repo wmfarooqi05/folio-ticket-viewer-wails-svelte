@@ -101,8 +101,10 @@ function hasMarkdown(dir: string): boolean {
 /** True when dir holds a map.md or an issues/ folder. */
 function isSpaceDir(dir: string): boolean {
   if (!isDir(dir)) return false
+  const map = path.join(dir, 'map.md')
   try {
-    if (statSync(path.join(dir, 'map.md')).isFile()) return true
+    // a map.md that is a link to a share must not be stat'ed (a hostile cloned repo, ticket 18)
+    if (!S.pathReachesNetwork(map) && statSync(map).isFile()) return true
   } catch {
     /* no map.md */
   }
@@ -135,6 +137,9 @@ const probe = (dir: string, roots: string[]) => {
 const rootLabel = (r: string) => (S.isWholeRoot(r) ? 'the docs folder itself' : r + '/')
 const joinRoots = (roots: string[]) => roots.map(rootLabel).join(' · ')
 
+/** What CheckDocs says when none of the asked-for roots exist (it has no auto-detect). */
+export const expectsRootsMessage = (roots: string[]) => 'expects ' + joinRoots(roots) + ' inside the folder'
+
 /** What a folder with none of the roots (and no map.md or issues/ folder) is told. The same sentence as Go's ExpectsMessage. */
 export const expectsMessage = (roots: string[]) => 'expects ' + joinRoots(roots) + ', or a map.md or issues/ folder, inside the folder'
 
@@ -144,6 +149,10 @@ export const expectsMessage = (roots: string[]) => 'expects ' + joinRoots(roots)
  */
 export function inspectRoot(abs: string, roots: string[]): RootCheck {
   if (roots.length === 0) roots = S.DEFAULT_DOCS_ROOTS
+  // A saved "." is not a reason to accept any folder: look for the usual roots again, and for a map.md or
+  // issues/ folder, and suggest what matches (the usual roots, or ".").
+  const redetect = roots.some(S.isWholeRoot)
+  if (redetect) roots = S.DEFAULT_DOCS_ROOTS
   const fail: RootCheck = { ok: false, repoRoot: '', docsDir: '', found: [], missing: [...roots], message: expectsMessage(roots), suggested: [], folders: [] }
   // Web mode has no native folder dialog, so no network folder is ever "picked": always refused,
   // and before any file-system call (a stat on a UNC path starts SMB with the user's credentials).
@@ -157,7 +166,7 @@ export function inspectRoot(abs: string, roots: string[]): RootCheck {
   ]
   for (const c of candidates) {
     const p = probe(c.docs, roots)
-    if (p.found.length > 0) return { ok: true, repoRoot: c.repoRoot, docsDir: c.docsDir, ...p, message: '', suggested: [], folders: topFolders(c.docs) }
+    if (p.found.length > 0) return { ok: true, repoRoot: c.repoRoot, docsDir: c.docsDir, ...p, message: '', suggested: redetect ? [...S.DEFAULT_DOCS_ROOTS] : [], folders: topFolders(c.docs) }
     if (isSpaceDir(c.docs)) {
       return { ok: true, repoRoot: c.repoRoot, docsDir: c.docsDir, found: [S.WHOLE_DOCS_ROOT], missing: [...roots], message: '', suggested: [S.WHOLE_DOCS_ROOT], folders: topFolders(c.docs) }
     }
@@ -181,7 +190,7 @@ export function inspectDocs(repoRoot: string, docsDir: string, roots: string[]):
   rc.missing = p.missing
   rc.folders = topFolders(docsPath)
   rc.ok = p.found.length > 0
-  if (!rc.ok) rc.message = expectsMessage(roots)
+  if (!rc.ok) rc.message = expectsRootsMessage(roots)
   return rc
 }
 
@@ -262,6 +271,8 @@ export class ShellService {
     if (p.theme !== undefined) next.theme = p.theme
     S.validate(next)
     S.save(this.file, next, this.extra)
+    // the roots were chosen now: the ones detected for --docs no longer win
+    if (p.docsRoots !== undefined && this.override) this.override = { repoRoot: this.override.repoRoot, docsDir: this.override.docsDir }
     this.saved = next
     return this.effective()
   }

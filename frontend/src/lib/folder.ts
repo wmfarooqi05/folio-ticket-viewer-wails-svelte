@@ -44,5 +44,8 @@ export async function pickRoot(deps: PickApi = api): Promise<PickResult> {
 }
 
 /** "modules/ · handoffs/ · patterns/", the roots the warning names. "." reads as the docs folder itself. */
+/** What a folder lacks, for "This folder has ...": no Markdown at all when the whole docs folder was asked for. */
+export const noRootsText = (roots: string[]): string => (roots.includes('.') ? 'no Markdown files' : 'none of ' + rootsLabel(roots))
+
 export const rootsLabel = (roots: string[]) => roots.map((r) => (r === '.' ? 'the docs folder itself' : r + '/')).join(' · ')
 

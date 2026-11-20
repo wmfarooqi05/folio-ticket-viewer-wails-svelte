@@ -169,6 +169,11 @@ func (s *ShellService) SetConfig(p ConfigPatch) (Config, error) {
 	if err := settings.Save(s.path, next); err != nil {
 		return Config{}, err
 	}
+	if p.DocsRoots != nil && s.override != nil {
+		o := *s.override
+		o.Suggested = nil // the roots were chosen now: the detected ones no longer win
+		s.override = &o
+	}
 	s.saved = next
 	return s.effective(), nil
 }
@@ -291,8 +296,15 @@ func InspectRoot(abs string, roots []string) RootCheck { return InspectRootAllow
 // folders picked in the native dialog) are accepted. Any other network path is refused before
 // the file system is touched: even a stat on a UNC path starts SMB with the user's credentials.
 func InspectRootAllowing(abs string, roots []string, allowNetwork []string) RootCheck {
+	redetect := false
 	if len(roots) == 0 {
 		roots = settings.DefaultDocsRoots
+	}
+	if slices.ContainsFunc(roots, settings.IsWholeRoot) {
+		// A saved "." is not a reason to accept any folder: look for the usual roots again, and for a
+		// map.md or issues/ folder, and suggest what matches (the usual roots, or ".").
+		roots = settings.DefaultDocsRoots
+		redetect = true
 	}
 	fail := RootCheck{Found: []string{}, Missing: slices.Clone(roots), Suggested: []string{}, Folders: []string{},
 		Message: ExpectsMessage(roots)}
@@ -313,7 +325,7 @@ func InspectRootAllowing(abs string, roots []string, allowNetwork []string) Root
 		{abs, filepath.Dir(abs), filepath.Base(abs)},
 	} {
 		if found, missing := probe(c.docs, roots); len(found) > 0 {
-			return RootCheck{OK: true, RepoRoot: c.repo, DocsDir: c.docsDir, Found: found, Missing: missing, Suggested: []string{}, Folders: topFolders(c.docs)}
+			return RootCheck{OK: true, RepoRoot: c.repo, DocsDir: c.docsDir, Found: found, Missing: missing, Suggested: suggestedFor(redetect), Folders: topFolders(c.docs)}
 		}
 		if isSpaceDir(c.docs) {
 			return RootCheck{OK: true, RepoRoot: c.repo, DocsDir: c.docsDir, Found: []string{settings.WholeDocsRoot},
@@ -417,7 +429,7 @@ func InspectDocsAllowing(repoRoot, docsDir string, roots []string, allowNetwork 
 	rc.Folders = topFolders(docsPath)
 	rc.OK = len(rc.Found) > 0
 	if !rc.OK {
-		rc.Message = ExpectsMessage(roots)
+		rc.Message = ExpectsRootsMessage(roots)
 	}
 	return rc
 }

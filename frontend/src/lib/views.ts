@@ -122,8 +122,10 @@ export function questionSpaces(rows: QuestionRow[]): number {
 export function questionWhere(rec: DocRecord): string {
   if (rec.key) return rec.key
   // A nested map shows its path inside the space: "space · step2b/map.md"
-  const prefix = `modules/${rec.space}/`
-  const rel = rec.space && rec.path.startsWith(prefix) ? rec.path.slice(prefix.length) : rec.path
+  // inside the space's folder: modules/<space>/ or, for a space found by its map.md or issues/, <space>/
+  const prefixes = [`modules/${rec.space}/`, `${rec.space}/`]
+  const prefix = rec.space ? prefixes.find((p) => rec.path.startsWith(p)) : undefined
+  const rel = prefix ? rec.path.slice(prefix.length) : rec.path
   return `${rec.space ?? ''} · ${rel}`
 }
 

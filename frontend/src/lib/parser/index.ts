@@ -216,9 +216,19 @@ function ticketSpace(path: string, rootName: string): { space: string; num: stri
   const g = GENERIC_TICKET_PATH.exec(path)
   if (!g || CROSS_CUTTING.test(path) || path.startsWith('modules/')) return null
   const dir = g[1] ?? ''
-  const space = dir === '' ? rootName : dir.slice(dir.lastIndexOf('/') + 1)
+  // A top-level folder is named by itself, a deeper one by its path, so a/x and b/x are two spaces.
+  const space = dir === '' ? rootName : dir
   return space === '' ? null : { space, num: g[2] }
 }
+
+/** The name the docs-folder space takes from the repo: the repo folder, or the docs folder when it is not "docs". */
+export function rootNameFor(repoRoot: string, docsDir: string): string {
+  const last = (p: string) => p.split(/[\\/]/).filter((x) => x !== '').pop() ?? ''
+  const dir = last(docsDir)
+  return dir !== '' && dir.toLowerCase() !== 'docs' ? dir : last(repoRoot)
+}
+
+const COLLIDES = ' (docs)'
 
 function isHidden(path: string): boolean {
   return path.split('/').some((seg) => seg.startsWith('_'))
@@ -927,6 +937,11 @@ function spaceOf(path: string, index: Index): string | null {
   return index.files[path]?.space ?? SPACE_PATH.exec(path)?.[1] ?? null
 }
 
+/** A ref names a space in the old [a-z0-9-] form (a missing one is "no-file"), or any name of a space that exists. */
+function knownSpaceName(name: string, index: Index): boolean {
+  return /^[a-z0-9-]+$/.test(name) || index.spaces.includes(name)
+}
+
 /** The map of a space: modules/<space>/map.md, else the shortest map.md path of that space. */
 function mapOfSpace(space: string, index: Index): string | null {
   const modular = `modules/${space}/map.md`
@@ -951,11 +966,13 @@ export function resolveRef(ref: string, fromPath: string, index: Index): Resolve
   }
   m = /^([^\s#][^#]*?) (\d+)(?:#([a-z]+\d+))?$/.exec(ref)
   if (m) {
+    if (!knownSpaceName(m[1], index)) return bad
     const path = index.tickets[`${m[1]} ${pad2(m[2])}`]
     return path ? resolveInFile(path, m[3] ?? null, index) : noFile(m[3] ?? null)
   }
   m = /^([^\s#][^#]*)#([a-z]+\d+)$/.exec(ref)
   if (m) {
+    if (!knownSpaceName(m[1], index)) return bad
     const path = mapOfSpace(m[1], index)
     return path ? resolveInFile(path, m[2], index) : noFile(m[2])
   }
@@ -1111,7 +1128,7 @@ export function updateIndex(index: Index, changed: SourceFile[], removed: string
 function spaceDirs(parsed: Record<string, DocRecord>): Set<string> {
   const dirs = new Set<string>()
   for (const p of Object.keys(parsed)) {
-    if (SPACE_PATH.test(p) || CROSS_CUTTING.test(p)) continue
+    if (p.startsWith('modules/') || CROSS_CUTTING.test(p)) continue
     const segs = p.split('/')
     segs.pop()
     if (p.endsWith('/map.md') || p === 'map.md') dirs.add(segs.join('/'))
@@ -1126,16 +1143,33 @@ function crossFile(parsed: Record<string, DocRecord>, rootName: string): Index {
   const paths = Object.keys(parsed).sort()
   // A file outside modules/ that is not a ticket belongs to the nearest folder above it that is a space.
   const dirs = spaceDirs(parsed)
+  const modular = new Set<string>()
+  for (const p of paths) {
+    const m = SPACE_PATH.exec(p)
+    if (m) modular.add(m[1])
+  }
   for (const p of paths) {
     const rec = parsed[p]
-    if (rec.kind === 'ticket' || SPACE_PATH.test(p) || CROSS_CUTTING.test(p)) continue
-    const segs = p.split('/')
-    segs.pop()
-    let space: string | null = null
-    for (let n = segs.length; n >= 0 && space === null; n--) {
-      if (dirs.has(segs.slice(0, n).join('/'))) space = n === 0 ? rootName || null : segs[n - 1]
+    if (p.startsWith('modules/') || CROSS_CUTTING.test(p)) continue
+    let space: string | null = rec.space
+    if (rec.kind !== 'ticket') {
+      const segs = p.split('/')
+      segs.pop()
+      space = null
+      for (let n = segs.length; n >= 0 && space === null; n--) {
+        const d = segs.slice(0, n).join('/')
+        if (dirs.has(d)) space = n === 0 ? rootName || null : d
+      }
     }
-    if (space !== rec.space) parsed[p] = { ...rec, space }
+    // A space outside modules/ that shares its name with one inside takes " (docs)", so the two stay apart.
+    if (space !== null) {
+      const base = space.endsWith(COLLIDES) ? space.slice(0, -COLLIDES.length) : space
+      space = modular.has(base) ? base + COLLIDES : base
+    }
+    if (space !== rec.space) {
+      const key = rec.key && rec.num && space ? `${space} ${pad2(rec.num)}` : rec.key
+      parsed[p] = { ...rec, space, key }
+    }
   }
   const spaces = new Set<string>()
   const tickets: Record<string, string> = {}

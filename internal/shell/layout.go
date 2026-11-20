@@ -37,6 +37,19 @@ func joinRoots(roots []string) string {
 	return strings.Join(labels, " · ")
 }
 
+// ExpectsRootsMessage is what CheckDocs says when none of the asked-for roots exist (it has no auto-detect).
+func ExpectsRootsMessage(roots []string) string {
+	return "expects " + joinRoots(roots) + " inside the folder"
+}
+
+// suggestedFor is what CheckRoot suggests when a saved "." made it look again and the usual roots were found.
+func suggestedFor(redetect bool) []string {
+	if redetect {
+		return slices.Clone(settings.DefaultDocsRoots)
+	}
+	return []string{}
+}
+
 // ExpectsMessage is what a folder with none of the roots (and no map.md or issues/ folder) is told.
 func ExpectsMessage(roots []string) string {
 	return "expects " + joinRoots(roots) + ", or a map.md or issues/ folder, inside the folder"
@@ -67,8 +80,11 @@ func isSpaceDir(dir string) bool {
 	if !settings.SafeIsDir(dir) {
 		return false
 	}
-	if st, err := os.Stat(filepath.Join(dir, "map.md")); err == nil && st.Mode().IsRegular() {
-		return true
+	// A map.md that is a link to a share must not be stat'ed (a hostile cloned repo, ticket 18).
+	if m := filepath.Join(dir, "map.md"); !settings.PathReachesNetwork(m) {
+		if st, err := os.Stat(m); err == nil && st.Mode().IsRegular() {
+			return true
+		}
 	}
 	return settings.SafeIsDir(filepath.Join(dir, "issues"))
 }

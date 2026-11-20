@@ -1,6 +1,7 @@
 // Ticket 25: spaces outside modules/. A space is a folder that holds a map.md or an issues/ folder.
 import { describe, expect, it } from 'vitest'
-import { buildIndex, resolveRef, scanText, updateIndex, type SourceFile, type TicketMeta } from './index'
+import { questionWhere } from '../views'
+import { buildIndex, resolveRef, rootNameFor, scanText, updateIndex, type SourceFile, type TicketMeta } from './index'
 
 const f = (path: string, text = '# x\n'): SourceFile => ({ path, text, mtime: 1 })
 const tkt = (num: string, extra = '') => `---\ntype: build\nstatus: open\n${extra}---\n# ${num} — t\n`
@@ -69,5 +70,58 @@ describe('generic docs layout', () => {
   it('resolves space#item to the map of a space outside modules/', () => {
     const idx = buildIndex([f('map.md', '# Map\n\n- [ ] **Q1** — a question\n'), f('issues/01-a.md', tkt('01'))], 'repo')
     expect(resolveRef('repo#q1', 'issues/01-a.md', idx).path).toBe('map.md')
+  })
+
+  it('names the root space after the repo folder with either slash, or after a docs folder that is not "docs"', () => {
+    expect(rootNameFor('E:' + String.fromCharCode(92) + 'projects' + String.fromCharCode(92) + 'ticket_ui', 'docs')).toBe('ticket_ui')
+    expect(rootNameFor('/home/me/ticket_ui/', 'docs')).toBe('ticket_ui')
+    expect(rootNameFor('/home/me/repo', 'specs')).toBe('specs')
+    expect(rootNameFor('/home/me/repo', 'a/Docs')).toBe('repo')
+  })
+
+  it('does not make a space of modules/ itself', () => {
+    const idx = buildIndex([f('modules/map.md'), f('modules/a/map.md'), f('modules/a/issues/01-a.md', tkt('01'))], 'repo')
+    expect(idx.spaces).toEqual(['a'])
+    expect(idx.files['modules/map.md'].space).toBeNull()
+  })
+
+  it('keeps spaces apart when their names collide', () => {
+    const idx = buildIndex(
+      [
+        f('modules/x/map.md'), f('modules/x/issues/01-m.md', tkt('01')),
+        f('x/map.md'), f('x/issues/01-g.md', tkt('01')),
+        f('a/x/issues/01-ax.md', tkt('01')), f('b/x/issues/01-bx.md', tkt('01')),
+        f('issues/01-root.md', tkt('01', 'related: ["x 01"]\n')),
+      ],
+      'x',
+    )
+    expect(idx.tickets).toEqual({
+      'x 01': 'modules/x/issues/01-m.md',
+      'x (docs) 01': expect.stringMatching(/^(x|issues)\//),
+      'a/x 01': 'a/x/issues/01-ax.md',
+      'b/x 01': 'b/x/issues/01-bx.md',
+    })
+    expect(idx.diagnostics.filter((d) => d.code === 'DUP_NUM')).toHaveLength(1) // the repo root and the x/ folder share "x (docs)"
+    expect(resolveRef('b/x 01', 'issues/01-root.md', idx).path).toBe('b/x/issues/01-bx.md')
+  })
+
+  it('maps space#item for a collided space to its own map', () => {
+    const idx = buildIndex([f('modules/x/map.md'), f('x/map.md', '# M\n\n- [ ] **Q1** — q\n'), f('x/issues/01-g.md', tkt('01'))], 'repo')
+    expect(resolveRef('x (docs)#q1', 'x/issues/01-g.md', idx).path).toBe('x/map.md')
+  })
+
+  it('answers bad-ref for a name that is no space, as before', () => {
+    const idx = buildIndex([f('modules/a/issues/01-a.md', tkt('01'))], 'repo')
+    expect(resolveRef('Foo 01', 'modules/a/issues/01-a.md', idx).problem).toBe('bad-ref')
+    expect(resolveRef('a b 01', 'modules/a/issues/01-a.md', idx).problem).toBe('bad-ref')
+    expect(resolveRef('notes.md#q1', 'modules/a/issues/01-a.md', idx).problem).toBe('bad-ref')
+    expect(resolveRef('zzz 01', 'modules/a/issues/01-a.md', idx).problem).toBe('no-file')
+  })
+
+  it('words the "where" of a map inside its own space folder', () => {
+    const idx = buildIndex([f('area/map.md'), f('area/issues/01-a.md', tkt('01')), f('map.md'), f('modules/m/map.md')], 'repo')
+    expect(questionWhere(idx.files['area/map.md'])).toBe('area · map.md')
+    expect(questionWhere(idx.files['map.md'])).toBe('repo · map.md')
+    expect(questionWhere(idx.files['modules/m/map.md'])).toBe('m · map.md')
   })
 })
