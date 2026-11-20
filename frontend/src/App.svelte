@@ -208,25 +208,49 @@
   let changingFolder = $state(false)
   let folderNotice = $state<{ roots: boolean; message: string } | null>(null)
 
-  async function changeFolder() {
-    if (changingFolder || !config) return
-    if (api.isWeb) {
-      settingsOpen = true // the path box lives in Settings
-      return
-    }
+  // Web mode: a browser cannot hand back a folder's path, so "Change folder" opens a small path
+  // box above the footer instead of a native dialog, filled in with the current folder.
+  let folderBoxOpen = $state(false)
+  let folderBoxValue = $state('')
+
+  function changeFolder() {
+    if (!api.isWeb) return void applyFolder()
+    if (!config) return
+    folderBoxValue = config.repoRoot
+    folderNotice = null
+    folderBoxOpen = true
+  }
+
+  function focusSelect(el: HTMLInputElement) {
+    el.focus()
+    el.select()
+  }
+
+  async function submitFolderBox() {
+    if (!folderBoxValue.trim()) return
+    if (await applyFolder(folderBoxValue)) folderBoxOpen = false
+  }
+
+  /** Picks (desktop) or checks the typed path (web), then applies it. True when the box can close. */
+  async function applyFolder(typed?: string): Promise<boolean> {
+    if (changingFolder || !config) return false
     changingFolder = true
     folderNotice = null
     try {
-      const res = await pickRoot()
+      const res = typed !== undefined ? await checkPath(typed, undefined, true) : await pickRoot()
       if (res.kind === 'no-roots') {
-        folderNotice = { roots: !res.refused, message: res.message } // the Settings warning; nothing changed
+        // the Settings warning; nothing changed. A typed path shows the backend's own reason (missing folder, no docs).
+        folderNotice = { roots: typed === undefined && !res.refused, message: res.message }
+        return false
       } else if (res.kind === 'ok' && (res.repoRoot !== config.repoRoot || res.docsDir !== config.docsDir || (res.docsRoots !== undefined && res.docsRoots.join(',') !== (config.docsRoots ?? []).join(',')))) {
         config = await api.setConfig({ repoRoot: res.repoRoot, docsDir: res.docsDir, ...(res.docsRoots ? { docsRoots: res.docsRoots } : {}) })
         showToast('Folder changed')
         await rootChanged(config)
       }
+      return true
     } catch (err) {
       folderNotice = { roots: false, message: err instanceof Error ? err.message : String(err) }
+      return false
     } finally {
       changingFolder = false
     }
@@ -427,10 +451,53 @@
                 {folderNotice.message}
               {/if}
             </span>
-            <button type="button" class="shrink-0 rounded-xs px-4 font-medium text-acc" onclick={changeFolder}>
-              {folderNotice.roots ? 'Choose again' : 'Retry'}
-            </button>
+            {#if !folderBoxOpen}
+              <button type="button" class="shrink-0 rounded-xs px-4 font-medium text-acc" onclick={changeFolder}>
+                {folderNotice.roots ? 'Choose again' : 'Retry'}
+              </button>
+            {/if}
           </div>
+        {/if}
+        {#if folderBoxOpen}
+          <!-- web mode's "Change folder": a browser cannot return a folder path, so the path is typed here -->
+          <form
+            class="mx-8 mb-8 flex flex-col gap-6 rounded-md border border-line2 bg-card px-10 py-8 text-xs motion-safe:animate-rise"
+            onsubmit={(e) => (e.preventDefault(), void submitFolderBox())}
+          >
+            <label for="folder-box" class="text-fg2">Repo or docs folder</label>
+            <input
+              id="folder-box"
+              class="h-28 min-w-0 rounded-xs border border-line2 bg-bg px-8 font-mono text-[11.5px] text-fg outline-none focus:border-acc"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="E:/path/to/repo"
+              bind:value={folderBoxValue}
+              use:focusSelect
+              onkeydown={(e) => {
+                if (e.key === 'Escape') {
+                  e.stopPropagation()
+                  folderBoxOpen = false
+                  folderNotice = null
+                }
+              }}
+            />
+            <div class="flex justify-end gap-8">
+              <button
+                type="button"
+                class="rounded-xs px-6 py-2 text-fg2 hover:text-fg"
+                onclick={() => ((folderBoxOpen = false), (folderNotice = null))}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                class="rounded-xs bg-acc px-10 py-2 font-medium text-acc-ink disabled:opacity-50"
+                disabled={changingFolder || !folderBoxValue.trim()}
+              >
+                {changingFolder ? 'Opening…' : 'Open'}
+              </button>
+            </div>
+          </form>
         {/if}
         <footer class="flex items-center gap-8 border-t border-line px-14 py-8 text-[11px] text-fg3">
           <span class="size-6 shrink-0 rounded-full bg-s-done"></span>

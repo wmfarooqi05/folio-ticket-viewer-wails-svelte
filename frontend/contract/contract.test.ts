@@ -224,6 +224,25 @@ for (const d of drivers) {
       },
     )
 
+    t(
+      'a folder chosen in the app replaces --docs / FOLIO_ROOT for the session',
+      async (c) => {
+        const other = path.join(c.sb.dir, 'other')
+        mkdirSync(path.join(other, 'docs', 'modules', 'a', 'issues'), { recursive: true })
+        writeFileSync(path.join(other, 'docs', 'modules', 'a', 'issues', '01-x.md'), '# x' + String.fromCharCode(10))
+        const cfg = await c.b.call('setConfig', { repoRoot: other, docsDir: 'docs', docsRoots: ['modules'] })
+        expect(cfg.repoRoot).toBe(other)
+        expect((await c.b.call('getConfig')).repoRoot).toBe(other)
+        const s = await c.b.call('scan')
+        expect(list(s.changed)).toEqual(['modules/a/issues/01-x.md'])
+        record('overrideFolder', norm([cfg.docsRoots, list(s.changed)], c))
+      },
+      (x) => {
+        prepGeneric(x)
+        x.sb.override = x.repo
+      },
+    )
+
     t('a saved "." is re-detected: it neither accepts any folder nor sticks to a modules repo', async (c) => {
       const random = path.join(c.sb.dir, 'random')
       mkdirSync(path.join(random, 'docs', 'random'), { recursive: true })

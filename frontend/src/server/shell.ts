@@ -271,8 +271,10 @@ export class ShellService {
     if (p.theme !== undefined) next.theme = p.theme
     S.validate(next)
     S.save(this.file, next, this.extra)
-    // the roots were chosen now: the ones detected for --docs no longer win
-    if (p.docsRoots !== undefined && this.override) this.override = { repoRoot: this.override.repoRoot, docsDir: this.override.docsDir }
+    // a folder chosen now (Change folder, Settings) replaces --docs for the rest of the session;
+    // roots chosen now replace the ones detected for --docs
+    if (this.override && (p.repoRoot !== undefined || p.docsDir !== undefined)) this.override = null
+    else if (p.docsRoots !== undefined && this.override) this.override = { repoRoot: this.override.repoRoot, docsDir: this.override.docsDir }
     this.saved = next
     return this.effective()
   }

@@ -169,7 +169,9 @@ func (s *ShellService) SetConfig(p ConfigPatch) (Config, error) {
 	if err := settings.Save(s.path, next); err != nil {
 		return Config{}, err
 	}
-	if p.DocsRoots != nil && s.override != nil {
+	if s.override != nil && (p.RepoRoot != nil || p.DocsDir != nil) {
+		s.override = nil // a folder chosen now (Change folder, Settings) replaces FOLIO_ROOT for the session
+	} else if p.DocsRoots != nil && s.override != nil {
 		o := *s.override
 		o.Suggested = nil // the roots were chosen now: the detected ones no longer win
 		s.override = &o
