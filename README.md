@@ -143,7 +143,7 @@ task test:contract:go              # also runs the frozen Go services through th
 
 `.github/workflows/ci.yml` runs on `windows-2025` with every action pinned by commit SHA, and needs Node only (ticket 26 dropped Go, wails3 and the exe job): svelte-check, vitest, the contract tests against the Node server, the size budgets, `npm audit`, then the npm tarball plus `SHA256SUMS-npm`. The build job holds no signing permissions. Every run uploads the files as artifacts; a `v*` tag whose number matches `packages/folio-viewer/package.json` also creates a GitHub Release with the tarball and its checksum file (the release notes name the CI run), and, if the repo is public, a separate `attest` job signs a build-provenance attestation for the tarball. (Releases before ticket 26 also carried `folio.exe`.)
 
-**Verify a downloaded package.** The checksum files only show that the file was not damaged or swapped in transit, and only if you get the hash from somewhere other than the download itself (the CI run page, or a message from the owner): `SHA256SUMS` sits on the same release as the exe, so anyone who can edit the release can replace both. The real provenance is the attestation (public repo only):
+**Verify a downloaded package.** The checksum files only show that the file was not damaged or swapped in transit, and only if you get the hash from somewhere other than the download itself (the CI run page, or a message from the owner): `SHA256SUMS-npm` sits on the same release as the tarball, so anyone who can edit the release can replace both. The real provenance is the attestation (public repo only):
 
 ```
 (Get-FileHash folio-viewer-0.1.0.tgz).Hash -eq ((Get-Content SHA256SUMS-npm) -split '\s+')[0]

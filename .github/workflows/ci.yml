@@ -70,13 +70,13 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
-      # What ships (the frontend's `dependencies`, bundled into the npm package)
-      # fails the build at high or critical. Dev-only advisories (the test and build tools) are
-      # printed in the next step and never fail it: they are not in the shipped files.
-      - name: Production dependencies (fails at high)
+      # Everything the package ships (svelte, mermaid, markdown-it and so on) is bundled from the
+      # frontend's devDependencies, so `--omit=dev` would gate nothing that ships. The gate is every
+      # dependency at high or critical; low and moderate advisories are printed and never fail it.
+      - name: All dependencies (fails at high)
         working-directory: frontend
-        run: npm audit --omit=dev --audit-level=high
-      - name: All dependencies (report only)
+        run: npm audit --audit-level=high
+      - name: All dependencies (full report)
         working-directory: frontend
         continue-on-error: true
         run: npm audit

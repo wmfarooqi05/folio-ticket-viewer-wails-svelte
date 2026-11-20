@@ -44,3 +44,5 @@ task test:contract:go     # the contract suite against Node and the Go services,
 The README section "Retired: desktop app" keeps the full desktop documentation (install, settings, memory readout, installer, benchmarks). Tickets 15 and 16 describe the installer and the WebView2 hardening.
 
 If Go code is ever changed again, run `task test:contract:go` so the two backends stay equal.
+
+After any change to the Go services, also copy `frontend/bindings` over `frontend/bindings-frozen` (`task desktop:build` and `task desktop:check` fail with "refresh bindings-frozen" when they differ).

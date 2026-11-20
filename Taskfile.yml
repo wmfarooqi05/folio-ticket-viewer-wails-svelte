@@ -113,6 +113,8 @@ tasks:
       - task: windows:build
         vars:
           DEV: '{{.DEV}}'
+      # the build regenerated frontend/bindings; the frozen snapshot must still match it
+      - node scripts/restore-bindings.mjs --check
       - cmd: node scripts/size-check.mjs --desktop
         platforms: [windows]
         # a DEV=true build is unminified, so the budgets mean nothing there
@@ -163,6 +165,7 @@ tasks:
     cmds:
       - go vet ./...
       - wails3 generate bindings -clean=true -ts -i
+      - node scripts/restore-bindings.mjs --check
       - task: check:frontend
 
   test:frontend:

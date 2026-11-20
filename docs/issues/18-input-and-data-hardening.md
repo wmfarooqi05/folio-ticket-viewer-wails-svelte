@@ -1,7 +1,7 @@
 ---
 type: build
 status: done
-status_note: "merged Nov 20, 2026; ticket 26 (Nov 20, 2026) retired the desktop app, so the hand checks that were waiting on the owner (UNC pick, Clear data across a restart, NSIS uninstall prompt) are desktop-only and no longer needed. Web mode behaves the same and is covered by the Node tests and the contract suite."
+status_note: "merged Nov 20, 2026; ticket 26 (Nov 20, 2026) retired the desktop app. Of the six hand checks that were waiting on the owner, 1-3 and 6 (UNC pick, Clear data across a restart, NSIS uninstall prompt, the bench exe and task desktop:ram) are desktop-only and no longer needed. 4 (a hand-edited bad field) and 5 (a 6 MB .md shown as too large) behave the same in web mode and are covered by the Node settings tests and Tree.test.ts."
 waiting_on: null
 blocked_by: []
 blocked_note: null

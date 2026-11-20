@@ -24,26 +24,26 @@ Decided Nov 20, 2026 (owner): retire the Go desktop app and keep Node as the onl
 
 ## To do
 
-- [ ] **Freeze, don't delete.** Leave every Go file, `go.mod`, `build/`, the NSIS script, `cmd/contract-server` and `frontend/src/lib/backend-wails.ts` in place and unchanged, except where a change is needed to keep the web build and tests green.
+- [x] **Freeze, don't delete.** Leave every Go file, `go.mod`, `build/`, the NSIS script, `cmd/contract-server` and `frontend/src/lib/backend-wails.ts` in place and unchanged, except where a change is needed to keep the web build and tests green.
   - Add a short `RETIRED.md` at the root saying what is frozen, why, and how to build it again if ever wanted.
   - Add a one-line comment at the top of `main.go`.
-- [ ] **Web mode becomes the default.**
+- [x] **Web mode becomes the default.**
   - `npm run web` and `task web` are the main way to run Folio.
   - Keep the desktop tasks, renamed under a `desktop:` prefix (`desktop:build`, `desktop:dev`, `desktop:package`, `desktop:ram`), so nothing is lost. Make `task build` build the web package.
   - `task test` runs the frontend and Node server tests only.
-- [ ] **An app window on the owner's PC.** Add `--app` to the Node CLI. It opens the tokenised URL in an Edge app window (`msedge --app=<url>`, no tabs or address bar), and falls back to the default browser if Edge isn't found.
+- [x] **An app window on the owner's PC.** Add `--app` to the Node CLI. It opens the tokenised URL in an Edge app window (`msedge --app=<url>`, no tabs or address bar), and falls back to the default browser if Edge isn't found.
   - Find Edge without a shell: use the known install paths, then `where`-free checks. Pass the URL as a single argument, never through a shell.
   - Document a Start-menu or desktop shortcut that runs `folio --app --docs <path>`.
   - Don't add a command that writes `.lnk` files. On the company VM, spawning PowerShell from Node could look suspicious.
-- [ ] **The contract suite** keeps its cases and runs them against the Node server only, by default. The Go side stays runnable behind a flag or an env var (`FOLIO_CONTRACT_GO=1`) and is not in CI.
-- [ ] **CI** (`.github/workflows/ci.yml`):
+- [x] **The contract suite** keeps its cases and runs them against the Node server only, by default. The Go side stays runnable behind a flag or an env var (`FOLIO_CONTRACT_GO=1`) and is not in CI.
+- [x] **CI** (`.github/workflows/ci.yml`):
   - Drop the exe job, `go test`, `go vet`, `govulncheck`, the bindings step and the wails3 install.
   - Keep vitest, svelte-check, the contract suite (Node), `npm audit`, the npm package build with its checksum, the release and the attestation, for the tarball only.
   - `publish-npm.yml` stays as it is.
-- [ ] **Size budgets.** `scripts/size-check.mjs` checks the web bundle; the exe budget only runs from `desktop:build`. The initial-JS, CSS, Mermaid and highlight.js budgets stay.
-- [ ] **Desktop-only UI and settings.** In web mode these are already hidden or ignored: window bounds, the RAM readout and "Open settings file". Leave them alone. `settings.json` stays compatible, so an old desktop build can still read it.
-- [ ] **README.** Lead with web mode on the PC and on the VM. Move the desktop sections under a "Retired: desktop app" heading. Remove nothing; mark it frozen.
-- [ ] **Ticket statuses.** On merge, the desktop-only owner checks in 15, 16, 18 and 25 are no longer needed. Set the frontmatter of each and say why:
+- [x] **Size budgets.** `scripts/size-check.mjs` checks the web bundle; the exe budget only runs from `desktop:build`. The initial-JS, CSS, Mermaid and highlight.js budgets stay.
+- [x] **Desktop-only UI and settings.** In web mode these are already hidden or ignored: window bounds, the RAM readout and "Open settings file". Leave them alone. `settings.json` stays compatible, so an old desktop build can still read it.
+- [x] **README.** Lead with web mode on the PC and on the VM. Move the desktop sections under a "Retired: desktop app" heading. Remove nothing; mark it frozen.
+- [x] **Ticket statuses.** On merge, the desktop-only owner checks in 15, 16, 18 and 25 are no longer needed. Set the frontmatter of each and say why:
   - 15 and 16: `superseded_by: "26"`.
   - 18 and 25: `status_note`.
 

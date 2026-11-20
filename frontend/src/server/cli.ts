@@ -27,7 +27,7 @@ Options:
   --port <n>      listen on this port (default: a random free port)
   --app           open Folio in an Edge app window (no tabs or address bar). Windows only: on other
                   systems, or when Edge is not found, the normal browser opens instead
-  --no-open       print the URL but do not open the browser
+  --no-open       print the URL but do not open the browser (it wins over --app)
   --version       print the version
   --help          show this text
 
@@ -99,10 +99,10 @@ export function openBrowser(url: string): void {
   }
 }
 
-/** Where Edge lives on Windows: both Program Files folders, then a per-user install. */
+/** Where Edge lives on Windows: both Program Files folders, then a per-user install. A base that is not a full drive path (C:...) is ignored, so a relative variable cannot pick up an msedge.exe from the working folder. */
 export function edgePaths(env: NodeJS.ProcessEnv): string[] {
   const tail = ['Microsoft', 'Edge', 'Application', 'msedge.exe']
-  return [env['ProgramFiles(x86)'], env.ProgramFiles, env.LOCALAPPDATA].filter((b): b is string => !!b).map((b) => path.win32.join(b, ...tail))
+  return [env['ProgramFiles(x86)'], env.ProgramFiles, env.LOCALAPPDATA].filter((b): b is string => !!b && /^[A-Za-z]:[\\/]/.test(b)).map((b) => path.win32.join(b, ...tail))
 }
 
 /** What openApp needs from the machine, so a test can stand in for all of it. */
@@ -177,7 +177,10 @@ export async function main(argv: string[], version = ''): Promise<void> {
   if (running.shell.loadError) console.error(`folio: ${running.shell.loadError}`)
   for (const w of running.shell.loadWarnings) console.error(`folio: ${w}`)
   console.log(`Folio is running. Open this link (the token in it works once):\n\n  ${running.url}\n\nPress Ctrl+C to stop.`)
-  if (args.open) args.app ? openApp(running.url) : openBrowser(running.url)
+  if (args.open) {
+    if (args.app) openApp(running.url)
+    else openBrowser(running.url)
+  }
 
   const stop = () => {
     void running.close().then(() => process.exit(0))

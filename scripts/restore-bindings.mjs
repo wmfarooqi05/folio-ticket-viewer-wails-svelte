@@ -3,14 +3,28 @@
 // frontend/bindings-frozen/ is a snapshot of that generated output from the frozen Go code (wails3
 // v3.1.0). This copies it to frontend/bindings/ when that folder is missing. It never overwrites a
 // folder that is already there (a desktop build regenerates the real one).
-import { cpSync, existsSync } from 'node:fs'
+import { cpSync, existsSync, readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const frontend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'frontend')
 const from = path.join(frontend, 'bindings-frozen')
 const to = path.join(frontend, 'bindings')
-if (existsSync(to)) {
+// `--check`: after a desktop build regenerated frontend/bindings, fail when the snapshot has drifted.
+function files(dir, base = dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(path.join(dir, e.name), base) : [path.relative(base, path.join(dir, e.name))]))
+}
+if (process.argv.includes('--check')) {
+  const a = files(to).sort()
+  const b = files(from).sort()
+  const norm = (f) => readFileSync(f, 'utf8').replace(/\r\n/g, '\n')
+  const same = a.join('\n') === b.join('\n') && a.every((f) => norm(path.join(to, f)) === norm(path.join(from, f)))
+  if (!same) {
+    console.error('frontend/bindings differs from frontend/bindings-frozen: refresh bindings-frozen (copy frontend/bindings over it).')
+    process.exit(1)
+  }
+  console.log('frontend/bindings-frozen matches the generated bindings')
+} else if (existsSync(to)) {
   console.log('frontend/bindings exists; left as it is')
 } else {
   cpSync(from, to, { recursive: true })

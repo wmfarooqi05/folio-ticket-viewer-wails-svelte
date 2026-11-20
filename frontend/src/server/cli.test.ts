@@ -42,6 +42,9 @@ describe('edgePaths', () => {
       'C:\\L\\Microsoft\\Edge\\Application\\msedge.exe',
     ])
   })
+  it('ignores bases that are not absolute paths', () => {
+    expect(edgePaths({ 'ProgramFiles(x86)': 'PF86', ProgramFiles: '..\\x', LOCALAPPDATA: '\\rooted' })).toEqual([])
+  })
   it('skips variables that are not set', () => {
     expect(edgePaths({})).toEqual([])
   })
