@@ -62,7 +62,7 @@ Reached when:
 | 14 | [Dependency graph, Mermaid and syntax highlighting](issues/14-graph-mermaid-highlight.md) | build | [10](issues/10-document-view.md), [12](issues/12-cross-space-views.md) | — | blocked — merged, waiting on owner Graph check | — |
 | 15 | [Budgets enforced, installer, v1 release](issues/15-budgets-and-packaging.md) | build | — | — | superseded — by 26 (desktop app retired) | — |
 | 16 | [Harden the WebView2 host](issues/16-webview2-host-hardening.md) | build | — | — | superseded — by 26 (desktop app retired) | — |
-| 17 | [Reproducible build and CI release](issues/17-reproducible-ci-release.md) | build | — | owner | blocked — merged, waiting on owner (tag, compare CI hashes) | — |
+| 17 | [Reproducible build and CI release](issues/17-reproducible-ci-release.md) | build | — | — | done — v0.1.0 tagged, build reproducible | — |
 | 18 | [Input and data hardening](issues/18-input-and-data-hardening.md) | build | — | — | done | — |
 | 19 | [Focused security review](issues/19-security-review.md) | verify | — | — | done | — |
 | 20 | [Find out what company IT allows](issues/20-company-it-requirements.md) | task | — | — | dropped — npm route needs nothing from IT | — |
@@ -72,7 +72,7 @@ Reached when:
 | 24 | [Web mode: a zero-dependency Node server, published to npm](issues/24-node-web-mode.md) | build | — | — | blocked — merged, waiting on owner (try tarball, publish) | — |
 | 25 | [Any docs layout, and choosing the docs roots in Settings](issues/25-generic-docs-layout.md) | build | — | owner | blocked — merged, waiting on owner (open this repo by hand) | — |
 | 26 | [Retire the Go desktop app, keep the code](issues/26-retire-the-desktop-app.md) | build | — | owner | blocked — merged, waiting on owner (try --app) | — |
-| 27 | [Get the npm package ready for its first publish](issues/27-npm-publish-prep.md) | build | — | owner | blocked — merged, waiting on owner (first publish) | — |
+| 27 | [Get the npm package ready for its first publish](issues/27-npm-publish-prep.md) | build | — | owner | blocked — tarball verified, waiting on owner (npm login, publish) | — |
 <!-- tickets:end -->
 
 ## Decisions so far

@@ -1,8 +1,8 @@
 ---
 type: build
-status: blocked
-status_note: "merged Nov 20, 2026; waiting on the owner: push, tag v0.1.0, compare the CI hashes with the local ones (AC1)"
-waiting_on: owner
+status: done
+status_note: "v0.1.0 tagged Nov 21, 2026; CI and local builds give the same tarball hash"
+waiting_on: null
 blocked_by: []
 blocked_note: null
 related: ["15", "21", "22", "23", "24"]
@@ -66,3 +66,5 @@ Built Nov 20, 2026 on branch `worktree-agent-a8a22d9164d4a33b7`, then revised af
 - **AC1 stays open.** Local result: three `task build` runs from a clean state (bin, frontend/dist, node_modules, bindings removed; the third after the go.mod toolchain line) all gave `a7f6d0b6c05ed96f90a8d0022c39817841e3a4d60503615537f0bc409b13f822`; two `task build:web` + `npm pack` runs and one more after the changes gave `23cbb3737626c09bda1befb6fe0d960a729c088acfc39d368d63d3d25dbd71e8` (127 files; npm fixes tar mtimes). That is the same machine and path. AC1 needs two CI runs of one commit to match each other and a CI build to match a local build of that commit; compare after the first real CI run. The local hashes came from Go 1.27.4 and Node 26.7.0, while CI uses Go 1.27.4 and Node 26.13.1, so a difference is most likely the Node patch (the `toolchain` line is a minimum and the Node check is major-only); that is why CI uses exact Go and Node versions, which a local build only matches if it uses the same ones.
 - **AC2:** `go version -m bin/folio.exe` shows `-tags=production`, `-trimpath=true` and four dependency modules plus Folio (fsnotify v1.10.1, go-ole v1.3.0, wails v3.1.0, x/sys v0.48.0); the workflow fails without the first two. The tagged release is untested until a tag exists. **AC3:** done.
 - **Left for the owner:** push, tag `v0.1.0` (must match `packages/folio-viewer/package.json`), compare the CI exe and tarball hashes with the local ones above (closes AC1); make the repo public for attestations and trusted publishing, then do the setup in the README, or publish the tarball by hand.
+
+**Release check (Nov 21, 2026).** Tag `v0.1.0` at `858dc7c`: the tag's `ci` run passed every job, including `attest build provenance` and `GitHub Release`. The Release tarball's SHA-256 is `1123a4158ed892f438004c4c57a289a28a6b0580eee8c872270524b4a6b88250`. It matches `SHA256SUMS-npm`, and `gh attestation verify` (signer workflow `ci.yml`, source ref `refs/tags/v0.1.0`) passes. A local rebuild from the tag (clean worktree, `npm ci`, `npm run build:web`, `npm pack`) gives the same hash, so the build is reproducible (AC1).

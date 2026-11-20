@@ -1,7 +1,7 @@
 ---
 type: build
 status: blocked
-status_note: "merged Nov 20, 2026; waiting on the owner: the first publish (owner steps below)"
+status_note: "v0.1.0 tagged, CI tarball verified and dry-run published (Nov 21, 2026); waiting on the owner: npm login and the real publish (step 5)"
 waiting_on: owner
 blocked_by: []
 blocked_note: null
