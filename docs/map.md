@@ -69,7 +69,7 @@ Reached when:
 | 22 | [How Folio reaches the company VM](issues/22-distribution-channel.md) | decision | — | — | done — public npm package, run with npx (owner) | — |
 | 23 | [First run on the company VM](issues/23-first-company-vm-install.md) | verify | [24](issues/24-node-web-mode.md) | — | blocked | — |
 | 24 | [Web mode: a zero-dependency Node server, published to npm](issues/24-node-web-mode.md) | build | — | — | blocked — merged, waiting on owner (try tarball, publish) | — |
-| 25 | [Any docs layout, and choosing the docs roots in Settings](issues/25-generic-docs-layout.md) | build | — | — | in-progress | — |
+| 25 | [Any docs layout, and choosing the docs roots in Settings](issues/25-generic-docs-layout.md) | build | — | owner | blocked — merged, waiting on owner (open this repo by hand) | — |
 <!-- tickets:end -->
 
 ## Decisions so far

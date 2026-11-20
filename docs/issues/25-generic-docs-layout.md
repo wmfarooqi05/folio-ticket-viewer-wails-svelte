@@ -1,8 +1,8 @@
 ---
 type: build
-status: in-progress
-status_note: null
-waiting_on: null
+status: blocked
+status_note: "merged Nov 20, 2026; waiting on the owner: open E:\projects\ticket_ui in the desktop app and web mode (AC1 by hand)"
+waiting_on: owner
 blocked_by: []
 blocked_note: null
 related: ["04", "13", "18", "24"]
