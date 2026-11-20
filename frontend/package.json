@@ -9,8 +9,10 @@
     "build": "vite build --mode production",
     "preview": "vite preview",
     "build:lib": "vite build --config vite.lib.config.ts",
+    "build:web": "vite build --config vite.web.config.ts && vite build --config vite.server.config.ts",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:contract": "vitest run --config vitest.contract.config.ts"
   },
   "dependencies": {
     "@wailsio/runtime": "3.1.0",

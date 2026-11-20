@@ -15,5 +15,5 @@
     "isolatedModules": true,
     "types": ["svelte", "vite/client", "node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte", "bindings"]
+  "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte", "bindings", "contract/**/*.ts"]
 }

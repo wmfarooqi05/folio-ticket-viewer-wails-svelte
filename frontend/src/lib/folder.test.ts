@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pickRoot, rootsLabel, type PickApi } from './folder'
+import { checkPath, pickRoot, rootsLabel, type PickApi } from './folder'
 
 const fake = (picked: string, check: Partial<Awaited<ReturnType<PickApi['checkRoot']>>>): PickApi => ({
   pickFolder: async () => picked,
@@ -32,5 +32,17 @@ describe('pickRoot', () => {
 describe('rootsLabel', () => {
   it('lists the roots with a trailing slash', () => {
     expect(rootsLabel(['modules', 'handoffs'])).toBe('modules/ · handoffs/')
+  })
+})
+
+describe('checkPath (the typed path of web mode)', () => {
+  it('treats an empty or blank box as cancelled', async () => {
+    expect(await checkPath('  ', fake('', {}))).toEqual({ kind: 'cancelled' })
+  })
+  it('trims the path and returns the resolved root', async () => {
+    let asked = ''
+    const deps = { checkRoot: async (p: string) => ((asked = p), { ok: true, repoRoot: 'E:/repo', docsDir: 'docs', found: [], missing: [], message: '' }) }
+    expect(await checkPath('  E:/repo ', deps)).toEqual({ kind: 'ok', repoRoot: 'E:/repo', docsDir: 'docs' })
+    expect(asked).toBe('E:/repo')
   })
 })

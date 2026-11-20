@@ -16,12 +16,17 @@ export interface PickApi {
   checkRoot: typeof api.checkRoot
 }
 
-export async function pickRoot(deps: PickApi = api): Promise<PickResult> {
-  const picked = await deps.pickFolder()
+/** Checks a folder path (from the native picker, or typed in web mode, which has no dialog). Empty means cancelled. */
+export async function checkPath(picked: string, deps: Pick<PickApi, 'checkRoot'> = api): Promise<PickResult> {
+  picked = picked.trim()
   if (!picked) return { kind: 'cancelled' }
   const check = await deps.checkRoot(picked)
   if (!check.ok) return { kind: 'no-roots', picked, message: check.message }
   return { kind: 'ok', repoRoot: check.repoRoot, docsDir: check.docsDir }
+}
+
+export async function pickRoot(deps: PickApi = api): Promise<PickResult> {
+  return checkPath(await deps.pickFolder(), deps)
 }
 
 /** "modules/ · handoffs/ · patterns/", the roots the warning names. */

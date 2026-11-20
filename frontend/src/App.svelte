@@ -16,7 +16,7 @@
   import { pinnedCounts, type ViewId } from './lib/views'
   import * as panelStack from './lib/panel'
   import { Layout } from './lib/layout.svelte'
-  import { pickRoot, rootsLabel } from './lib/folder'
+  import { checkPath, pickRoot, rootsLabel } from './lib/folder'
   import { docsRootPath, splitPath } from './lib/path'
   import { MEMORY_TIP, formatMemory } from './lib/memory'
   import Icon from './lib/icons/Icon.svelte'
@@ -105,7 +105,7 @@
   // 1 MB; this sets one text node. Polling runs only while the footer is on screen and the setting
   // is on; Go itself pauses it while the window is minimised or hidden.
   let memText = $state('')
-  const memWanted = $derived(!!config?.showMemory && phase === 'ready' && geo.treeVisible)
+  const memWanted = $derived(!api.isWeb && !!config?.showMemory && phase === 'ready' && geo.treeVisible)
   $effect(() => {
     if (!memWanted) return
     const off = api.onMemory((b) => (memText = formatMemory(b)))
@@ -185,10 +185,12 @@
     }
   }
 
+  // Web mode has no native folder dialog: the first-run screen has a path box instead.
+  let typedRoot = $state('')
   async function choose() {
     problem = null
     try {
-      const res = await pickRoot()
+      const res = api.isWeb ? await checkPath(typedRoot) : await pickRoot()
       if (res.kind === 'cancelled') return
       if (res.kind === 'no-roots') {
         problem = res.message
@@ -208,6 +210,10 @@
 
   async function changeFolder() {
     if (changingFolder || !config) return
+    if (api.isWeb) {
+      settingsOpen = true // the path box lives in Settings
+      return
+    }
     changingFolder = true
     folderNotice = null
     try {
@@ -439,13 +445,31 @@
           <p class="text-md leading-[1.6] text-fg2">
             Folio reads the tickets in a repo and never changes them. Pick the repo, or its docs folder.
           </p>
-          <button
-            type="button"
-            class="h-40 rounded-lg bg-acc px-18 text-sm font-medium text-acc-ink transition-transform duration-[var(--dur-press)] hover:-translate-y-1"
-            onclick={choose}
-          >
-            Choose folder…
-          </button>
+          {#if api.isWeb}
+            <form class="flex w-full gap-8" onsubmit={(e) => (e.preventDefault(), void choose())}>
+              <input
+                class="h-40 min-w-0 flex-1 rounded-lg border border-line2 bg-card px-12 font-mono text-sm text-fg outline-none focus:border-acc"
+                spellcheck="false"
+                aria-label="Path to the repo or its docs folder"
+                placeholder="E:/path/to/repo or its docs folder"
+                bind:value={typedRoot}
+              />
+              <button
+                type="submit"
+                class="h-40 rounded-lg bg-acc px-18 text-sm font-medium text-acc-ink transition-transform duration-[var(--dur-press)] hover:-translate-y-1"
+              >
+                Open
+              </button>
+            </form>
+          {:else}
+            <button
+              type="button"
+              class="h-40 rounded-lg bg-acc px-18 text-sm font-medium text-acc-ink transition-transform duration-[var(--dur-press)] hover:-translate-y-1"
+              onclick={choose}
+            >
+              Choose folder…
+            </button>
+          {/if}
           {#if problem}
             <p class="text-sm text-s-block" role="alert">{problem}</p>
           {/if}

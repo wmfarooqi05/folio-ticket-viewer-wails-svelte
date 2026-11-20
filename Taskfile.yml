@@ -72,6 +72,25 @@ tasks:
     cmds:
       - npm run build:lib
 
+  web:
+    summary: "Web mode (ticket 24): builds the Node server and the browser bundle if needed, then runs it. Example: task web -- --docs fixtures/docs"
+    cmds:
+      - node scripts/web.mjs {{.CLI_ARGS}}
+
+  build:web:
+    summary: Builds packages/folio-viewer (folio-web.mjs and dist/), the folder `npm publish` ships
+    dir: frontend
+    deps: [common:install:frontend:deps]
+    cmds:
+      - npm run build:web
+
+  test:contract:
+    summary: Runs the same cases against the Go services and the Node server (builds cmd/contract-server; needs Go)
+    dir: frontend
+    deps: [common:install:frontend:deps]
+    cmds:
+      - npm run test:contract
+
   check:
     summary: go vet plus svelte-check (regenerates the TS bindings first)
     deps: [dist:stub, common:install:frontend:deps]

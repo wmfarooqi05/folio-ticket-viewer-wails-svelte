@@ -4,7 +4,7 @@
   import { onDestroy, onMount, untrack } from 'svelte'
   import * as api from '../lib/api'
   import type { Config, RootCheck } from '../lib/api'
-  import { pickRoot, rootsLabel } from '../lib/folder'
+  import { checkPath, pickRoot, rootsLabel } from '../lib/folder'
   import {
     SECTIONS,
     THEMES,
@@ -99,6 +99,27 @@
     }
   }
 
+  // Web mode: no native dialog, so the folder is a typed path, checked like a picked one.
+  let typed = $state(untrack(() => config.repoRoot))
+  let cliFolder = $state<string | null>(null)
+  onMount(() => {
+    if (api.isWeb) void api.docsFromCommandLine().then((p) => (cliFolder = p)).catch(() => {})
+  })
+  async function chooseTyped() {
+    try {
+      const res = await checkPath(typed)
+      if (res.kind === 'ok') {
+        draft.repoRoot = res.repoRoot
+        draft.docsDir = res.docsDir
+        typed = res.repoRoot
+      } else if (res.kind === 'no-roots') {
+        draft.repoRoot = res.picked // shows the "No roots" warning
+      }
+    } catch (err) {
+      saveError = message(err)
+    }
+  }
+
   async function save() {
     if (disabled) return
     busy = true
@@ -149,7 +170,11 @@
   }
 
   const found = (root: string) => (check?.found ?? []).includes(root)
-  const section = $derived(SECTIONS.find((s) => s.id === sec)!)
+  // Web mode has no RAM readout to switch, so that toggle is not offered.
+  const section = $derived.by(() => {
+    const s = SECTIONS.find((x) => x.id === sec)!
+    return api.isWeb ? { ...s, fields: s.fields.filter((f) => f.key !== 'showMemory') } : s
+  })
   const watchLine = $derived(
     !scan || noRoots || !hasRepo
       ? `Watching 0 files${scan ? ` · last scan ${scan.walkMs} ms` : ''}`
@@ -209,17 +234,37 @@
               {#if f.kind === 'folder'}
                 <div>
                   <div class="lbl">{f.label}</div>
-                  <div class="row">
-                    <div class="path" title={draft.repoRoot}>{draft.repoRoot || 'No folder chosen'}</div>
-                    <button type="button" class="btn" onclick={choose}>Choose folder…</button>
-                  </div>
+                  {#if api.isWeb}
+                    <form class="row" onsubmit={(e) => (e.preventDefault(), void chooseTyped())}>
+                      <input
+                        class="inp mono"
+                        style="flex:1;min-width:0"
+                        spellcheck="false"
+                        aria-label="Path to the repo or its docs folder"
+                        placeholder="E:/path/to/repo or its docs folder"
+                        bind:value={typed}
+                      />
+                      <button type="submit" class="btn">Use folder</button>
+                    </form>
+                    {#if cliFolder}
+                      <div class="hint" style="margin-top:6px">
+                        This session was started with <span class="mono">--docs {cliFolder}</span>. That folder is used until
+                        you restart; a folder saved here applies the next time without <span class="mono">--docs</span>.
+                      </div>
+                    {/if}
+                  {:else}
+                    <div class="row">
+                      <div class="path" title={draft.repoRoot}>{draft.repoRoot || 'No folder chosen'}</div>
+                      <button type="button" class="btn" onclick={choose}>Choose folder…</button>
+                    </div>
+                  {/if}
                   {#if noRoots}
                     <div class="warn" role="alert">
                       <span class="dot" style="width:7px;height:7px;background:var(--s-rev)"></span>
                       <span style="flex:1;min-width:0">
                         This folder has none of <span class="mono" style="font-size:11.5px">{rootsLabel(draft.docsRoots)}</span>
                       </span>
-                      <button type="button" class="link" onclick={choose}>Choose again</button>
+                      {#if !api.isWeb}<button type="button" class="link" onclick={choose}>Choose again</button>{/if}
                     </div>
                   {/if}
                 </div>
@@ -355,9 +400,11 @@
     </div>
 
     <div class="foot">
-      <button type="button" class="file" onclick={() => api.openSettingsFile().catch((e) => (saveError = message(e)))}>
-        Open settings file
-      </button>
+      {#if !api.isWeb}
+        <button type="button" class="file" onclick={() => api.openSettingsFile().catch((e) => (saveError = message(e)))}>
+          Open settings file
+        </button>
+      {/if}
       <span style="flex:1"></span>
       <button type="button" class="cancel" onclick={onclose}>Cancel</button>
       <button type="button" class="save" {disabled} title="Enter" onclick={save}>Save</button>

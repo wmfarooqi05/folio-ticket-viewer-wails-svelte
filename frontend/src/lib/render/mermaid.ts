@@ -196,6 +196,26 @@ export function themeVariables(): Record<string, string> {
 
 type Mermaid = (typeof import('mermaid'))['default']
 let loaded: Promise<Mermaid> | null = null
+/**
+ * Config keys a document's `%%{init: ...}%%` directive or frontmatter can never change. The app sets
+ * them itself. themeCSS is raw CSS, so a directive could restyle the whole page; the others
+ * change the look or the HTML labels.
+ */
+export const SECURE_KEYS = [
+  'secure',
+  'securityLevel',
+  'startOnLoad',
+  'maxTextSize',
+  'suppressErrorRendering',
+  'maxEdges',
+  'layout',
+  'dompurifyConfig',
+  'themeCSS',
+  'themeVariables',
+  'fontFamily',
+  'htmlLabels',
+] as const
+
 let configuredFor: string | null = null
 let seq = 0
 let inserts = 0
@@ -223,16 +243,7 @@ function configure(mermaid: Mermaid, theme: ThemeName): void {
     // dagre only: ELK is not bundled (vite.config.ts), and a directive or frontmatter in a
     // document must not be able to switch the layout, the security level or the limits
     layout: 'dagre',
-    secure: [
-      'secure',
-      'securityLevel',
-      'startOnLoad',
-      'maxTextSize',
-      'suppressErrorRendering',
-      'maxEdges',
-      'layout',
-      'dompurifyConfig',
-    ],
+    secure: [...SECURE_KEYS],
   })
   configuredFor = key
 }
