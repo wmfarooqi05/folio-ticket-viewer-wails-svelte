@@ -181,6 +181,26 @@ describe('Mermaid output hardening (ticket 14 review)', () => {
     expect(m.noElk('flowchart TD\n A-->B')).toBe('flowchart TD\n A-->B')
   })
 
+  it('drops actor menus from sequence diagrams, and nothing else', async () => {
+    const m = await vi.importActual<typeof import('./mermaid')>('./mermaid')
+    const seq = [
+      'sequenceDiagram',
+      'participant A',
+      'link A: Dash @ https://evil.example',
+      '  links A: {"x": "https://evil.example"}',
+      'properties A: {"class": "x"}',
+      'details A: {"k": "v"}',
+      'A->>B: link B: not a menu',
+      'details->>B: a message from an actor called details',
+    ].join('\n')
+    const out = m.dropActorMenus(seq)
+    expect(out).not.toMatch(/evil\.example|properties|"k"/)
+    expect(out).toContain('A->>B: link B: not a menu')
+    expect(out).toContain('details->>B: a message from an actor called details')
+    const flow = 'flowchart TD\nlinkStyle 0 stroke:red\nlink A: x @ https://e.example'
+    expect(m.dropActorMenus(flow)).toBe(flow)
+  })
+
   it('gives every insert of a cached SVG its own ids', async () => {
     const m = await vi.importActual<typeof import('./mermaid')>('./mermaid')
     const svg =

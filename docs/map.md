@@ -63,7 +63,7 @@ Reached when:
 | 16 | [Harden the WebView2 host](issues/16-webview2-host-hardening.md) | build | — | — | superseded — by 26 (desktop app retired) | — |
 | 17 | [Reproducible build and CI release](issues/17-reproducible-ci-release.md) | build | — | owner | blocked — merged, waiting on owner (tag, compare CI hashes) | — |
 | 18 | [Input and data hardening](issues/18-input-and-data-hardening.md) | build | — | — | done | — |
-| 19 | [Focused security review](issues/19-security-review.md) | verify | — | owner | blocked — merged, waiting on owner (accept residual risks) | — |
+| 19 | [Focused security review](issues/19-security-review.md) | verify | — | — | done | — |
 | 20 | [Find out what company IT allows](issues/20-company-it-requirements.md) | task | — | — | dropped — npm route needs nothing from IT | — |
 | 21 | [Code signing: whether and how](issues/21-code-signing.md) | decision | — | — | dropped — no exe goes to the VM | — |
 | 22 | [How Folio reaches the company VM](issues/22-distribution-channel.md) | decision | — | — | done — public npm package, run with npx (owner) | — |
