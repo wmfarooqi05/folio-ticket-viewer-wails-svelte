@@ -52,7 +52,7 @@ dev_mode:
       - "*.ts" # The frontend directory will be excluded entirely by the setting above.
     git_ignore: true
   executes:
-    - cmd: wails3 build DEV=true
+    - cmd: wails3 task desktop:build DEV=true
       type: blocking
     - cmd: wails3 task common:dev:frontend
       type: background
@@ -63,7 +63,7 @@ dev_mode:
       #   http: "http://localhost:5173/"
       #   timeout: "60s"
       #   interval: "200ms"
-    - cmd: wails3 task run
+    - cmd: wails3 task desktop:run
       type: primary
       exit_policy: shutdown
 

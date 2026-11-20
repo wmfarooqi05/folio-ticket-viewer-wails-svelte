@@ -1,12 +1,12 @@
 ---
 type: build
-status: blocked
-status_note: "merged Nov 20, 2026; waiting on the owner: build the installer (needs NSIS), clean-profile install test, VM run (AC3), and confirm the budget calls"
-waiting_on: owner
+status: superseded
+status_note: "superseded by ticket 26 (Nov 20, 2026): the desktop app is retired, so the owner checks that were waiting here (installer build, clean-profile install, VM run of the exe) are no longer needed. The code is frozen, not deleted."
+waiting_on: null
 blocked_by: []
 blocked_note: null
 related: ["06", "07"]
-superseded_by: null
+superseded_by: "26"
 pr: []
 ado: []
 afk: false

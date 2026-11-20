@@ -1,6 +1,8 @@
 version: '3'
 
-# Folio is Windows-only (Wails v3, WebView2). Build files live in build/.
+# Folio runs as web mode on Node (ticket 24); the Go/Wails desktop app is retired and frozen (ticket 26,
+# RETIRED.md). `task build`, `task test` and `task web` need Node only. Everything that needs Go or
+# wails3 is under the desktop: prefix. The desktop build files live in build/.
 
 vars:
   APP_NAME: "folio"
@@ -10,9 +12,9 @@ vars:
   # `task build PRODUCTION=true` is the default; `task build DEV=true` makes a debug build.
   DEV: '{{.DEV | default "false"}}'
 
-# Reproducible builds (ticket 17): modules are never changed by a build. (Go already defaults to
-# -mod=readonly without a vendor folder; an OS-level GOFLAGS wins over this line, Task never
-# overrides a variable that is already set, so keep -mod=readonly in it if you set one.)
+# Reproducible builds (ticket 17): modules are never changed by a build. (Only the desktop: tasks run
+# Go. Go already defaults to -mod=readonly without a vendor folder; an OS-level GOFLAGS wins over this
+# line, Task never overrides a variable that is already set, so keep -mod=readonly in it if you set one.)
 env:
   GOFLAGS: '-mod=readonly'
 
@@ -21,69 +23,70 @@ includes:
   windows: ./build/windows/Taskfile.yml
 
 tasks:
-  tools:install:
-    summary: Installs the pinned wails3 CLI (v3.1.0, the version in go.mod)
-    cmds:
-      - go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+  # ---- web mode: the way Folio is built, tested and run (Node only) ---------------------------
 
-  dev:
-    summary: Runs the app in development mode (Vite hot reload, Go rebuild on change)
+  web:
+    summary: "Runs Folio in your browser (builds the Node server and the browser bundle if needed). Example: task web -- --docs fixtures/docs"
     cmds:
-      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
+      - node scripts/web.mjs {{.CLI_ARGS}}
 
   build:
-    summary: Builds the production exe into bin/ (regenerates the TS bindings first), then checks the size budgets
+    summary: Builds packages/folio-viewer (folio-web.mjs and dist/), the folder `npm publish` ships, then checks the size budgets
+    dir: frontend
+    deps: [common:node:check, common:install:frontend:deps]
     cmds:
-      - task: windows:build
-        vars:
-          DEV: '{{.DEV}}'
-      - cmd: node scripts/size-check.mjs
-        platforms: [windows]
-        # a DEV=true build is unminified, so the budgets mean nothing there
-        if: '[ "{{.DEV}}" != "true" ]'
+      - npm run build:web
+      - node ../scripts/size-check.mjs
+
+  build:web:
+    summary: Alias of `task build` (its old name)
+    cmds:
+      - task: build
 
   size:
-    summary: Checks the size budgets against the last build (frontend/dist, bin/folio.exe)
+    summary: Checks the web bundle's size budgets (run task build first) and size-check's own tests
     cmds:
       - node scripts/size-check.mjs
       - node --test scripts/size-check.test.mjs
 
-  build:bench:
-    summary: Builds bin/folio-bench.exe, the exe scripts/ram-check.ps1 drives. It has the bench hook (go build -tags bench); the shipped folio.exe does not.
-    cmds:
-      - task: common:build:frontend
-      - cmd: go build -tags production,bench -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui" -o bin/folio-bench.exe
-        platforms: [windows]
-        env:
-          CGO_ENABLED: "0"
-
-  ram:
-    summary: RAM and CPU benchmark of bin/folio-bench.exe on the fixtures (about 25 minutes; run task build:bench first; see README)
-    cmds:
-      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ram-check.ps1 {{.CLI_ARGS}}
-
-  run:
-    summary: Runs the built exe (set FOLIO_ROOT to skip the folder picker)
-    cmds:
-      - task: windows:run
-
-  package:
-    summary: Builds an NSIS installer (needs NSIS on PATH)
-    cmds:
-      - task: windows:package
-
   test:
-    summary: Runs the Go tests and the frontend tests
-    deps: [dist:stub, common:install:frontend:deps]
+    summary: Runs the frontend tests, the Node server tests and the contract suite against the Node server. Needs Node only.
+    deps: [common:install:frontend:deps]
     cmds:
-      - go test ./...
+      # some tests import the Wails backend module, which imports the generated bindings
+      - node scripts/restore-bindings.mjs
       - task: test:frontend
+      - task: test:contract
+      - node --test scripts/size-check.test.mjs
 
-  test:frontend:
+  test:contract:
+    summary: Runs the contract suite against the Node server only
+    dir: frontend
+    deps: [common:install:frontend:deps]
+    cmds:
+      - npm run test:contract
+
+  test:contract:go:
+    summary: Runs the contract suite against the Node server and the frozen Go services, with the cross-backend checks (FOLIO_CONTRACT_GO=1; builds cmd/contract-server; needs Go)
+    dir: frontend
+    deps: [common:install:frontend:deps]
+    env:
+      FOLIO_CONTRACT_GO: "1"
+    cmds:
+      - npm run test:contract
+
+  check:
+    summary: svelte-check on the frontend. Needs Node only; the type-only Wails bindings come from frontend/bindings-frozen when frontend/bindings is missing
+    deps: [common:install:frontend:deps]
+    cmds:
+      - node scripts/restore-bindings.mjs
+      - task: check:frontend
+
+  check:frontend:
     internal: true
     dir: frontend
     cmds:
-      - npm test
+      - npm run check
 
   build:lib:
     summary: Builds the parser alone into frontend/dist-lib/lib.mjs (zero imports, for the upstream CLI)
@@ -92,41 +95,81 @@ tasks:
     cmds:
       - npm run build:lib
 
-  web:
-    summary: "Web mode (ticket 24): builds the Node server and the browser bundle if needed, then runs it. Example: task web -- --docs fixtures/docs"
-    cmds:
-      - node scripts/web.mjs {{.CLI_ARGS}}
+  # ---- retired desktop app (ticket 26): frozen, every task here needs Go and wails3 ------------
 
-  build:web:
-    summary: Builds packages/folio-viewer (folio-web.mjs and dist/), the folder `npm publish` ships
-    dir: frontend
-    deps: [common:node:check, common:install:frontend:deps]
+  desktop:tools:install:
+    summary: Installs the pinned wails3 CLI (v3.1.0, the version in go.mod)
     cmds:
-      - npm run build:web
+      - go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
 
-  test:contract:
-    summary: Runs the same cases against the Go services and the Node server (builds cmd/contract-server; needs Go)
-    dir: frontend
-    deps: [common:install:frontend:deps]
+  desktop:dev:
+    summary: Runs the desktop app in development mode (Vite hot reload, Go rebuild on change)
     cmds:
-      - npm run test:contract
+      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
-  check:
+  desktop:build:
+    summary: Builds the desktop exe into bin/ (regenerates the TS bindings first), then checks the size budgets including the exe budget
+    cmds:
+      - task: windows:build
+        vars:
+          DEV: '{{.DEV}}'
+      - cmd: node scripts/size-check.mjs --desktop
+        platforms: [windows]
+        # a DEV=true build is unminified, so the budgets mean nothing there
+        if: '[ "{{.DEV}}" != "true" ]'
+
+  desktop:size:
+    summary: Checks the size budgets against the last desktop build (frontend/dist, bin/folio.exe)
+    cmds:
+      - node scripts/size-check.mjs --desktop
+
+  desktop:build:bench:
+    summary: Builds bin/folio-bench.exe, the exe scripts/ram-check.ps1 drives. It has the bench hook (go build -tags bench); the shipped folio.exe does not.
+    cmds:
+      - task: common:build:frontend
+      - cmd: go build -tags production,bench -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui" -o bin/folio-bench.exe
+        platforms: [windows]
+        env:
+          CGO_ENABLED: "0"
+
+  desktop:ram:
+    summary: RAM and CPU benchmark of bin/folio-bench.exe on the fixtures (about 25 minutes; run task desktop:build:bench first; see README)
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ram-check.ps1 {{.CLI_ARGS}}
+
+  desktop:run:
+    summary: Runs the built exe (set FOLIO_ROOT to skip the folder picker)
+    cmds:
+      - task: windows:run
+
+  desktop:package:
+    summary: Builds an NSIS installer (needs NSIS on PATH)
+    cmds:
+      - task: windows:package
+
+  desktop:test:
+    summary: Runs the Go tests and the frontend tests
+    deps: [dist:stub, common:install:frontend:deps]
+    cmds:
+      - go test ./...
+      - task: test:frontend
+
+  desktop:check:
     summary: go vet plus svelte-check (regenerates the TS bindings first)
     deps: [dist:stub, common:install:frontend:deps]
     preconditions:
       - sh: '[ "$(wails3 version 2>&1)" = "v3.1.0" ]'
-        msg: "wails3 must be v3.1.0. Install it with: task tools:install"
+        msg: "wails3 must be v3.1.0. Install it with: task desktop:tools:install"
     cmds:
       - go vet ./...
       - wails3 generate bindings -clean=true -ts -i
       - task: check:frontend
 
-  check:frontend:
+  test:frontend:
     internal: true
     dir: frontend
     cmds:
-      - npm run check
+      - npm test
 
   dist:stub:
     summary: Makes sure frontend/dist exists, because main.go embeds it (go vet fails without it)

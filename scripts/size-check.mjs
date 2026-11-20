@@ -1,12 +1,14 @@
 // Size budgets for Folio (ticket 15; 06 D5, tightened to what tickets 09-14 actually used).
 //
-//   node scripts/size-check.mjs            checks frontend/dist and bin/folio.exe, prints a table
-//   node scripts/size-check.mjs --no-exe   skips the exe (when only the frontend is built)
-//   node scripts/size-check.mjs --json     adds a machine-readable line at the end
+//   node scripts/size-check.mjs            checks the web bundle (packages/folio-viewer/dist), prints a table
+//   node scripts/size-check.mjs --desktop  checks the retired desktop build instead: frontend/dist and
+//                                          bin/folio.exe, with the exe budget (`task desktop:build` runs this)
+//   node scripts/size-check.mjs --desktop --no-exe   the desktop frontend only, no exe (when only it is built)
 //
 // Node built-ins only. Exits 1 on a breach, 2 when the build output is missing.
-// The checks read frontend/dist/index.html and the Vite manifest (frontend/.vite/manifest.json,
-// moved out of dist/ by vite.config.ts so it is not embedded in the exe). Sizes are gzip
+// The checks read index.html and the Vite manifest of the bundle: for the web build
+// frontend/.vite-web/manifest.json (moved out of the published dist/ by vite.web.config.ts), for the desktop
+// build frontend/.vite/manifest.json (moved out by vite.config.ts so it is not embedded in the exe). Sizes are gzip
 // (zlib level 9, which is what a good static host would send; Vite's own report uses a
 // similar level) and "KB" is 1000 bytes, like Vite's report.
 import { existsSync, readFileSync, statSync } from 'node:fs'
@@ -194,7 +196,7 @@ const fmtMiB = (n) => (n / MIB).toFixed(2).padStart(7) + ' MiB'
 export function run({ dist, manifestPath, exePath, checkExe = true, log = console.log }) {
   const indexPath = join(dist, 'index.html')
   if (!existsSync(indexPath) || !existsSync(manifestPath)) {
-    log(`size-check: build output missing (${indexPath} or ${manifestPath}). Run npm run build in frontend/ first.`)
+    log(`size-check: build output missing (${indexPath} or ${manifestPath}). Run "task build" (web) or "task desktop:build" (with --desktop) first.`)
     return 2
   }
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
@@ -269,11 +271,12 @@ export function run({ dist, manifestPath, exePath, checkExe = true, log = consol
 const here = dirname(fileURLToPath(import.meta.url))
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const root = resolve(here, '..')
+  const desktop = process.argv.includes('--desktop')
   const code = run({
-    dist: join(root, 'frontend', 'dist'),
-    manifestPath: join(root, 'frontend', '.vite', 'manifest.json'),
+    dist: desktop ? join(root, 'frontend', 'dist') : join(root, 'packages', 'folio-viewer', 'dist'),
+    manifestPath: join(root, 'frontend', desktop ? '.vite' : '.vite-web', 'manifest.json'),
     exePath: join(root, 'bin', 'folio.exe'),
-    checkExe: !process.argv.includes('--no-exe'),
+    checkExe: desktop && !process.argv.includes('--no-exe'),
   })
   process.exit(code)
 }

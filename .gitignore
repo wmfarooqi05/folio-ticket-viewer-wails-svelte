@@ -32,5 +32,6 @@ prototypes/
 
 # Vite manifest for scripts/size-check.mjs
 frontend/.vite/
+frontend/.vite-web/
 
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe

@@ -1,12 +1,12 @@
 ---
 type: build
-status: blocked
-status_note: "merged Nov 20, 2026; waiting on the owner: AC2 by eye (right-click, F12, copy button), NSIS install/uninstall, file the upstream Wails issue"
-waiting_on: owner
+status: superseded
+status_note: "superseded by ticket 26 (Nov 20, 2026): the desktop app is retired, so the WebView2 hand checks (right-click, F12, copy button), the NSIS install/uninstall and the upstream Wails issue are no longer needed. The code is frozen, not deleted."
+waiting_on: null
 blocked_by: []
 blocked_note: null
 related: ["10", "17", "19"]
-superseded_by: null
+superseded_by: "26"
 pr: []
 ado: []
 afk: true

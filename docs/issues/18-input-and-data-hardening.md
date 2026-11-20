@@ -1,8 +1,8 @@
 ---
 type: build
-status: blocked
-status_note: "merged Nov 20, 2026; waiting on the owner: hand checks (UNC pick, Clear data across a restart, NSIS uninstall prompt)"
-waiting_on: owner
+status: done
+status_note: "merged Nov 20, 2026; ticket 26 (Nov 20, 2026) retired the desktop app, so the hand checks that were waiting on the owner (UNC pick, Clear data across a restart, NSIS uninstall prompt) are desktop-only and no longer needed. Web mode behaves the same and is covered by the Node tests and the contract suite."
+waiting_on: null
 blocked_by: []
 blocked_note: null
 related: ["13", "16", "19"]
