@@ -35,10 +35,14 @@ Open them with the gear in the header or Ctrl+,. The dialog has three sections; 
 
 - **Docs folder:** the repo root (with the picker), the docs folder name (default `docs`), and the docs roots to index (default `modules`, `handoffs`, `patterns`), with "found/missing" chips and the last scan time.
 - **Links:** the Azure DevOps work item and pull request URL templates (`https://` with an `{id}`), with a live preview.
-- **Appearance:** System, Light or Dark.
+- **Appearance:** System, Light or Dark, and **Show memory use** (on by default).
 - **Open settings file** opens `settings.json` in VS Code. It is plain JSON; unknown keys are kept.
 
 Window position and size, the pane widths and the collapsed tree are saved there too.
+
+### Memory readout
+
+The bottom of the tree shows one muted figure, for example `165 MB`: the private bytes of Folio plus its WebView2 processes, summed the way `scripts/ram-check.ps1` does it, so the two agree (Task Manager's Memory column is a different measure, which the tooltip says). Go measures (`internal/mem`) and only sends a number when it moved by 1 MB or more since the last one it sent. It polls every 5 s, re-reading just the known processes and listing every process on the machine once a minute to find new children, and it pauses while the window is minimised or hidden. Turn it off with **Show memory use** in Settings (`showMemory` in `settings.json`): nothing is polled then, and no goroutine or timer exists. The readout is also off while the tree is hidden or collapsed.
 
 ## Stack
 
@@ -109,6 +113,7 @@ Taskfile.yml             dev, build (with the size check), test, check, size, ra
 internal/docs/           DocsService: Scan, ReadBatch, ReadFile, the watcher, the index cache
 internal/shell/          ShellService: config, folder picker, CheckRoot, open in VS Code, asset middleware, bench hook
 internal/settings/       settings.json: load, validate, atomic save
+internal/mem/            the RAM readout: process-tree private bytes, polling, pause
 scripts/                 size-check.mjs (+ test) and ram-check.ps1
 build/                   Wails build files (Windows only), the NSIS installer script
 frontend/

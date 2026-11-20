@@ -12,6 +12,7 @@ export interface Draft {
   adoWorkItemUrl: string
   adoPrUrl: string
   theme: Theme
+  showMemory: boolean
 }
 
 /** The subset of the saved config the dialog needs (structurally what Config has). */
@@ -22,7 +23,7 @@ export type DraftSource = Partial<Omit<Draft, 'theme' | 'docsRoots'>> & {
 
 export const DEFAULT_ROOTS = ['modules', 'handoffs', 'patterns']
 
-export type FieldKind = 'folder' | 'docsDir' | 'roots' | 'template' | 'theme'
+export type FieldKind = 'folder' | 'docsDir' | 'roots' | 'template' | 'theme' | 'toggle'
 
 export interface Field {
   key: keyof Draft
@@ -66,7 +67,15 @@ export const SECTIONS: Section[] = [
   {
     id: 'appearance',
     label: 'Appearance',
-    fields: [{ key: 'theme', kind: 'theme', label: 'Theme', hint: 'System follows your OS setting.' }],
+    fields: [
+      { key: 'theme', kind: 'theme', label: 'Theme', hint: 'System follows your OS setting.' },
+      {
+        key: 'showMemory',
+        kind: 'toggle',
+        label: 'Show memory use',
+        hint: 'A small RAM figure in the sidebar footer. Off stops the measuring.',
+      },
+    ],
   },
 ]
 
@@ -85,6 +94,7 @@ export function draftFrom(cfg: DraftSource): Draft {
     adoWorkItemUrl: cfg.adoWorkItemUrl ?? '',
     adoPrUrl: cfg.adoPrUrl ?? '',
     theme,
+    showMemory: cfg.showMemory !== false,
   }
 }
 

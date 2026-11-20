@@ -9,6 +9,7 @@ import type {
   ScanResult,
   SourceFile,
 } from '../../bindings/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/docs'
+import { MemoryService } from '../../bindings/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/mem'
 import { ShellService } from '../../bindings/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/shell'
 import type {
   ConfigPatch,
@@ -74,6 +75,18 @@ export async function readAll(paths: string[]): Promise<{ files: SourceFile[]; m
 /** Subscribes to the debounced `docs:changed` event. Returns an unsubscribe function. */
 export function onDocsChanged(handler: (cs: ChangeSet) => void): () => void {
   return Events.On('docs:changed', (e) => handler(e.data as ChangeSet))
+}
+
+// ---- memory readout (Go measures, see internal/mem) -------------------------
+
+/** Switches Go's polling on or off (the showMemory setting). On, Go emits the current total at once. */
+export const setMemoryEnabled = (on: boolean): Promise<void> => MemoryService.SetEnabled(on)
+
+/** Subscribes to `mem:changed`: the total private bytes, emitted only when it moved by 1 MB or more. */
+export function onMemory(handler: (bytes: number) => void): () => void {
+  return Events.On('mem:changed', (e) => {
+    if (typeof e.data === 'number') handler(e.data)
+  })
 }
 
 /**

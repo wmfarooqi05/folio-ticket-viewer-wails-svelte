@@ -6,6 +6,7 @@ import {
   needsRescan,
   patchFrom,
   saveDisabled,
+  SECTIONS,
   templateExample,
   toggleRoot,
   validateDocsDir,
@@ -92,6 +93,27 @@ describe('patch and rescan', () => {
   })
   it('a template change does not rescan', () => {
     expect(needsRescan(patchFrom({ ...saved(), adoPrUrl: 'https://x.test/{id}' }, saved()))).toBe(false)
+  })
+})
+
+describe('showMemory (the hide setting)', () => {
+  it('is on unless the config says false, including older configs without the key', () => {
+    expect(draftFrom({}).showMemory).toBe(true)
+    expect(draftFrom({ showMemory: true }).showMemory).toBe(true)
+    expect(draftFrom({ showMemory: false }).showMemory).toBe(false)
+  })
+  it('is a field of the Appearance section, so the dialog renders it', () => {
+    const f = SECTIONS.find((s) => s.id === 'appearance')?.fields.find((x) => x.key === 'showMemory')
+    expect(f?.kind).toBe('toggle')
+  })
+  it('turning it off enables Save and sends only that key, with no rescan', () => {
+    const d = { ...saved(), showMemory: false }
+    expect(saveDisabled(d, saved())).toBe(false)
+    expect(patchFrom(d, saved())).toEqual({ showMemory: false })
+    expect(needsRescan(patchFrom(d, saved()))).toBe(false)
+  })
+  it('turning it off and on again changes nothing', () => {
+    expect(saveDisabled({ ...saved(), showMemory: true }, saved())).toBe(true)
   })
 })
 

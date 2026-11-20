@@ -33,6 +33,7 @@ type ConfigPatch struct {
 	AdoWorkItemURL *string   `json:"adoWorkItemUrl,omitempty"`
 	AdoPRURL       *string   `json:"adoPrUrl,omitempty"`
 	Theme          *string   `json:"theme,omitempty"`
+	ShowMemory     *bool     `json:"showMemory,omitempty"`
 }
 
 // RootCheck reports what CheckRoot found in a folder the user picked.
@@ -134,6 +135,9 @@ func (s *ShellService) SetConfig(p ConfigPatch) (Config, error) {
 	}
 	if p.AdoPRURL != nil {
 		next.AdoPRURL = *p.AdoPRURL
+	}
+	if p.ShowMemory != nil {
+		next.ShowMemory = *p.ShowMemory
 	}
 	if p.Theme != nil {
 		next.Theme = *p.Theme

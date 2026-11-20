@@ -18,6 +18,7 @@
   import { Layout } from './lib/layout.svelte'
   import { pickRoot, rootsLabel } from './lib/folder'
   import { docsRootPath, splitPath } from './lib/path'
+  import { MEMORY_TIP, formatMemory } from './lib/memory'
   import Icon from './lib/icons/Icon.svelte'
   import Divider from './components/Divider.svelte'
 
@@ -99,6 +100,22 @@
   const docsPathParts = $derived(splitPath(docsPath))
   // the engine says "412 files"; the mockup's footer says "Watching 412 files"
   const footerText = $derived(/^\d+ files?$/.test(status) ? `Watching ${status}` : status)
+
+  // The RAM readout (ticket 16). Go measures and emits `mem:changed` only when the total moves by
+  // 1 MB; this sets one text node. Polling runs only while the footer is on screen and the setting
+  // is on; Go itself pauses it while the window is minimised or hidden.
+  let memText = $state('')
+  const memWanted = $derived(!!config?.showMemory && phase === 'ready' && geo.treeVisible)
+  $effect(() => {
+    if (!memWanted) return
+    const off = api.onMemory((b) => (memText = formatMemory(b)))
+    void api.setMemoryEnabled(true).catch(() => {})
+    return () => {
+      off()
+      memText = ''
+      void api.setMemoryEnabled(false).catch(() => {})
+    }
+  })
 
   // Bench hook (ticket 15): opens an indexed file when the exe runs with FOLIO_BENCH=1; inert otherwise.
   onMount(() =>
@@ -397,6 +414,9 @@
         <footer class="flex items-center gap-8 border-t border-line px-14 py-8 text-[11px] text-fg3">
           <span class="size-6 shrink-0 rounded-full bg-s-done"></span>
           <span class="min-w-0 flex-1 truncate">{footerText}</span>
+          {#if memText}
+            <span class="shrink-0 tabular-nums" title={MEMORY_TIP}>{memText}</span>
+          {/if}
           <button
             type="button"
             class="shrink-0 rounded-xs text-fg2 transition-colors duration-(--dur-hover) enabled:hover:text-acc disabled:opacity-50"
