@@ -11,7 +11,7 @@ Folio installs for the current user only: no admin prompt, files in `%LOCALAPPDA
 1. Get `folio-amd64-installer.exe` (build it with `task package`, see below, or take it from whoever built it) and run it.
 2. Start Folio from the Start menu.
 
-Needs Windows 10 or 11 with the WebView2 runtime (Windows 11 has it; the installer fetches it if it is missing). Uninstalling removes the program, its shortcut and the WebView2 profile (`%LOCALAPPDATA%\Folio\WebView2`) and leaves your settings and index cache alone (`%APPDATA%\Folio` and `%LOCALAPPDATA%\Folio`); delete those folders by hand for a clean slate.
+Needs Windows 10 or 11 with the WebView2 runtime (Windows 11 has it; the installer fetches it if it is missing). Uninstalling removes the program, its shortcut and the WebView2 profile (`%LOCALAPPDATA%\Folio\WebView2`) and keeps your settings (`%APPDATA%\Folio`) and the index cache (`%LOCALAPPDATA%\Folio\cache`); delete those folders by hand for a clean slate.
 
 Without the installer, `bin\folio.exe` runs on its own after `task build`.
 

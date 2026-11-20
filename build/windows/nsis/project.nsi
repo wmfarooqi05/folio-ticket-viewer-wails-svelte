@@ -139,7 +139,8 @@ Section "uninstall"
     !insertmacro wails.setShellContext
 
     # The WebView2 profile (ticket 16, M2): %LOCALAPPDATA%\Folio\WebView2, which internal/paths.WebView2Dir names.
-    RMDir /r "$LOCALAPPDATA\${INFO_PRODUCTNAME}\WebView2"
+    # "Folio" is hardcoded here to match internal/paths (not ${INFO_PRODUCTNAME}); the cache folder beside it stays.
+    RMDir /r "$LOCALAPPDATA\Folio\WebView2"
     # Builds before ticket 16 kept the profile in roaming AppData as folio.exe; clean that up too.
     RMDir /r "$AppData\${PRODUCT_EXECUTABLE}"
 

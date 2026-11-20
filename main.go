@@ -5,7 +5,6 @@ import (
 	"embed"
 	"log"
 	"os"
-	"strings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -51,12 +50,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("folio: webview2 profile path: %v", err)
 	}
-	// Only Folio's own origin may call the Wails runtime. In `wails3 dev` the page comes from Vite.
-	devURL := os.Getenv("FRONTEND_DEVSERVER_URL")
-	origins := []string{shell.AppOrigin}
-	if devURL != "" {
-		origins = append(origins, strings.TrimRight(devURL, "/"))
-	}
+	// Only Folio's own origin may call the Wails runtime, and the watchdog trusts only it.
+	origin := appOrigin()
 
 	app = application.New(application.Options{
 		Name:        "Folio",
@@ -71,7 +66,7 @@ func main() {
 			// /doc/<path> serves images from the docs folder (ticket 10, 06 D6).
 			// The runtime guard is outermost, so it sees every request before Wails' own transport (ticket 16).
 			Middleware: shell.Chain(
-				shell.RuntimeGuard(origins...),
+				shell.RuntimeGuard(origin),
 				shell.DocAssets(func() string { return shell.RootsOf(shellSvc).Docs }),
 			),
 		},
@@ -95,19 +90,18 @@ func main() {
 		},
 	})
 
-	win := app.Window.NewWithOptions(shell.WindowOptions(shellSvc, application.WebviewWindowOptions{
+	win := app.Window.NewWithOptions(shell.Harden(shell.WindowOptions(shellSvc, application.WebviewWindowOptions{
 		Title:     "Folio",
 		Width:     1440,
 		Height:    900,
 		MinWidth:  900,
 		MinHeight: 560,
 		URL:       "/",
-		// Deny every capability request (ticket 16, H3). Clipboard write is not a permission.
-		Permissions:                shell.DeniedPermissions(),
-		DefaultContextMenuDisabled: true, // no Save as / Print / Inspect menu (ticket 16, M1)
-		Windows:                    application.WindowsWindow{Permissions: shell.DeniedWebView2Permissions()},
-	}))
-	shell.WatchNavigation(win, devURL == "")
+	})))
+	// The navigation watchdog (ticket 16): Go resets the window unless the page answers Ready.
+	watchdog := shell.NewWindowWatchdog(win, origin)
+	shellSvc.SetReadyHandler(watchdog.Ready)
+	shell.WatchNavigation(win, watchdog)
 	shell.RememberWindow(shellSvc, win)
 	mem.Attach(memMon, win) // paused while the window is minimised or hidden
 	// Dev-only RAM bench hook (ticket 15): off unless FOLIO_BENCH=1 and FOLIO_BENCH_DIR are set.

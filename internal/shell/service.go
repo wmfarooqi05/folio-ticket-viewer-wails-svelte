@@ -53,6 +53,26 @@ type ShellService struct {
 	mu       sync.Mutex
 	saved    settings.Settings // what is on disk (or defaults)
 	override *RootCheck        // FOLIO_ROOT, applied on top of saved, never persisted
+	onReady  func(href string) // the navigation watchdog's answer hook (hostperms.go)
+}
+
+// SetReadyHandler registers what Ready calls. main.go points it at the navigation watchdog.
+func (s *ShellService) SetReadyHandler(f func(href string)) {
+	s.mu.Lock()
+	s.onReady = f
+	s.mu.Unlock()
+}
+
+// Ready is the frontend's answer to the watchdog's ping (ticket 16): "this page is Folio's".
+// href is the page's location.href. Only Folio's own origin can reach this method through the
+// runtime guard, so a foreign page cannot fake it.
+func (s *ShellService) Ready(href string) {
+	s.mu.Lock()
+	f := s.onReady
+	s.mu.Unlock()
+	if f != nil {
+		f(href)
+	}
 }
 
 // New loads settings from path and applies the FOLIO_ROOT override if set.

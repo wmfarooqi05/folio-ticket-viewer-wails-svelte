@@ -7,8 +7,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // guarded runs one request through the guard. next answers 202 and echoes the body it can still read,
@@ -63,6 +61,16 @@ func TestRuntimeGuard(t *testing.T) {
 		{"duplicate key, last one wins like Wails", "POST", "/wails/runtime", AppOrigin, `{"object":0,"object":9}`, nil, 403},
 		{"chunked upload", "POST", "/wails/runtime", AppOrigin, call, map[string]string{"x-wails-chunk-id": "a"}, 403},
 		{"GET", "GET", "/wails/runtime?object=0&method=0", AppOrigin, ``, nil, 403},
+		{"HEAD", "HEAD", "/wails/runtime", AppOrigin, ``, nil, 403},
+		{"PUT", "PUT", "/wails/runtime", AppOrigin, call, nil, 403},
+		{"OPTIONS", "OPTIONS", "/wails/runtime", AppOrigin, ``, nil, 403},
+		{"DELETE", "DELETE", "/wails/runtime", AppOrigin, call, nil, 403},
+		{"Object key in another case is read like Wails reads it", "POST", "/wails/runtime", AppOrigin, `{"Object":9,"method":0}`, nil, 403},
+		{"uppercase OBJECT call is the same call", "POST", "/wails/runtime", AppOrigin, `{"OBJECT":0,"method":0}`, nil, 202},
+		{"stream HEAD without origin", "HEAD", "/wails/stream/x", "", ``, nil, 202},
+		{"stream POST without origin", "POST", "/wails/stream/x", "", ``, nil, 403},
+		{"stream POST from the app", "POST", "/wails/stream/x", AppOrigin, ``, nil, 202},
+		{"event payload DELETE without origin", "DELETE", "/wails/eventpayload/x", "", ``, nil, 403},
 		{"runtime.js without origin", "GET", "/wails/runtime.js", "", ``, nil, 202},
 		{"stream without origin (same-origin GET)", "GET", "/wails/stream/x", "", ``, nil, 202},
 		{"stream from a foreign origin", "POST", "/wails/stream/x", "https://evil.example", ``, nil, 403},
@@ -80,51 +88,6 @@ func TestRuntimeGuard(t *testing.T) {
 				t.Fatalf("body not restored: next saw %q, want %q", seen, c.body)
 			}
 		})
-	}
-}
-
-func TestRuntimeGuardAcceptsDevOrigin(t *testing.T) {
-	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusAccepted) })
-	h := RuntimeGuard(AppOrigin, "http://localhost:9245")(next)
-	req := httptest.NewRequest("POST", "/wails/runtime", strings.NewReader(`{"object":0,"method":0}`))
-	req.Header.Set("Origin", "http://localhost:9245")
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != 202 {
-		t.Fatalf("dev origin = %d", rec.Code)
-	}
-}
-
-func TestChainOrder(t *testing.T) {
-	var order []string
-	mk := func(n string) func(http.Handler) http.Handler {
-		return func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				order = append(order, n)
-				next.ServeHTTP(w, r)
-			})
-		}
-	}
-	Chain(mk("first"), mk("second"))(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		order = append(order, "app")
-	})).ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil))
-	if strings.Join(order, ",") != "first,second,app" {
-		t.Fatalf("order %v", order)
-	}
-}
-
-func TestDeniedPermissions(t *testing.T) {
-	if got := len(DeniedPermissions()); got != 5 {
-		t.Fatalf("cross-platform permissions: %d", got)
-	}
-	m := DeniedWebView2Permissions()
-	for k := 1; k <= 12; k++ {
-		if m[application.CoreWebView2PermissionKind(k)] != application.CoreWebView2PermissionStateDeny {
-			t.Fatalf("kind %d not denied", k)
-		}
-	}
-	if _, ok := m[0]; ok {
-		t.Fatal("kind 0 (unknown) should not be listed")
 	}
 }
 

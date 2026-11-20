@@ -6,7 +6,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 // The runtime-request guard (ticket 16, findings H1 and H2).
@@ -35,18 +38,36 @@ const (
 // AppOrigin is the origin the Wails asset server uses on Windows.
 const AppOrigin = "http://wails.localhost"
 
-// maxRuntimeBody caps what the guard buffers; Wails itself chunks anything near 2 MB.
-const maxRuntimeBody = 16 << 20
+// The limits below are Wails v3.1.0's own (transport_http.go): the runtime splits a call whose JSON is
+// over 524288 characters into chunks, and the guard has to reassemble them to see the object.
+const (
+	maxRuntimeBody    = 64 << 20 // maxAssembledBytes
+	maxChunkBody      = 1 << 20  // maxChunkBodyBytes
+	maxChunkTotal     = 1024
+	chunkTTL          = 30 * time.Second
+	maxPendingUploads = 64
+)
 
 var allowedObjects = map[int]bool{ObjectCall: true, ObjectEvents: true, ObjectCancelCall: true}
 
-// RuntimeGuard rejects /wails/runtime* and /wails/stream/ requests that do not come from one of
-// origins, or that call a runtime object outside the allowlist. Everything else passes to next.
+type pendingUpload struct {
+	total   int
+	chunks  map[int][]byte
+	size    int
+	created time.Time
+}
+
+// RuntimeGuard rejects /wails/runtime*, /wails/stream/ and /wails/eventpayload/ requests that do not
+// come from one of origins, or that call a runtime object outside the allowlist. Everything else
+// passes to next. A chunked call is held back here until it is whole, checked as one JSON document,
+// and forwarded as a single ordinary request, so what was checked is exactly what Wails decodes.
 func RuntimeGuard(origins ...string) func(http.Handler) http.Handler {
 	ok := map[string]bool{}
 	for _, o := range origins {
 		ok[o] = true
 	}
+	var mu sync.Mutex
+	pending := map[string]*pendingUpload{}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			p := r.URL.Path
@@ -62,10 +83,11 @@ func RuntimeGuard(origins ...string) func(http.Handler) http.Handler {
 			}
 			origin := r.Header.Get("Origin")
 			if p != "/wails/runtime" {
-				// The stream and event-payload channels carry no runtime object and only hand data
-				// to the page. A same-origin GET carries no Origin header, so absent is fine; a
-				// foreign one is not.
-				if origin != "" && !ok[origin] {
+				// The stream and event-payload channels carry no runtime object. A same-origin GET
+				// or HEAD carries no Origin header, so absent is fine for those; a foreign one is
+				// not, and anything that can write must carry Folio's exact origin.
+				readOnly := r.Method == http.MethodGet || r.Method == http.MethodHead
+				if (readOnly && origin != "" && !ok[origin]) || (!readOnly && !ok[origin]) {
 					deny(w, r, "origin")
 					return
 				}
@@ -78,16 +100,34 @@ func RuntimeGuard(origins ...string) func(http.Handler) http.Handler {
 				deny(w, r, "origin")
 				return
 			}
-			if r.Method != http.MethodPost || r.Header.Get("x-wails-chunk-id") != "" {
+			if r.Method != http.MethodPost {
 				deny(w, r, "method")
 				return
 			}
-			body, err := io.ReadAll(io.LimitReader(r.Body, maxRuntimeBody+1))
-			if err != nil || len(body) > maxRuntimeBody {
-				deny(w, r, "body")
-				return
+			var body []byte
+			if id := r.Header.Get("x-wails-chunk-id"); id != "" {
+				whole, status := takeChunk(&mu, pending, id, r)
+				if status != 0 {
+					if status == http.StatusOK {
+						w.WriteHeader(http.StatusOK) // a middle chunk: Wails answers 200 and waits
+						return
+					}
+					deny(w, r, "chunk")
+					return
+				}
+				body = whole
+				// forward one ordinary request: no chunk headers, so Wails does not wait for more
+				r.Header.Del("x-wails-chunk-id")
+				r.Header.Del("x-wails-chunk-index")
+				r.Header.Del("x-wails-chunk-total")
+			} else {
+				var err error
+				body, err = io.ReadAll(io.LimitReader(r.Body, maxRuntimeBody+1))
+				if err != nil || len(body) > maxRuntimeBody {
+					deny(w, r, "body")
+					return
+				}
 			}
-			r.Body = io.NopCloser(bytes.NewReader(body)) // Wails reads it again
 			var req struct {
 				Object *int `json:"object"`
 			}
@@ -95,9 +135,60 @@ func RuntimeGuard(origins ...string) func(http.Handler) http.Handler {
 				deny(w, r, "object")
 				return
 			}
+			r.Body = io.NopCloser(bytes.NewReader(body)) // Wails reads it again
+			r.ContentLength = int64(len(body))
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// takeChunk stores one chunk. It returns the whole body once the last chunk is in. The status is 0 for
+// a whole body, 200 for "stored, more to come" and anything else for a refusal.
+func takeChunk(mu *sync.Mutex, pending map[string]*pendingUpload, id string, r *http.Request) ([]byte, int) {
+	total, err1 := strconv.Atoi(r.Header.Get("x-wails-chunk-total"))
+	index, err2 := strconv.Atoi(r.Header.Get("x-wails-chunk-index"))
+	if err1 != nil || err2 != nil || total <= 0 || total > maxChunkTotal || index < 0 || index >= total {
+		return nil, http.StatusBadRequest
+	}
+	chunk, err := io.ReadAll(io.LimitReader(r.Body, maxChunkBody+1))
+	if err != nil || len(chunk) > maxChunkBody {
+		return nil, http.StatusRequestEntityTooLarge
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	now := time.Now()
+	for k, u := range pending { // expire stale uploads, as Wails does
+		if now.Sub(u.created) > chunkTTL {
+			delete(pending, k)
+		}
+	}
+	u := pending[id]
+	if u == nil {
+		if len(pending) >= maxPendingUploads {
+			return nil, http.StatusServiceUnavailable
+		}
+		u = &pendingUpload{total: total, chunks: map[int][]byte{}, created: now}
+		pending[id] = u
+	}
+	if u.total != total {
+		delete(pending, id)
+		return nil, http.StatusBadRequest
+	}
+	u.size += len(chunk) - len(u.chunks[index])
+	u.chunks[index] = chunk
+	if u.size > maxRuntimeBody {
+		delete(pending, id)
+		return nil, http.StatusRequestEntityTooLarge
+	}
+	if len(u.chunks) < u.total {
+		return nil, http.StatusOK
+	}
+	delete(pending, id)
+	whole := make([]byte, 0, u.size)
+	for i := 0; i < u.total; i++ {
+		whole = append(whole, u.chunks[i]...)
+	}
+	return whole, 0
 }
 
 func deny(w http.ResponseWriter, r *http.Request, why string) {
