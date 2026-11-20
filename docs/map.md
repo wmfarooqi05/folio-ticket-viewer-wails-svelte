@@ -37,7 +37,8 @@ Reached when:
 **Planning destination reached on Nov 20, 2026.** Decisions 01–07 are closed. The build runs as slices 08–15 on the scaffolded app.
 
 1. **Merged Nov 20, 2026:** 08–14. 08 is done; 09–14 wait on the owner's checks in the app (see each ticket's `status_note`).
-2. **Next:** 15 (budgets, installer, v1 on the VM). It needs the owner, and it re-measures RAM (B crept to about 177 MB over 09–13; Mermaid adds about 40 MB).
+2. **Merged Nov 20, 2026:** 15 (budgets, RAM check, installer config). The installer build and the VM run wait on the owner.
+3. **Security and company VM (from the [security assessment](assets/16-security-assessment.md)):** now, in parallel: 16 (WebView2 host hardening), 17 (reproducible CI release), 18 (input and data hardening), and 20 (the owner asks company IT). After 16–18: 19 (focused security review). After 20: 21 (signing) and 22 (channel). Last: 23 (first install on the company VM), which also closes 15's AC3.
 
 ## Tickets
 
@@ -59,6 +60,14 @@ Reached when:
 | 13 | [Settings dialog and first-run flow](issues/13-settings-dialog.md) | build | — | — | blocked — merged, waiting on owner UI check | — |
 | 14 | [Dependency graph, Mermaid and syntax highlighting](issues/14-graph-mermaid-highlight.md) | build | [10](issues/10-document-view.md), [12](issues/12-cross-space-views.md) | — | blocked — merged, waiting on owner Graph check | — |
 | 15 | [Budgets enforced, installer, v1 release](issues/15-budgets-and-packaging.md) | build | [09](issues/09-cache-and-live-refresh.md), [11](issues/11-side-panel.md), [13](issues/13-settings-dialog.md), [14](issues/14-graph-mermaid-highlight.md) | — | blocked — merged, waiting on owner (installer, VM run) | — |
+| 16 | [Harden the WebView2 host](issues/16-webview2-host-hardening.md) | build | — | — | open | — |
+| 17 | [Reproducible build and CI release](issues/17-reproducible-ci-release.md) | build | — | — | open | — |
+| 18 | [Input and data hardening](issues/18-input-and-data-hardening.md) | build | — | — | open | — |
+| 19 | [Focused security review](issues/19-security-review.md) | verify | [16](issues/16-webview2-host-hardening.md), [17](issues/17-reproducible-ci-release.md), [18](issues/18-input-and-data-hardening.md) | — | blocked | — |
+| 20 | [Find out what company IT allows](issues/20-company-it-requirements.md) | task | — | owner | open | — |
+| 21 | [Code signing: whether and how](issues/21-code-signing.md) | decision | [20](issues/20-company-it-requirements.md) | — | blocked | — |
+| 22 | [How Folio reaches the company VM](issues/22-distribution-channel.md) | decision | [20](issues/20-company-it-requirements.md) | — | blocked | — |
+| 23 | [First install on the company VM](issues/23-first-company-vm-install.md) | verify | [16](issues/16-webview2-host-hardening.md), [17](issues/17-reproducible-ci-release.md), [20](issues/20-company-it-requirements.md), [22](issues/22-distribution-channel.md) | — | blocked | — |
 <!-- tickets:end -->
 
 ## Decisions so far
