@@ -63,14 +63,14 @@ Reached when:
 | 16 | [Harden the WebView2 host](issues/16-webview2-host-hardening.md) | build | — | owner | blocked — merged, waiting on owner (checks by eye, file Wails issue) | — |
 | 17 | [Reproducible build and CI release](issues/17-reproducible-ci-release.md) | build | — | owner | blocked — merged, waiting on owner (tag, compare CI hashes) | — |
 | 18 | [Input and data hardening](issues/18-input-and-data-hardening.md) | build | — | owner | blocked — merged, waiting on owner (hand checks) | — |
-| 19 | [Focused security review](issues/19-security-review.md) | verify | [16](issues/16-webview2-host-hardening.md), [17](issues/17-reproducible-ci-release.md), [18](issues/18-input-and-data-hardening.md), [24](issues/24-node-web-mode.md) | — | blocked | — |
+| 19 | [Focused security review](issues/19-security-review.md) | verify | [26](issues/26-retire-the-desktop-app.md) | — | blocked — runs after 26 | — |
 | 20 | [Find out what company IT allows](issues/20-company-it-requirements.md) | task | — | — | dropped — npm route needs nothing from IT | — |
 | 21 | [Code signing: whether and how](issues/21-code-signing.md) | decision | — | — | dropped — no exe goes to the VM | — |
 | 22 | [How Folio reaches the company VM](issues/22-distribution-channel.md) | decision | — | — | done — public npm package, run with npx (owner) | — |
 | 23 | [First run on the company VM](issues/23-first-company-vm-install.md) | verify | [24](issues/24-node-web-mode.md) | — | blocked | — |
 | 24 | [Web mode: a zero-dependency Node server, published to npm](issues/24-node-web-mode.md) | build | — | — | blocked — merged, waiting on owner (try tarball, publish) | — |
 | 25 | [Any docs layout, and choosing the docs roots in Settings](issues/25-generic-docs-layout.md) | build | — | owner | blocked — merged, waiting on owner (open this repo by hand) | — |
-| 26 | [Retire the Go desktop app, keep the code](issues/26-retire-the-desktop-app.md) | build | — | — | open | — |
+| 26 | [Retire the Go desktop app, keep the code](issues/26-retire-the-desktop-app.md) | build | — | — | in-progress | — |
 <!-- tickets:end -->
 
 ## Decisions so far

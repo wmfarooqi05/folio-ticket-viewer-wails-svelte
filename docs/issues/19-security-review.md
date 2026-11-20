@@ -3,8 +3,8 @@ type: verify
 status: blocked
 status_note: null
 waiting_on: null
-blocked_by: ["16", "17", "18", "24"]
-blocked_note: "reviews the hardened build, so it runs after the fixes land"
+blocked_by: ["26"]
+blocked_note: "16, 17, 18 and 24 are merged; runs after 26 retires the desktop app, so it reviews only what ships (the Node server and the frontend) (owner, Nov 20, 2026)"
 related: []
 superseded_by: null
 pr: []
