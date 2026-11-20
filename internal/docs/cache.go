@@ -10,8 +10,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -174,9 +176,19 @@ func writeAtomic(path string, b []byte) error {
 	return rerr
 }
 
+var freeOnce sync.Once
+
 // LogTimings writes a frontend timing line to the Go log, so a launch can be read
-// from one place (AC1). It has no other effect.
+// from one place (AC1). Its first call is the start timings, sent once the index is up; that
+// also schedules one debug.FreeOSMemory two seconds later, which hands the scan's garbage back
+// to Windows (measured in ticket 15: about -3.6 MB private at idle, nothing else changes).
 func (s *DocsService) LogTimings(line string) {
+	freeOnce.Do(func() {
+		go func() {
+			time.Sleep(2 * time.Second)
+			debug.FreeOSMemory()
+		}()
+	})
 	if len(line) > 500 {
 		line = line[:500]
 	}
