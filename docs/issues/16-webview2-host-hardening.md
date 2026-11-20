@@ -16,7 +16,9 @@ afk: true
 
 ## Why
 
-The security assessment ([16-security-assessment.md](../assets/16-security-assessment.md)) found that Folio's own rendering is sound, but the WebView2 host that Wails v3.1.0 sets up is not. None of these is exploitable alone. Each one decides how bad a first bug (a sanitiser or Mermaid bypass, a compromised dependency) would be: with them open, page script could launch any protocol handler, read the clipboard silently, or point Folio at any folder. This must land before the first install on the company VM.
+The security assessment ([16-security-assessment.md](../assets/16-security-assessment.md)) found that Folio's own rendering is sound, but the WebView2 host that Wails v3.1.0 sets up is not. None of these is exploitable alone. Each one decides how bad a first bug (a sanitiser or Mermaid bypass, a compromised dependency) would be: with them open, page script could launch any protocol handler, read the clipboard silently, or point Folio at any folder.
+
+Scope (Nov 20, 2026): this protects the **desktop exe** on the owner's PC. On the company VM Folio runs as an npm web app in Edge (24), where Edge's sandbox replaces this hardening, so this no longer blocks the VM.
 
 ## To do
 

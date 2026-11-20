@@ -38,7 +38,7 @@ Reached when:
 
 1. **Merged Nov 20, 2026:** 08–14. 08 is done; 09–14 wait on the owner's checks in the app (see each ticket's `status_note`).
 2. **Merged Nov 20, 2026:** 15 (budgets, RAM check, installer config). The installer build and the VM run wait on the owner.
-3. **Security and company VM (from the [security assessment](assets/16-security-assessment.md)):** now, in parallel: 16 (WebView2 host hardening), 17 (reproducible CI release), 18 (input and data hardening), and 20 (the owner asks company IT). After 16–18: 19 (focused security review). After 20: 21 (signing) and 22 (channel). Last: 23 (first install on the company VM), which also closes 15's AC3.
+3. **Company VM (decided Nov 20, 2026):** Folio goes there as a public npm package, `npx folio-viewer --docs <path>` (22). Now: 24 (Node web mode, published to npm), then 23 (first run on the VM). Security work for the desktop exe and both backends: 16, 17, 18 in any order, then 19 (focused review, which also covers the Node server).
 
 ## Tickets
 
@@ -63,11 +63,12 @@ Reached when:
 | 16 | [Harden the WebView2 host](issues/16-webview2-host-hardening.md) | build | — | — | open | — |
 | 17 | [Reproducible build and CI release](issues/17-reproducible-ci-release.md) | build | — | — | open | — |
 | 18 | [Input and data hardening](issues/18-input-and-data-hardening.md) | build | — | — | open | — |
-| 19 | [Focused security review](issues/19-security-review.md) | verify | [16](issues/16-webview2-host-hardening.md), [17](issues/17-reproducible-ci-release.md), [18](issues/18-input-and-data-hardening.md) | — | blocked | — |
-| 20 | [Find out what company IT allows](issues/20-company-it-requirements.md) | task | — | owner | open | — |
-| 21 | [Code signing: whether and how](issues/21-code-signing.md) | decision | [20](issues/20-company-it-requirements.md) | — | blocked | — |
-| 22 | [How Folio reaches the company VM](issues/22-distribution-channel.md) | decision | [20](issues/20-company-it-requirements.md) | — | blocked | — |
-| 23 | [First install on the company VM](issues/23-first-company-vm-install.md) | verify | [16](issues/16-webview2-host-hardening.md), [17](issues/17-reproducible-ci-release.md), [20](issues/20-company-it-requirements.md), [22](issues/22-distribution-channel.md) | — | blocked | — |
+| 19 | [Focused security review](issues/19-security-review.md) | verify | [16](issues/16-webview2-host-hardening.md), [17](issues/17-reproducible-ci-release.md), [18](issues/18-input-and-data-hardening.md), [24](issues/24-node-web-mode.md) | — | blocked | — |
+| 20 | [Find out what company IT allows](issues/20-company-it-requirements.md) | task | — | — | dropped — npm route needs nothing from IT | — |
+| 21 | [Code signing: whether and how](issues/21-code-signing.md) | decision | — | — | dropped — no exe goes to the VM | — |
+| 22 | [How Folio reaches the company VM](issues/22-distribution-channel.md) | decision | — | — | done — public npm package, run with npx (owner) | — |
+| 23 | [First run on the company VM](issues/23-first-company-vm-install.md) | verify | [24](issues/24-node-web-mode.md) | — | blocked | — |
+| 24 | [Web mode: a zero-dependency Node server, published to npm](issues/24-node-web-mode.md) | build | — | — | open | — |
 <!-- tickets:end -->
 
 ## Decisions so far

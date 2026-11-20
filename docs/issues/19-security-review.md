@@ -3,7 +3,7 @@ type: verify
 status: blocked
 status_note: null
 waiting_on: null
-blocked_by: ["16", "17", "18"]
+blocked_by: ["16", "17", "18", "24"]
 blocked_note: "reviews the hardened build, so it runs after the fixes land"
 related: []
 superseded_by: null
@@ -21,6 +21,7 @@ The owner's biggest concern is running Folio on a company VM. Per-ticket reviews
 ## To do
 
 - [ ] **IPC and host review (about 1.5 days).** Treat every bound Go method (`ShellService`, `DocsService`, `MemoryService`) as attacker-callable. Check the Wails runtime objects, navigation, new windows, downloads, permissions and the profile. Re-test the fixes from 16.
+- [ ] **Web-mode server review.** The Node server from 24 is a localhost service any page in the browser can reach. Check `Host` and token enforcement, cross-site requests, DNS rebinding, every endpoint, the `/doc/` path rules ported from Go, and that it binds to `127.0.0.1` only.
 - [ ] **Malicious-docs corpus (about 1 day).** Build a `fixtures/hostile/` tree containing:
   - HTML and SVG payloads;
   - Mermaid `click`, `%%{init}%%` and `htmlLabels` tricks;
