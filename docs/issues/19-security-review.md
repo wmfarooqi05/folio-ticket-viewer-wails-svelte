@@ -1,8 +1,8 @@
 ---
 type: verify
-status: open
-status_note: null
-waiting_on: null
+status: blocked
+status_note: "merged Nov 21, 2026; 3 fixed (1 medium, 2 low) plus 2 low hardening fixes; waiting on the owner to accept the residual risks in the Outcome"
+waiting_on: owner
 blocked_by: []
 blocked_note: null
 related: []
