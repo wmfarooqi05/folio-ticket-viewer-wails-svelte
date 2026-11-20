@@ -1,8 +1,8 @@
 ---
 type: build
-status: in-progress
-status_note: null
-waiting_on: null
+status: blocked
+status_note: "merged Nov 20, 2026; waiting on the owner: hand checks (UNC pick, Clear data across a restart, NSIS uninstall prompt)"
+waiting_on: owner
 blocked_by: []
 blocked_note: null
 related: ["13", "16", "19"]

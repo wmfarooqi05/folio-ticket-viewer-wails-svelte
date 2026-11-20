@@ -3,8 +3,8 @@ type: build
 status: open
 status_note: null
 waiting_on: null
-blocked_by: ["18"]
-blocked_note: "18 changes settings validation in both backends; start this once 18 is merged"
+blocked_by: []
+blocked_note: null
 related: ["04", "13", "18", "24"]
 superseded_by: null
 pr: []
