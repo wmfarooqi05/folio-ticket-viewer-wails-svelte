@@ -1,4 +1,4 @@
-import type { DocRecord, Edge, Index, Status } from './parser'
+import { fileAt, type DocRecord, type Edge, type Index, type Status } from './parser'
 
 /** What a blocker, related or superseded-by chip shows (03 spec, RefChip). */
 export interface ChipModel {
@@ -17,7 +17,7 @@ export interface ChipModel {
 /** Same space shows `05`, another space shows `space 05` (03 spec). */
 export function chipFor(edge: Edge, index: Index, fromSpace: string | null): ChipModel {
   const to = edge.to
-  const target: DocRecord | undefined = to.path ? index.files[to.path] : undefined
+  const target: DocRecord | undefined = to.path ? fileAt(index, to.path) : undefined
   const frag = to.fragment ? `#${to.fragment}` : ''
   let label = edge.ref
   if (target?.key && target.num) {

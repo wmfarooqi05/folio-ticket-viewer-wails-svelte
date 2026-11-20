@@ -3,6 +3,7 @@
   import * as api from './lib/api'
   import type { Config } from './lib/api'
   import { indexStore } from './lib/index-store.svelte'
+  import { fileAt } from './lib/parser'
   import { applyTheme, resolvedTheme } from './lib/theme/theme'
   import Logo from './components/Logo.svelte'
   import Tree from './components/Tree.svelte'
@@ -566,7 +567,7 @@
           <WaitingOn {index} onselect={select} />
         {:else if view === 'questions' && index}
           <OpenQuestions {index} onselect={select} />
-        {:else if index && selected && index.files[selected]?.kind === 'map'}
+        {:else if index && selected && fileAt(index, selected)?.kind === 'map'}
           <MapModes {index} path={selected} onselect={select}>
             {#snippet doc()}{@render docView()}{/snippet}
           </MapModes>

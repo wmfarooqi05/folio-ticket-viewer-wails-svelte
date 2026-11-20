@@ -923,8 +923,15 @@ function lookupFragment(rec: DocRecord, fragment: string): { ok: boolean; itemId
   return { ok: false, itemId: null }
 }
 
+/**
+ * The record at `path`, own keys only. A link's path comes from the document, so "/__proto__" or
+ * "/constructor" must not find Object.prototype (ticket 19: that threw and emptied the whole index).
+ * The index is a plain object again after a JSON round trip through the cache, so the check is here.
+ */
+export const fileAt = (index: Index, path: string): DocRecord | undefined => (Object.hasOwn(index.files, path) ? index.files[path] : undefined)
+
 function resolveInFile(path: string, fragment: string | null, index: Index): Resolved {
-  const rec = index.files[path]
+  const rec = fileAt(index, path)
   if (!rec) return { kind: 'internal', path, fragment, itemId: null, ok: false, problem: 'no-file' }
   if (!fragment) return { kind: 'internal', path, fragment: null, itemId: null, ok: true }
   const r = lookupFragment(rec, fragment)
@@ -934,7 +941,7 @@ function resolveInFile(path: string, fragment: string | null, index: Index): Res
 }
 
 function spaceOf(path: string, index: Index): string | null {
-  return index.files[path]?.space ?? SPACE_PATH.exec(path)?.[1] ?? null
+  return fileAt(index, path)?.space ?? SPACE_PATH.exec(path)?.[1] ?? null
 }
 
 /** A ref names a space in the old [a-z0-9-] form (a missing one is "no-file"), or any name of a space that exists. */
@@ -1212,7 +1219,7 @@ function crossFile(parsed: Record<string, DocRecord>, rootName: string): Index {
       for (const [field, refs] of fields) {
         for (const ref of refs) {
           const to = resolveRef(ref, p, index)
-          const toSpace = to.path ? index.files[to.path]?.space ?? null : null
+          const toSpace = to.path ? fileAt(index, to.path)?.space ?? null : null
           index.edges.push({ from: p, field, ref, to, crossSpace: to.path !== null && toSpace !== rec.space })
           if (!to.ok) {
             diagnostics.push({

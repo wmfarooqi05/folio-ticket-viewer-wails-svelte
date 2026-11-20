@@ -2,7 +2,7 @@
   import { tick, untrack } from 'svelte'
   import * as api from '../lib/api'
   import Icon from '../lib/icons/Icon.svelte'
-  import type { Index, LineRange } from '../lib/parser'
+  import { fileAt, type Index, type LineRange } from '../lib/parser'
   import { canBack, label, resolveEntry, top, type PanelStack } from '../lib/panel'
   import { chipsFor, questionChips, usedBy, type ChipModel } from '../lib/refs'
   import type { UrlTemplates } from '../lib/render/urls'
@@ -29,7 +29,7 @@
   let { stack, index, config = null, width = 360, onback, onpromote, onclose, onpush, onpopto, onnavigate }: Props = $props()
 
   const entry = $derived(top(stack))
-  const rec = $derived(entry && index ? (index.files[entry.path] ?? null) : null)
+  const rec = $derived(entry && index ? (fileAt(index, entry.path) ?? null) : null)
 
   // The text with the path and mtime it was read at, so a record and a text never mix: on a hop
   // the old file's text is never shown for the new record, and after a live refresh the range

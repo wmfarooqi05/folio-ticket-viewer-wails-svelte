@@ -168,7 +168,9 @@ export async function start(opts: Options): Promise<Running> {
     const q = target.indexOf('?')
     const rawPath = q < 0 ? target : target.slice(0, q)
     const query = new URLSearchParams(q < 0 ? '' : target.slice(q + 1))
-    if (!rawPath.startsWith('/') || rawPath.startsWith('//')) return text(res, 400, 'bad request')
+    // A browser never sends a raw backslash (it turns it into "/"), and the token exchange's Location
+    // is this path: "/\evil.com" there would be read as "//evil.com", another site (ticket 19).
+    if (!rawPath.startsWith('/') || rawPath.startsWith('//') || rawPath.includes('\\')) return text(res, 400, 'bad request')
 
     // The one-time exchange: the printed URL carries the token; it becomes a cookie and leaves the URL.
     if (req.method === 'GET' && query.has('token')) {

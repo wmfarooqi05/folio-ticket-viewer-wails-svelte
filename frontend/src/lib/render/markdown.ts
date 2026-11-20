@@ -154,6 +154,9 @@ export function resolveImagePath(src: string, fromPath: string): string | 'exter
   raw = raw.replace(/\\/g, '/')
   if (raw === '') return null
   const given = raw.split('/').map(decode)
+  // An encoded slash ("..%2f..%2fapi%2fevents") would come back as a real one in the /doc/ URL below, and
+  // the browser would then remove the ".." itself: a request for any path on this origin (ticket 19).
+  if (given.some((s) => s.includes('/') || s.includes('\\'))) return null
   const dir = fromPath.includes('/') ? fromPath.slice(0, fromPath.lastIndexOf('/')).split('/') : []
   const segs = raw.startsWith('/') ? given : [...dir, ...given]
   const out: string[] = []

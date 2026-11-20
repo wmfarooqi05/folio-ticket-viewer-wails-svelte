@@ -216,6 +216,12 @@ export const SECURE_KEYS = [
   'htmlLabels',
 ] as const
 
+/** What DOMPurify does to a diagram's label text (Mermaid's sanitizeText). The content of a dropped tag is kept. */
+export const LABEL_PURIFY = {
+  FORBID_TAGS: ['style', 'img', 'image', 'picture', 'source', 'video', 'audio', 'iframe', 'frame', 'object', 'embed', 'link', 'meta', 'base', 'form', 'input', 'svg', 'math', 'a', 'use'],
+  FORBID_ATTR: ['src', 'srcset', 'href', 'xlink:href', 'action', 'formaction', 'poster', 'background', 'data', 'ping'],
+}
+
 let configuredFor: string | null = null
 let seq = 0
 let inserts = 0
@@ -243,6 +249,10 @@ function configure(mermaid: Mermaid, theme: ThemeName): void {
     // dagre only: ELK is not bundled (vite.config.ts), and a directive or frontmatter in a
     // document must not be able to switch the layout, the security level or the limits
     layout: 'dagre',
+    // Mermaid draws HTML labels in a scratch element in the live page to measure them, before
+    // sanitizeSvg runs: an <img> in a label was fetched from there (blocked only by the CSP, ticket 19).
+    // Labels are text; drop anything that loads or links. Mermaid's default for this is FORBID_TAGS: style.
+    dompurifyConfig: LABEL_PURIFY,
     secure: [...SECURE_KEYS],
   })
   configuredFor = key
