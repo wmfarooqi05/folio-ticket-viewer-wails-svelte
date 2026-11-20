@@ -261,6 +261,16 @@ function configure(mermaid: Mermaid, theme: ThemeName): void {
 /** `flowchart-elk` is the ELK flowchart; it is drawn with dagre like every other flowchart. */
 export const noElk = (src: string): string => src.replace(/^(\s*)flowchart-elk\b/m, '$1flowchart')
 
+/**
+ * Sequence-diagram actor menus (`link`, `links`, and the older `properties` / `details` lines) make
+ * Mermaid build popups with inline `onclick` handlers in its scratch element. The CSP blocks them and
+ * sanitizeSvg strips them, but Folio never needs them, so they are removed from the source first
+ * (ticket 19, finding 4). Only in sequence diagrams; a message line (it has an arrow) is never touched.
+ */
+const ACTOR_MENU = /^[ \t]*(?:links?|properties|details)[ \t]+[^:\n<>-]+:.*$/gm
+export const dropActorMenus = (src: string): string =>
+  /^\s*sequenceDiagram\b/m.test(src) ? src.replace(ACTOR_MENU, '') : src
+
 /** The placeholder shows the diagram's source: the fallback and the error state. */
 export function showSource(el: HTMLElement, src: string, error: string | null): void {
   el.querySelector('.mermaid-out')?.remove()
@@ -329,7 +339,7 @@ export function renderBlocks(blocks: Block[], ctx: RenderContext): Promise<void>
       let svg: string
       try {
         configure(mermaid, ctx.theme)
-        svg = (await mermaid.render(id, noElk(b.src))).svg
+        svg = (await mermaid.render(id, noElk(dropActorMenus(b.src)))).svg
       } catch (e) {
         if (ctx.alive()) showSource(b.el, b.src, oneLine(e))
         continue
