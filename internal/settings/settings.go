@@ -323,8 +323,12 @@ func IsNetworkLinkTarget(t string) bool {
 	if !IsNetworkPath(t) {
 		return false
 	}
-	return !regexp.MustCompile(`^[\\/]{2}[?.][\\/][A-Za-z]:([\\/]|$)`).MatchString(t)
+	return !localDeviceTarget.MatchString(t)
 }
+
+// localDeviceTarget matches the device-path forms that are local: a drive (\\?\C:\...) and a volume
+// mount point, which Windows reads back as \\?\Volume{GUID}\ (also with the \??\ prefix).
+var localDeviceTarget = regexp.MustCompile(`(?i)^(?:[\\/]{2}[?.][\\/]|\\\?\?\\)(?:[A-Za-z]:(?:[\\/]|$)|Volume\{[0-9a-f-]+\}(?:[\\/]|$))`)
 
 // IsNetworkPath reports whether p is a UNC path (\\host\share) or a device path (\\?\, \\.\, \??\).
 // Opening one makes Windows talk SMB with the user's credentials, so it is never used as a root

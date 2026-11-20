@@ -65,7 +65,14 @@ func (f LinkFS) PathReachesNetwork(p string) bool {
 		}
 		target, err := f.Readlink(next)
 		if err != nil {
-			return true // a link (or junction) that cannot be read cannot be shown to be local
+			if fi.Mode()&os.ModeSymlink != 0 {
+				return true // a symlink that cannot be read cannot be shown to be local
+			}
+			// A reparse point that is not a symlink or mount point (a OneDrive Files On-Demand or
+			// ProjFS placeholder) has no target to read: it is a plain folder or file.
+			hops--
+			cur = next
+			continue
 		}
 		if IsNetworkLinkTarget(target) {
 			return true

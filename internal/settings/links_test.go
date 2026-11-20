@@ -90,20 +90,62 @@ func TestPathReachesNetwork(t *testing.T) {
 // String exists so the map above reads as a list of paths.
 func String(s string) string { return s }
 
-func TestJunctionThatCannotBeReadIsRefused(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("Windows paths")
-	}
-	f := LinkFS{
+func unreadable(mode os.FileMode) LinkFS {
+	return LinkFS{
 		Lstat: func(p string) (os.FileInfo, error) {
 			if p == `C:\j` {
-				return fakeInfo{mode: os.ModeIrregular}, nil
+				return fakeInfo{mode: mode}, nil
 			}
 			return nil, fs.ErrNotExist
 		},
 		Readlink: func(string) (string, error) { return "", fs.ErrInvalid },
 	}
-	if !f.PathReachesNetwork(`C:\j\x`) {
-		t.Fatal("a junction whose target cannot be read must be refused")
+}
+
+func TestUnreadableSymlinkIsRefused(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows paths")
+	}
+	if !unreadable(os.ModeSymlink).PathReachesNetwork(`C:\j\x`) {
+		t.Fatal("a symlink whose target cannot be read must be refused")
+	}
+}
+
+// OneDrive Files On-Demand and ProjFS placeholders are reparse points with no target to read.
+func TestUnreadableNonSymlinkReparsePointIsAPlainFolder(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows paths")
+	}
+	if unreadable(os.ModeIrregular).PathReachesNetwork(`C:\j\x`) {
+		t.Fatal("a placeholder reparse point was refused")
+	}
+}
+
+// A volume mount point (C:\mnt\data) reads back as \\?\Volume{GUID}\: local, not a share.
+func TestVolumeMountPointIsLocal(t *testing.T) {
+	for _, target := range []string{`\\?\Volume{0f3a2c1e-5b7d-4e8f-9a10-1234567890ab}\`, `\??\Volume{0F3A2C1E-5B7D-4E8F-9A10-1234567890AB}\`, `\\?\C:\data`} {
+		if IsNetworkLinkTarget(target) {
+			t.Errorf("%s was taken for a network target", target)
+		}
+	}
+	for _, target := range []string{`\\host\share`, `\\?\UNC\h\s`, `\\.\pipe\x`, `\\?\Volumes\x`} {
+		if !IsNetworkLinkTarget(target) {
+			t.Errorf("%s should be a network or device target", target)
+		}
+	}
+	if runtime.GOOS != "windows" {
+		return
+	}
+	f := LinkFS{
+		Lstat: func(p string) (os.FileInfo, error) {
+			if p == `C:\mnt` {
+				return fakeInfo{mode: os.ModeIrregular}, nil
+			}
+			return nil, fs.ErrNotExist
+		},
+		Readlink: func(string) (string, error) { return `\\?\Volume{0f3a2c1e-5b7d-4e8f-9a10-1234567890ab}\`, nil },
+	}
+	if f.PathReachesNetwork(`C:\mnt\data`) {
+		t.Fatal("a path through a volume mount point was refused")
 	}
 }
