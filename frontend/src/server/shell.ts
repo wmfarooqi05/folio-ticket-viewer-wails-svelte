@@ -55,6 +55,7 @@ export interface RootCheck {
 }
 
 const isDir = (p: string) => {
+  if (S.pathReachesNetwork(p)) return false // a link to a share: never stat it
   try {
     return statSync(p).isDirectory()
   } catch {

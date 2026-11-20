@@ -42,6 +42,12 @@ func SafeJoin(root, rel string) (string, error) {
 	if err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
 		return "", ErrEscapesRoot
 	}
+	// A link anywhere on the way (in the docs folder, in a folder, in a link's target) that leads to
+	// \\host\share would make the Lstat and EvalSymlinks below talk SMB with the user's credentials (a
+	// hostile cloned repo). Resolve the path by hand first: Lstat and Readlink only, one part at a time.
+	if settings.PathReachesNetwork(full) {
+		return "", ErrEscapesRoot
+	}
 	// Junctions. Go's EvalSymlinks does not follow them (it fails or returns them unchanged),
 	// and Lstat reports them as irregular files, so any such folder on the way is refused.
 	cur := root
@@ -55,11 +61,6 @@ func SafeJoin(root, rel string) (string, error) {
 			return "", ErrEscapesRoot
 		}
 		if fi.Mode()&os.ModeIrregular != 0 {
-			return "", ErrEscapesRoot
-		}
-		// A link inside a local repo that points at \\host\share would make EvalSymlinks below talk
-		// SMB with the user's credentials (a hostile cloned repo). Read the link, never follow it.
-		if fi.Mode()&os.ModeSymlink != 0 && linkLeadsToNetwork(cur, os.Lstat, os.Readlink) {
 			return "", ErrEscapesRoot
 		}
 	}
@@ -81,31 +82,6 @@ func SafeJoin(root, rel string) (string, error) {
 		return "", ErrEscapesRoot
 	}
 	return full, nil
-}
-
-// linkLeadsToNetwork follows a chain of symlinks with Lstat and Readlink only (never Stat, which
-// would contact the target) and reports whether any hop names a network or device path. A chain
-// that is too long counts as yes.
-func linkLeadsToNetwork(p string, lstat func(string) (os.FileInfo, error), readlink func(string) (string, error)) bool {
-	cur := p
-	for range 16 {
-		fi, err := lstat(cur)
-		if err != nil || fi.Mode()&os.ModeSymlink == 0 {
-			return false
-		}
-		t, err := readlink(cur)
-		if err != nil {
-			return true
-		}
-		if settings.IsNetworkLinkTarget(t) {
-			return true
-		}
-		if !filepath.IsAbs(t) {
-			t = filepath.Join(filepath.Dir(cur), t)
-		}
-		cur = t
-	}
-	return true
 }
 
 // ResolveMarkdown is SafeJoin plus the .md-only rule for reads.

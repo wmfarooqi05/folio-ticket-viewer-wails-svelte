@@ -471,13 +471,13 @@ func ValidateAllowing(s Settings, allowNetwork []string) error {
 		// Checked before any file-system call: even a stat on a UNC path starts SMB.
 		add("repoRoot", rootMsg)
 	} else if s.RepoRoot != "" {
-		if st, err := os.Stat(s.RepoRoot); err != nil || !st.IsDir() {
+		if !SafeIsDir(s.RepoRoot) {
 			add("repoRoot", "must be an existing folder")
 		} else if pathsOK {
 			docs := s.DocsPath()
 			found := false
 			for _, r := range s.DocsRoots {
-				if st, err := os.Stat(filepath.Join(docs, filepath.FromSlash(r))); err == nil && st.IsDir() {
+				if SafeIsDir(filepath.Join(docs, filepath.FromSlash(r))) {
 					found = true
 					break
 				}

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io/fs"
 	"log"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -12,6 +11,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/settings"
 )
 
 const (
@@ -247,7 +248,7 @@ func (w *watcher) loop() {
 				continue
 			}
 			if ev.Has(fsnotify.Create) {
-				if st, err := os.Stat(ev.Name); err == nil && st.IsDir() {
+				if st, err := settings.SafeStat(ev.Name); err == nil && st.IsDir() {
 					if !skipDir(filepath.Base(ev.Name)) {
 						go w.walkNew(ev.Name)
 					}
@@ -335,7 +336,7 @@ func (s *DocsService) judge(paths map[string]struct{}) ChangeSet {
 		if err != nil {
 			continue
 		}
-		st, err := os.Stat(full)
+		st, err := settings.SafeStat(full)
 		if errors.Is(err, fs.ErrNotExist) {
 			probes = append(probes, probe{path: p, gone: true})
 			continue

@@ -73,6 +73,10 @@ func New(path string) *ShellService {
 	}
 	s.saved = cfg
 	if env := os.Getenv(EnvRoot); env != "" {
+		// A relative value (".") is taken against the working folder, as a person typing it meant.
+		if abs, err := filepath.Abs(env); err == nil {
+			env = abs
+		}
 		if rc := InspectRoot(env, cfg.DocsRoots); rc.OK {
 			s.override = &rc
 			log.Printf("shell: %s=%s -> repoRoot=%s docsDir=%s", EnvRoot, env, rc.RepoRoot, rc.DocsDir)
@@ -288,7 +292,7 @@ func InspectRootAllowing(abs string, roots []string, allowNetwork []string) Root
 		fail.Message = msg
 		return fail
 	}
-	if st, err := os.Stat(abs); err != nil || !st.IsDir() {
+	if !settings.SafeIsDir(abs) {
 		fail.Message = "that is not a folder"
 		return fail
 	}
@@ -308,7 +312,7 @@ func InspectRootAllowing(abs string, roots []string, allowNetwork []string) Root
 func probe(dir string, roots []string) (found, missing []string) {
 	found, missing = []string{}, []string{}
 	for _, r := range roots {
-		if st, err := os.Stat(filepath.Join(dir, filepath.FromSlash(r))); err == nil && st.IsDir() {
+		if settings.SafeIsDir(filepath.Join(dir, filepath.FromSlash(r))) {
 			found = append(found, r)
 		} else {
 			missing = append(missing, r)
@@ -400,7 +404,7 @@ func InspectDocsAllowing(repoRoot, docsDir string, roots []string, allowNetwork 
 		rc.Message = msg
 		return rc
 	}
-	if st, err := os.Stat(repoRoot); err != nil || !st.IsDir() {
+	if !settings.SafeIsDir(repoRoot) {
 		rc.Message = "that is not a folder"
 		return rc
 	}

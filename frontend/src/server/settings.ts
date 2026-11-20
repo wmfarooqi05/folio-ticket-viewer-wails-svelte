@@ -1,6 +1,6 @@
 // settings.json: the same file, format and validation as internal/settings (Go).
 // It writes only the app's own config, never a ticket file.
-import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync, openSync, fsyncSync, closeSync, unlinkSync } from 'node:fs'
+import { lstatSync, mkdirSync, readFileSync, readlinkSync, renameSync, statSync, writeFileSync, openSync, fsyncSync, closeSync, unlinkSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { randomBytes } from 'node:crypto'
@@ -301,7 +301,77 @@ function templateError(t: string): string | null {
   return 'must be an https:// URL'
 }
 
+/** The two calls pathReachesNetwork makes, so tests can inject a fake disk. Neither may follow a link. */
+export interface LinkFs {
+  /** null when the path does not exist */
+  lstat(p: string): { isSymbolicLink(): boolean } | null
+  readlink(p: string): string
+}
+export const realLinks: LinkFs = {
+  lstat: (p) => {
+    try {
+      return lstatSync(p)
+    } catch {
+      return null
+    }
+  },
+  readlink: (p) => readlinkSync(p),
+}
+
+const linkParts = (s: string) => s.split(/[\\/]/).filter((x) => x !== '')
+
+/**
+ * True when resolving p would reach a network or device path (\\host\share) through a symlink or
+ * junction anywhere on the way. Same algorithm as Go's settings.PathReachesNetwork: resolve one part
+ * at a time from the left, lstat each part, readlink every link, run the network check on its target
+ * before touching it and continue from the target, at most 16 links. A p that is itself a network
+ * path returns false (that is rootShapeError's business); a part that does not exist ends the walk.
+ */
+export function pathReachesNetwork(p: string, fs: LinkFs = realLinks): boolean {
+  if (p === '' || isNetworkPath(p)) return false
+  const root = path.parse(p).root
+  if (root === '') return false // not absolute: callers pass absolute paths
+  let cur = root
+  let pending = linkParts(p.slice(root.length))
+  let hops = 0
+  while (pending.length > 0) {
+    const part = pending.shift()!
+    if (part === '.') continue
+    if (part === '..') {
+      cur = path.dirname(cur) // cur holds no links: it is already resolved
+      continue
+    }
+    const next = path.join(cur, part)
+    const st = fs.lstat(next)
+    if (!st) return false
+    if (!st.isSymbolicLink()) {
+      cur = next
+      continue
+    }
+    if (++hops > 16) return true
+    let target: string
+    try {
+      target = fs.readlink(next)
+    } catch {
+      return true // a link that cannot be read cannot be shown to be local
+    }
+    if (isNetworkLinkTarget(target)) return true
+    const device = /^[\\/]{2}[?.][\\/](?=[A-Za-z]:)/.exec(target) // \\?\C:\x is a local drive
+    if (device) target = target.slice(device[0].length)
+    if (/^[A-Za-z]:[\\/]/.test(target)) {
+      cur = target.slice(0, 3)
+      target = target.slice(3)
+    } else if (/^[\\/]/.test(target)) {
+      cur = path.parse(cur).root // \x\b.md is on the drive of the folder the link is in
+      target = target.slice(1)
+    }
+    pending = [...linkParts(target), ...pending]
+  }
+  return false
+}
+
 const isDir = (p: string) => {
+  if (pathReachesNetwork(p)) return false
   try {
     return statSync(p).isDirectory()
   } catch {

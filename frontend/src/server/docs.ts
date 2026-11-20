@@ -7,6 +7,7 @@ import { lstat, open, readFile, readdir, rm, stat, unlink } from 'node:fs/promis
 import os from 'node:os'
 import path from 'node:path'
 import { inScope, resolveMarkdown, skipDir } from './paths'
+import { pathReachesNetwork } from './settings'
 
 export const CHANGED_EVENT = 'docs:changed'
 const READ_WORKERS = 4
@@ -120,6 +121,18 @@ export function isFolioCacheDir(dir: string): boolean {
   return path.basename(d).toLowerCase() === 'cache' && path.basename(path.dirname(d)).toLowerCase() === 'folio'
 }
 
+/**
+ * Fails when the docs folder or a docs root is, or sits behind, a link to a network path: a repo whose docs or
+ * docs/modules is a symlink to \\host\share would start SMB on the first stat. Runs before the watcher and the walk.
+ */
+export function refuseNetworkLinks(r: Roots): void {
+  if (pathReachesNetwork(r.docs)) throw new Error(`the docs folder ${r.docs} leads to a network path through a link`)
+  for (const root of r.roots) {
+    const base = path.join(r.docs, root)
+    if (pathReachesNetwork(base)) throw new Error(`the docs root ${base} leads to a network path through a link`)
+  }
+}
+
 /** The docs root as the cache sees it: case-insensitive, forward slashes. */
 export function normRoot(docs: string): string {
   let n = path.normalize(docs)
@@ -173,6 +186,7 @@ export class DocsService {
   private async doScan(announce: boolean): Promise<ScanResult> {
     const r = this.roots()
     if (r.docs === '') throw new Error('no docs root is configured')
+    refuseNetworkLinks(r)
     const gen = this.startWatcher(r)
     const start = Date.now()
     const found = await walkMarkdown(r)
@@ -492,7 +506,7 @@ async function walkMarkdown(r: Roots): Promise<Map<string, Stamp>> {
   for (const root of r.roots) {
     const base = path.join(r.docs, root)
     try {
-      if (!(await stat(base)).isDirectory()) continue
+      if (pathReachesNetwork(base) || !(await stat(base)).isDirectory()) continue
     } catch {
       continue // a missing root is skipped
     }
@@ -607,7 +621,7 @@ class Watcher {
     // No .md extension: a new directory (walk it for files made before the watch saw it), or one
     // deleted or renamed away (the event names only the directory, so sweep what is known beneath it).
     this.busy++
-    stat(abs).then(
+    ;(pathReachesNetwork(abs) ? Promise.reject(Object.assign(new Error('link to a network path'), { code: 'ELINK' })) : stat(abs)).then(
       (st) => {
         if (st.isDirectory() && !skipDir(path.basename(abs))) void this.walkNew(abs).finally(() => this.busy--)
         else this.busy--

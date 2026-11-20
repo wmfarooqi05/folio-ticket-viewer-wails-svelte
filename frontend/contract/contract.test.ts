@@ -406,6 +406,17 @@ for (const d of drivers) {
       const batch = await c.b.call('readBatch', ['modules/big/evil.md']).then(() => 'ok', () => 'rejected')
       expect(batch).toBe('rejected')
       expect(Date.now() - t0, 'refused slowly: it probably talked to the network').toBeLessThan(2000)
+      // a link partway down a link's target: x.md -> ..\..\..\evil\y.md, with evil a link to the share
+      symlinkSync(String.raw`\\folio-contract-nohost\share`, path.join(c.repo, 'evil'), 'dir')
+      const hop = path.join(c.docs, 'modules', 'big', 'hop.md')
+      symlinkSync(String.raw`..\..\..\evil\y.md`, hop, 'file')
+      await expect(c.b.call('readFile', 'modules/big/hop.md')).rejects.toThrow()
+      // the docs root itself is a link to the share: the first scan must not start SMB
+      rmSync(path.join(c.docs, 'modules'), { recursive: true, force: true })
+      symlinkSync(String.raw`\\folio-contract-nohost\share\modules`, path.join(c.docs, 'modules'), 'dir')
+      const t1 = Date.now()
+      await expect(c.b.call('scan')).rejects.toThrow('network')
+      expect(Date.now() - t1, 'the scan was slow: it probably talked to the network').toBeLessThan(2000)
     })
 
     // ---- clear data (L5) --------------------------------------------------------------

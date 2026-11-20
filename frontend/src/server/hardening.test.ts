@@ -4,8 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DocsService, MAX_FILE_BYTES } from './docs'
-import { linkLeadsToNetwork } from './paths'
-import { isNetworkLinkTarget, rootShapeError } from './settings'
+import { isNetworkLinkTarget, pathReachesNetwork, rootShapeError, type LinkFs } from './settings'
 
 let tmp: string
 let docs: string
@@ -63,32 +62,57 @@ describe('files that are not plain files', () => {
   })
 })
 
-describe('links that lead to the network', () => {
+describe.skipIf(process.platform !== 'win32')('links that lead to the network', () => {
+  const dirs = new Set([String.raw`C:\r`, String.raw`C:\r\docs`, String.raw`C:\r\docs\modules`, String.raw`C:\r\docs\modules\a`, String.raw`C:\other`, String.raw`C:\r\ok`])
   const links: Record<string, string> = {
-    'evil.md': String.raw`\\evil\share\x.md`,
-    'dev.md': String.raw`\\?\UNC\evil\share\x.md`,
-    'hop.md': 'evil.md',
-    'local.md': String.raw`C:\other\a.md`,
-    'drive.md': String.raw`\\?\C:\other\a.md`,
-    'loop.md': 'loop.md',
+    // a link whose target passes through another link: ..\..\..\evil\y.md, evil -> \\host\share
+    [String.raw`C:\r\docs\modules\a\x.md`]: String.raw`..\..\..\evil\y.md`,
+    [String.raw`C:\r\evil`]: String.raw`\\host\share`,
+    // the docs folder is a link to a share
+    [String.raw`C:\bad`]: String.raw`\\host\share\docs`,
+    // a rooted target is taken on the link's own drive: \x\b.md, with C:\x a link to a share
+    [String.raw`C:\r\rooted.md`]: String.raw`\x\b.md`,
+    [String.raw`C:\x`]: String.raw`\\evil\s`,
+    [String.raw`C:\r\ok\l.md`]: String.raw`C:\other\a.md`,
+    [String.raw`C:\r\ok\rel.md`]: String.raw`..\..\other\a.md`,
+    [String.raw`C:\r\ok\dev.md`]: String.raw`\\?\C:\other\a.md`,
+    [String.raw`C:\r\loop.md`]: 'loop.md',
   }
-  const fs = {
-    lstat: async (p: string) => {
-      if (!(path.basename(p) in links)) throw new Error('ENOENT')
-      return { isSymbolicLink: () => true }
+  const asked: string[] = []
+  const fs: LinkFs = {
+    lstat: (p) => {
+      asked.push(p)
+      if (p in links) return { isSymbolicLink: () => true }
+      return dirs.has(p) ? { isSymbolicLink: () => false } : null
     },
-    readlink: async (p: string) => links[path.basename(p)],
+    readlink: (p) => links[p],
   }
   it.each([
-    ['evil.md', true],
-    ['dev.md', true],
-    ['hop.md', true],
-    ['local.md', false],
-    ['drive.md', false],
-    ['loop.md', true],
-    ['plain.md', false],
-  ])('%s -> %s', async (name, want) => {
-    expect(await linkLeadsToNetwork(path.join(tmp, name), fs)).toBe(want)
+    [String.raw`C:\r\docs\modules\a\x.md`, true],
+    [String.raw`C:\bad\modules`, true],
+    [String.raw`C:\bad`, true],
+    [String.raw`C:\r\rooted.md`, true],
+    [String.raw`C:\r\ok\l.md`, false],
+    [String.raw`C:\r\ok\rel.md`, false],
+    [String.raw`C:\r\ok\dev.md`, false],
+    [String.raw`C:\r\loop.md`, true],
+    [String.raw`C:\r\docs\modules\a\y.md`, false],
+    [String.raw`C:\r\docs\..\ok`, false],
+    [String.raw`\\host\share\repo`, false],
+  ])('%s -> %s', (p, want) => {
+    asked.length = 0
+    expect(pathReachesNetwork(p, fs)).toBe(want)
+    // never asked about a path that lies behind a link: that lstat would follow it
+    for (const q of asked) for (const l of Object.keys(links)) expect(q.toLowerCase().startsWith(l.toLowerCase() + '\\'), `${q} is behind ${l}`).toBe(false)
+  })
+  it('refuses a junction or link that cannot be read', () => {
+    const bad: LinkFs = {
+      lstat: (p) => (p === String.raw`C:\j` ? { isSymbolicLink: () => true } : null),
+      readlink: () => {
+        throw new Error('EINVAL')
+      },
+    }
+    expect(pathReachesNetwork(String.raw`C:\j\x`, bad)).toBe(true)
   })
   it('knows a local drive written as a device path', () => {
     expect(isNetworkLinkTarget(String.raw`\\?\C:\x`)).toBe(false)

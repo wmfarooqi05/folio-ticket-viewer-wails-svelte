@@ -75,35 +75,3 @@ func TestNonRegularFilesAreNotRead(t *testing.T) {
 		t.Fatalf("ReadFile: %v", err)
 	}
 }
-
-// A symlink that points at a network path is never followed (a hostile cloned repo).
-func TestLinkLeadsToNetwork(t *testing.T) {
-	links := map[string]string{
-		`C:\r\evil.md`:  `\\evil\share\x.md`,
-		`C:\r\dev.md`:   `\\?\UNC\evil\share\x.md`,
-		`C:\r\hop.md`:   `C:\r\evil.md`,
-		`C:\r\rel.md`:   `evil.md`,
-		`C:\r\local.md`: `C:\other\a.md`,
-		`C:\r\drive.md`: `\\?\C:\other\a.md`,
-		`C:\r\loop.md`:  `loop.md`,
-	}
-	lstat := func(p string) (os.FileInfo, error) {
-		if _, ok := links[p]; ok {
-			return fakeLink{}, nil
-		}
-		return nil, os.ErrNotExist
-	}
-	readlink := func(p string) (string, error) { return links[p], nil }
-	for p, want := range map[string]bool{
-		`C:\r\evil.md`: true, `C:\r\dev.md`: true, `C:\r\hop.md`: true, `C:\r\rel.md`: true,
-		`C:\r\local.md`: false, `C:\r\drive.md`: false, `C:\r\loop.md`: true, `C:\r\plain.md`: false,
-	} {
-		if got := linkLeadsToNetwork(p, lstat, readlink); got != want {
-			t.Errorf("linkLeadsToNetwork(%s) = %v, want %v", p, got, want)
-		}
-	}
-}
-
-type fakeLink struct{ os.FileInfo }
-
-func (fakeLink) Mode() os.FileMode { return os.ModeSymlink }

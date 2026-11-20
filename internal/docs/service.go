@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/settings"
 )
 
 // ChangedEvent is the one debounced event Go emits (a ChangeSet payload).
@@ -173,6 +175,9 @@ func (s *DocsService) scan(announce bool) (ScanResult, error) {
 	r := s.roots()
 	if r.Docs == "" {
 		return ScanResult{}, errors.New("no docs root is configured")
+	}
+	if err := refuseNetworkLinks(r); err != nil {
+		return ScanResult{}, err
 	}
 	gen := s.startWatcher(r)
 
@@ -351,7 +356,7 @@ func walkMarkdown(r Roots) (map[string]stamp, error) {
 	found := map[string]stamp{}
 	for _, root := range r.Roots {
 		base := filepath.Join(r.Docs, filepath.FromSlash(root))
-		if st, err := os.Stat(base); err != nil || !st.IsDir() {
+		if !settings.SafeIsDir(base) {
 			continue
 		}
 		err := filepath.WalkDir(base, func(p string, d fs.DirEntry, err error) error {
@@ -398,6 +403,22 @@ func grownSize(full string) int64 {
 		return st.Size()
 	}
 	return MaxFileBytes + 1
+}
+
+// refuseNetworkLinks fails when the docs folder or a docs root is, or sits behind, a link to a
+// network path: a repo whose docs or docs/modules is a symlink to \\host\share would start SMB on
+// the first stat. It runs before the watcher is started and before the walk.
+func refuseNetworkLinks(r Roots) error {
+	if settings.PathReachesNetwork(r.Docs) {
+		return fmt.Errorf("the docs folder %s leads to a network path through a link: %w", r.Docs, settings.ErrNetworkLink)
+	}
+	for _, root := range r.Roots {
+		base := filepath.Join(r.Docs, filepath.FromSlash(root))
+		if settings.PathReachesNetwork(base) {
+			return fmt.Errorf("the docs root %s leads to a network path through a link: %w", base, settings.ErrNetworkLink)
+		}
+	}
+	return nil
 }
 
 // skipDir is the scope rule shared by the walk and the watcher: node_modules, dot

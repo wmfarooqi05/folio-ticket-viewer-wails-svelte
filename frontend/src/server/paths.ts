@@ -1,8 +1,8 @@
 // Path rules, ported from internal/docs/paths.go (SafeJoin, ResolveMarkdown, skipDir).
 // Zero dependencies: Node built-ins only. The contract tests run the same cases against
 // the Go services, so the two cannot drift.
-import { lstat, readlink, realpath } from 'node:fs/promises'
-import { isNetworkLinkTarget } from './settings'
+import { lstat, realpath } from 'node:fs/promises'
+import { pathReachesNetwork } from './settings'
 import path from 'node:path'
 
 export class PathError extends Error {}
@@ -37,18 +37,19 @@ export async function safeJoin(root: string, rel: string): Promise<string> {
   const full = path.join(root, ...segs)
   if (!within(root, full)) throw escapes()
 
+  // A link anywhere on the way (in the docs folder, in a folder, in a link's target) that leads to
+  // \\host\share would make the lstat and realpath below talk SMB with the user's credentials (a
+  // hostile cloned repo). Resolve the path by hand first: lstat and readlink only, a part at a time.
+  if (pathReachesNetwork(full)) throw escapes()
+
   // lstat every segment on the way: one that cannot be inspected is refused rather than
   // trusted. A missing one ends the walk (the target does not exist yet).
   let cur = root
   for (const seg of segs) {
     cur = path.join(cur, seg)
     try {
-      const st = await lstat(cur)
-      // A link inside a local repo that points at \\host\share would make realpath below talk SMB with
-      // the user's credentials (a hostile cloned repo). Read the link, never follow it.
-      if (st.isSymbolicLink() && (await linkLeadsToNetwork(cur))) throw escapes()
+      await lstat(cur)
     } catch (e) {
-      if (e instanceof PathError) throw e
       if ((e as NodeJS.ErrnoException).code === 'ENOENT') return full
       throw escapes()
     }
@@ -71,35 +72,6 @@ export async function resolveMarkdown(root: string, rel: string): Promise<string
   const full = await safeJoin(root, rel)
   if (path.extname(full).toLowerCase() !== '.md') throw new PathError(`${ERR_NOT_MARKDOWN}: ${rel}`)
   return full
-}
-
-/**
- * Follows a chain of symlinks with lstat and readlink only (never stat or realpath, which would contact
- * the target) and says whether any hop names a network or device path. Too long a chain counts as yes.
- */
-export async function linkLeadsToNetwork(
-  p: string,
-  fs: { lstat: (p: string) => Promise<{ isSymbolicLink(): boolean }>; readlink: (p: string) => Promise<string> } = { lstat, readlink },
-): Promise<boolean> {
-  let cur = p
-  for (let i = 0; i < 16; i++) {
-    let st
-    try {
-      st = await fs.lstat(cur)
-    } catch {
-      return false
-    }
-    if (!st.isSymbolicLink()) return false
-    let t: string
-    try {
-      t = await fs.readlink(cur)
-    } catch {
-      return true
-    }
-    if (isNetworkLinkTarget(t)) return true
-    cur = path.resolve(path.dirname(cur), t)
-  }
-  return true
 }
 
 /** The scope rule shared by the walk and the watcher: node_modules, dot folders and "_" folders. */
