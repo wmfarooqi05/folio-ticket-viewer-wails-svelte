@@ -1,7 +1,7 @@
 ---
 type: build
-status: in-review
-status_note: "on branch worktree-agent-a98dec4e917bf4773, not merged; AC3 (owner on the VM) and a clean-profile installer test are open: makensis is not installed here"
+status: blocked
+status_note: "merged Nov 20, 2026; waiting on the owner: build the installer (needs NSIS), clean-profile install test, VM run (AC3), and confirm the budget calls"
 waiting_on: owner
 blocked_by: []
 blocked_note: null

@@ -58,7 +58,7 @@ Reached when:
 | 12 | [Views: Waiting on, Board and Open questions](issues/12-cross-space-views.md) | build | [08](issues/08-parser.md) | — | blocked — merged, waiting on owner UI check | — |
 | 13 | [Settings dialog and first-run flow](issues/13-settings-dialog.md) | build | — | — | blocked — merged, waiting on owner UI check | — |
 | 14 | [Dependency graph, Mermaid and syntax highlighting](issues/14-graph-mermaid-highlight.md) | build | [10](issues/10-document-view.md), [12](issues/12-cross-space-views.md) | — | blocked — merged, waiting on owner Graph check | — |
-| 15 | [Budgets enforced, installer, v1 release](issues/15-budgets-and-packaging.md) | build | [09](issues/09-cache-and-live-refresh.md), [11](issues/11-side-panel.md), [13](issues/13-settings-dialog.md), [14](issues/14-graph-mermaid-highlight.md) | — | blocked | — |
+| 15 | [Budgets enforced, installer, v1 release](issues/15-budgets-and-packaging.md) | build | [09](issues/09-cache-and-live-refresh.md), [11](issues/11-side-panel.md), [13](issues/13-settings-dialog.md), [14](issues/14-graph-mermaid-highlight.md) | — | blocked — merged, waiting on owner (installer, VM run) | — |
 <!-- tickets:end -->
 
 ## Decisions so far
