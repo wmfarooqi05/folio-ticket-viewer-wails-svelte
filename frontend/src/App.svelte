@@ -16,7 +16,7 @@
   import { pinnedCounts, type ViewId } from './lib/views'
   import * as panelStack from './lib/panel'
   import { Layout } from './lib/layout.svelte'
-  import { checkPath, isNetworkPath, pickRoot, rootsLabel } from './lib/folder'
+  import { checkPath, isNetworkPath, noRootsText, pickRoot } from './lib/folder'
   import { docsRootPath, splitPath } from './lib/path'
   import { MEMORY_TIP, formatMemory } from './lib/memory'
   import Icon from './lib/icons/Icon.svelte'
@@ -196,7 +196,7 @@
         problem = res.message
         return
       }
-      config = await api.setConfig({ repoRoot: res.repoRoot, docsDir: res.docsDir })
+      config = await api.setConfig({ repoRoot: res.repoRoot, docsDir: res.docsDir, ...(res.docsRoots ? { docsRoots: res.docsRoots } : {}) })
       await load()
     } catch (err) {
       problem = err instanceof Error ? err.message : String(err)
@@ -220,8 +220,8 @@
       const res = await pickRoot()
       if (res.kind === 'no-roots') {
         folderNotice = { roots: !res.refused, message: res.message } // the Settings warning; nothing changed
-      } else if (res.kind === 'ok' && (res.repoRoot !== config.repoRoot || res.docsDir !== config.docsDir)) {
-        config = await api.setConfig({ repoRoot: res.repoRoot, docsDir: res.docsDir })
+      } else if (res.kind === 'ok' && (res.repoRoot !== config.repoRoot || res.docsDir !== config.docsDir || (res.docsRoots !== undefined && res.docsRoots.join(',') !== (config.docsRoots ?? []).join(',')))) {
+        config = await api.setConfig({ repoRoot: res.repoRoot, docsDir: res.docsDir, ...(res.docsRoots ? { docsRoots: res.docsRoots } : {}) })
         showToast('Folder changed')
         await rootChanged(config)
       }
@@ -421,7 +421,8 @@
             <span class="mt-4 size-7 shrink-0 rounded-full bg-s-rev"></span>
             <span class="min-w-0 flex-1">
               {#if folderNotice.roots}
-                This folder has none of <span class="font-mono text-[11.5px]">{rootsLabel(config?.docsRoots ?? [])}</span>
+                This folder has <span class="font-mono text-[11.5px]">{noRootsText(config?.docsRoots ?? [])}</span>, and no
+                map.md or issues/ folder
               {:else}
                 {folderNotice.message}
               {/if}

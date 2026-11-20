@@ -7,7 +7,7 @@ export type PickResult =
   /** the picker was cancelled: change nothing */
   | { kind: 'cancelled' }
   /** a usable folder; repoRoot and docsDir are what CheckRoot resolved */
-  | { kind: 'ok'; repoRoot: string; docsDir: string }
+  | { kind: 'ok'; repoRoot: string; docsDir: string; /** set when the folder had none of the roots but a map.md or issues/ folder */ docsRoots?: string[] }
   /**
    * a folder with none of the docs roots: the "no roots" warning. `refused` is set when the folder
    * was turned away for what it is (a network or device path in web mode), not for what it lacks.
@@ -29,7 +29,8 @@ export async function checkPath(picked: string, deps: Pick<PickApi, 'checkRoot'>
   if (!picked) return { kind: 'cancelled' }
   const check = await deps.checkRoot(picked)
   if (!check.ok) return { kind: 'no-roots', picked, message: check.message, ...(typed && isNetworkPath(picked) ? { refused: true } : {}) }
-  return { kind: 'ok', repoRoot: check.repoRoot, docsDir: check.docsDir }
+  const suggested = check.suggested ?? []
+  return { kind: 'ok', repoRoot: check.repoRoot, docsDir: check.docsDir, ...(suggested.length > 0 ? { docsRoots: [...suggested] } : {}) }
 }
 
 /**
@@ -42,5 +43,9 @@ export async function pickRoot(deps: PickApi = api): Promise<PickResult> {
   return checkPath(await deps.pickFolder(), deps)
 }
 
-/** "modules/ · handoffs/ · patterns/", the roots the warning names. */
-export const rootsLabel = (roots: string[]) => roots.map((r) => r + '/').join(' · ')
+/** "modules/ · handoffs/ · patterns/", the roots the warning names. "." reads as the docs folder itself. */
+/** What a folder lacks, for "This folder has ...": no Markdown at all when the whole docs folder was asked for. */
+export const noRootsText = (roots: string[]): string => (roots.includes('.') ? 'no Markdown files' : 'none of ' + rootsLabel(roots))
+
+export const rootsLabel = (roots: string[]) => roots.map((r) => (r === '.' ? 'the docs folder itself' : r + '/')).join(' · ')
+

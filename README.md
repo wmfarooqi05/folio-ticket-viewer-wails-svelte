@@ -1,6 +1,6 @@
 # Folio
 
-Folio is a read-only desktop viewer for file-based tickets: markdown files with a small frontmatter convention, kept in a repo under `docs/modules/`, `docs/handoffs/` and `docs/patterns/`. It shows the tree, the status of each ticket, and (as the slices land) boards, a dependency graph, waiting-on and open-question views. It never writes to a ticket. The only files it writes are its own settings, a disposable index cache and the WebView2 profile; [Where Folio writes](#where-folio-writes) lists every place, for the exe and for web mode.
+Folio is a read-only desktop viewer for file-based tickets: markdown files with a small frontmatter convention, kept in a repo under `docs/modules/`, `docs/handoffs/` and `docs/patterns/`, or in a plainer layout of `docs/map.md` and `docs/issues/NN-*.md` (see [Docs layouts](#docs-layouts)). It shows the tree, the status of each ticket, and (as the slices land) boards, a dependency graph, waiting-on and open-question views. It never writes to a ticket. The only files it writes are its own settings, a disposable index cache and the WebView2 profile; [Where Folio writes](#where-folio-writes) lists every place, for the exe and for web mode.
 
 Folio is lightweight on purpose: idle RAM is the priority (about 169 MB private for the whole process tree, WebView2 included), the exe is about 14 MiB, and a ticket 15 check keeps it that way (see [Budgets](#budgets)).
 
@@ -17,7 +17,7 @@ Without the installer, `bin\folio.exe` runs on its own after `task build`.
 
 ## First run
 
-1. The first launch shows a **Choose folder** screen. Pick the **repo root**, the folder that contains `docs/` (not `docs/` itself). Folio checks that `docs/modules`, `docs/handoffs` and `docs/patterns` can be found and shows what it found.
+1. The first launch shows a **Choose folder** screen. Pick the **repo root**, the folder that contains `docs/` (not `docs/` itself). Folio checks that `docs/modules`, `docs/handoffs` or `docs/patterns` can be found, or that `docs/` holds a `map.md` or an `issues/` folder, and shows what it found. A `map.md` or `issues/` layout needs no setup: Folio reads the whole docs folder.
 2. Folio scans the folder, builds an index, and shows the tree. The index is cached under `%LOCALAPPDATA%\Folio\cache`, so the next start is quick, and the tree stays live: edits, new files and deletions show up within a second or two.
 3. Folio never writes to your tickets. What it does write is listed under [Where Folio writes](#where-folio-writes).
 
@@ -29,11 +29,20 @@ Without the installer, `bin\folio.exe` runs on its own after `task build`.
 - **Resizable panes:** drag the divider between the tree and the document, or between the document and the side panel. Widths are remembered. Double-click a divider to reset it.
 - **Change folder:** the button at the bottom of the tree opens the folder picker again; Folio rescans the new folder.
 
+## Docs layouts
+
+A **space** is a folder that holds a `map.md` or an `issues/` folder, and a ticket is `issues/NN-*.md` under a space. Ticket keys are `<space> NN`, and refs, map links and `blocked_by` resolve inside the space.
+
+- `docs/modules/<space>/...` gives the space `<space>`, as before.
+- `docs/map.md` plus `docs/issues/NN-*.md` (this repo) is one space named after the repo folder, for example `ticket_ui`. Settings picks the root **Whole docs folder (`.`)** for it, and so does the first run when it finds no `modules`, `handoffs` or `patterns`.
+- A mix works too: `modules/<x>/` spaces beside a top-level `issues/` folder, with the root `.`. Under `.` the usual skips apply: `_` folders, dot folders and `node_modules`. `handoffs/` and `patterns/` belong to no space.
+- When spaces are nested, the nearest folder with a `map.md` or `issues/` wins.
+
 ## Settings
 
 Open them with the gear in the header or Ctrl+,. The dialog has four sections; Save stays disabled until something changes, Esc closes, Enter saves.
 
-- **Docs folder:** the repo root (with the picker), the docs folder name (default `docs`), and the docs roots to index (default `modules`, `handoffs`, `patterns`), with "found/missing" chips and the last scan time.
+- **Docs folder:** the repo root (with the picker), the docs folder name (default `docs`), and the docs roots to index (default `modules`, `handoffs`, `patterns`). The roots are chips: **Whole docs folder (.)**, the usual three, and every top-level folder of the docs folder that holds a `.md`, each with a found or missing dot. A small box adds any other relative folder. The last scan time is shown too.
 - **Links:** the Azure DevOps work item and pull request URL templates (`https://` with an `{id}`), with a live preview.
 - **Appearance:** System, Light or Dark, and **Show memory use** (off by default).
 - **Data:** **Clear data**, see [Clear data](#clear-data).
@@ -77,7 +86,7 @@ The same viewer runs in a browser, from Node alone. Use it where you cannot or d
 npx folio-viewer --docs <path>
 ```
 
-`<path>` is the repo root, or its docs folder. Node 22 or newer is the only requirement. The command starts a server on `127.0.0.1`, prints a link whose token works once, and opens it in your default browser. To install it once instead: `npm install -g folio-viewer`, then `folio --docs <path>`. `--port <n>` picks the port (default: a random free one), `--no-open` only prints the link, and without `--docs` the page asks for a path.
+`<path>` is the repo root, or its docs folder (one with `modules/`, `handoffs/` or `patterns/`, or with a `map.md` or an `issues/` folder; the latter is read whole). Node 22 or newer is the only requirement. The command starts a server on `127.0.0.1`, prints a link whose token works once, and opens it in your default browser. To install it once instead: `npm install -g folio-viewer`, then `folio --docs <path>`. `--port <n>` picks the port (default: a random free one), `--no-open` only prints the link, and without `--docs` the page asks for a path.
 
 Stop it with Ctrl+C. Under `npx` on Windows the shell may then ask "Terminate batch job (Y/N)?": answer Y, that is fine.
 

@@ -92,7 +92,7 @@ export function draftFrom(cfg: DraftSource): Draft {
   return {
     repoRoot: cfg.repoRoot ?? '',
     docsDir: cfg.docsDir ?? 'docs',
-    docsRoots: [...(cfg.docsRoots?.length ? cfg.docsRoots : DEFAULT_ROOTS)],
+    docsRoots: [...new Set((cfg.docsRoots?.length ? cfg.docsRoots : DEFAULT_ROOTS).map(normalizeRoot))],
     adoWorkItemUrl: cfg.adoWorkItemUrl ?? '',
     adoPrUrl: cfg.adoPrUrl ?? '',
     theme,
@@ -181,12 +181,50 @@ export function needsRescan(patch: Partial<Draft>): boolean {
   return patch.repoRoot !== undefined || patch.docsDir !== undefined || patch.docsRoots !== undefined
 }
 
-/** Roots to show as chips: the defaults plus any custom root already configured. */
-export function rootCandidates(selected: string[]): string[] {
-  return [...new Set([...DEFAULT_ROOTS, ...selected])]
+/** The docs root that means the whole docs folder (ticket 25). The scope skips still apply under it. */
+export const WHOLE_ROOT = '.'
+
+/** A root as the chips and messages name it. */
+export const rootLabel = (r: string): string => (r === WHOLE_ROOT ? 'Whole docs folder (.)' : r + '/')
+
+/**
+ * Roots to show as chips: the whole docs folder, the usual three, the folders found in the docs folder
+ * that hold any .md, the ones typed in this session, and any root already selected.
+ */
+export function rootCandidates(selected: string[], folders: string[] = [], added: string[] = []): string[] {
+  return [...new Set([WHOLE_ROOT, ...DEFAULT_ROOTS, ...folders, ...added, ...selected])]
 }
 
 /** Toggles a root, keeping the candidate order. */
-export function toggleRoot(selected: string[], root: string): string[] {
-  return rootCandidates(selected).filter((r) => (r === root ? !selected.includes(r) : selected.includes(r)))
+export function toggleRoot(selected: string[], root: string, candidates: string[] = rootCandidates(selected)): string[] {
+  const all = candidates.includes(root) ? candidates : [...candidates, root]
+  return all.filter((r) => (r === root ? !selected.includes(r) : selected.includes(r)))
+}
+
+/**
+ * A root typed in the Settings box: a relative folder inside the docs folder. Returns the cleaned root,
+ * or the message to show. "." and "" are not typed (the whole folder has its own chip).
+ */
+export function parseTypedRoot(text: string): { root: string } | { error: string } {
+  const t = text.trim().replaceAll('\\', '/').replace(/\/+$/, '')
+  if (t === '') return { error: 'Type a folder name' }
+  if (/^([a-zA-Z]:|\/)/.test(t) || t.split('/').includes('..')) return { error: 'Must be a folder inside the docs folder' }
+  const clean = t.split('/').filter((p) => p !== '' && p !== '.').join('/')
+  if (clean === '') return { error: 'Use the "Whole docs folder" chip for that' }
+  if (clean.split('/').some((p) => p === 'node_modules' || p.startsWith('_') || p.startsWith('.')))
+    return { error: 'Folio skips node_modules and folders that start with _ or .' }
+  return { root: clean }
+}
+
+/** "./" and "a/.." are the whole docs folder, "a/./b" is "a/b". A root that leaves the folder is left as written. */
+export function normalizeRoot(r: string): string {
+  const out: string[] = []
+  for (const p of r.replaceAll('\\', '/').split('/')) {
+    if (p === '' || p === '.') continue
+    if (p === '..') {
+      if (out.length === 0) return r
+      out.pop()
+    } else out.push(p)
+  }
+  return out.length === 0 ? WHOLE_ROOT : out.join('/')
 }

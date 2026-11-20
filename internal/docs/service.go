@@ -426,3 +426,6 @@ func refuseNetworkLinks(r Roots) error {
 func skipDir(name string) bool {
 	return name == "node_modules" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_")
 }
+
+// SkipDir is skipDir for the folder checks in internal/shell, so Settings counts what the scan counts.
+func SkipDir(name string) bool { return skipDir(name) }

@@ -13,6 +13,12 @@ describe('isRelativeInside (internal/settings isRelativeInside)', () => {
   it.each(['', '.', '..', '../x', 'a/../..', '/abs', '\\abs', 'C:\\x', 'C:x', '\\\\server\\share', 'a/../../b'])('rejects %j', (p) => expect(S.isRelativeInside(p)).toBe(false))
 })
 
+describe('isRootInside (a docs root: "." is the whole docs folder)', () => {
+  it.each(['.', './', 'a/..', 'docs', 'a/./b'])('accepts %j', (p) => expect(S.isRootInside(p)).toBe(true))
+  it.each(['', '..', '../x', 'a/../..', '/abs', 'C:/x', '//server/share'])('rejects %j', (p) => expect(S.isRootInside(p)).toBe(false))
+  it('still refuses "." as the docs folder name', () => expect(S.isRelativeInside('.')).toBe(false))
+})
+
 describe('settings file', () => {
   it('writes sorted keys, a window in struct order, two-space indent and a final newline, like Go', () => {
     const f = path.join(dir, 's.json')

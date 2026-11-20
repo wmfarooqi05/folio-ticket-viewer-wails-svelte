@@ -37,6 +37,10 @@ const DefaultDocsDir = "docs"
 // DefaultDocsRoots are the folders, relative to the docs dir, that Folio indexes.
 var DefaultDocsRoots = []string{"modules", "handoffs", "patterns"}
 
+// WholeDocsRoot is the docs root that means "the whole docs folder" (ticket 25). The scope skips
+// still apply under it: node_modules, dot folders and "_" folders.
+const WholeDocsRoot = "."
+
 // Window is the last window rectangle. Only Go writes it.
 type Window struct {
 	X         int  `json:"x"`
@@ -282,7 +286,7 @@ func rootsError(roots []string) string {
 		return "must list at least one folder"
 	}
 	for _, r := range roots {
-		if !isRelativeInside(r) {
+		if !IsRootInside(r) {
 			return fmt.Sprintf("%q must be a relative folder inside the docs folder", r)
 		}
 	}
@@ -458,7 +462,7 @@ func ValidateAllowing(s Settings, allowNetwork []string) error {
 		pathsOK = false
 	}
 	for _, r := range s.DocsRoots {
-		if !isRelativeInside(r) {
+		if !IsRootInside(r) {
 			add("docsRoots", fmt.Sprintf("%q must be a relative folder inside the docs folder", r))
 			pathsOK = false
 		}
@@ -516,9 +520,21 @@ func validateURLTemplate(t string) error {
 // IsRelativeInside is the exported form of isRelativeInside, for the shell service.
 func IsRelativeInside(p string) bool { return isRelativeInside(p) }
 
+// IsRootInside is IsRelativeInside for a docs root: "." (the whole docs folder) is allowed too.
+func IsRootInside(p string) bool { return IsWholeRoot(p) || isRelativeInside(p) }
+
+// IsWholeRoot reports whether p is a relative path that names the base folder itself: ".", "./", "a/..".
+func IsWholeRoot(p string) bool {
+	return relativeShape(p) && filepath.ToSlash(filepath.Clean(filepath.FromSlash(p))) == "."
+}
+
+func relativeShape(p string) bool {
+	return p != "" && !filepath.IsAbs(p) && filepath.VolumeName(p) == "" && !strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "\\")
+}
+
 // isRelativeInside reports whether p is a non-empty relative path that stays inside its base.
 func isRelativeInside(p string) bool {
-	if p == "" || filepath.IsAbs(p) || filepath.VolumeName(p) != "" || strings.HasPrefix(p, "/") || strings.HasPrefix(p, "\\") {
+	if !relativeShape(p) {
 		return false
 	}
 	clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(p)))

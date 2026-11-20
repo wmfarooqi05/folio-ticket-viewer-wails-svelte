@@ -44,6 +44,11 @@ type RootCheck struct {
 	Found    []string `json:"found"`    // docs roots that exist
 	Missing  []string `json:"missing"`  // docs roots that do not
 	Message  string   `json:"message"`  // for the inline error when !OK
+	// Suggested is set when none of the asked-for roots exist but the docs folder is itself a
+	// space (a map.md or an issues/ folder): the roots to save instead, ["."] (ticket 25).
+	Suggested []string `json:"suggested"`
+	// Folders are the docs folder's top-level folders that hold any .md, sorted: the Settings chips.
+	Folders []string `json:"folders"`
 }
 
 // ShellService is registered with Wails.
@@ -93,6 +98,9 @@ func (s *ShellService) effective() settings.Settings {
 	if s.override != nil {
 		cfg.RepoRoot = s.override.RepoRoot
 		cfg.DocsDir = s.override.DocsDir
+		if len(s.override.Suggested) > 0 {
+			cfg.DocsRoots = slices.Clone(s.override.Suggested) // auto-detected, so the saved roots would find nothing
+		}
 	}
 	return cfg
 }
@@ -160,6 +168,11 @@ func (s *ShellService) SetConfig(p ConfigPatch) (Config, error) {
 	}
 	if err := settings.Save(s.path, next); err != nil {
 		return Config{}, err
+	}
+	if p.DocsRoots != nil && s.override != nil {
+		o := *s.override
+		o.Suggested = nil // the roots were chosen now: the detected ones no longer win
+		s.override = &o
 	}
 	s.saved = next
 	return s.effective(), nil
@@ -283,11 +296,18 @@ func InspectRoot(abs string, roots []string) RootCheck { return InspectRootAllow
 // folders picked in the native dialog) are accepted. Any other network path is refused before
 // the file system is touched: even a stat on a UNC path starts SMB with the user's credentials.
 func InspectRootAllowing(abs string, roots []string, allowNetwork []string) RootCheck {
+	redetect := false
 	if len(roots) == 0 {
 		roots = settings.DefaultDocsRoots
 	}
-	fail := RootCheck{Found: []string{}, Missing: slices.Clone(roots),
-		Message: "expects " + joinRoots(roots) + " inside the folder"}
+	if slices.ContainsFunc(roots, settings.IsWholeRoot) {
+		// A saved "." is not a reason to accept any folder: look for the usual roots again, and for a
+		// map.md or issues/ folder, and suggest what matches (the usual roots, or ".").
+		roots = settings.DefaultDocsRoots
+		redetect = true
+	}
+	fail := RootCheck{Found: []string{}, Missing: slices.Clone(roots), Suggested: []string{}, Folders: []string{},
+		Message: ExpectsMessage(roots)}
 	if msg := settings.RootShapeError(abs, allowNetwork); msg != "" {
 		fail.Message = msg
 		return fail
@@ -298,38 +318,21 @@ func InspectRootAllowing(abs string, roots []string, allowNetwork []string) Root
 	}
 	abs = filepath.Clean(abs)
 
-	// A repo root: abs/docs/<root>.
-	if found, missing := probe(filepath.Join(abs, settings.DefaultDocsDir), roots); len(found) > 0 {
-		return RootCheck{OK: true, RepoRoot: abs, DocsDir: settings.DefaultDocsDir, Found: found, Missing: missing}
-	}
-	// The docs folder itself: abs/<root>.
-	if found, missing := probe(abs, roots); len(found) > 0 {
-		return RootCheck{OK: true, RepoRoot: filepath.Dir(abs), DocsDir: filepath.Base(abs), Found: found, Missing: missing}
+	// A repo root (abs/docs/<root>), then the docs folder itself (abs/<root>). A docs folder that has
+	// none of the roots but is a space of its own (map.md or issues/) is taken as a whole: ["."].
+	for _, c := range []struct{ docs, repo, docsDir string }{
+		{filepath.Join(abs, settings.DefaultDocsDir), abs, settings.DefaultDocsDir},
+		{abs, filepath.Dir(abs), filepath.Base(abs)},
+	} {
+		if found, missing := probe(c.docs, roots); len(found) > 0 {
+			return RootCheck{OK: true, RepoRoot: c.repo, DocsDir: c.docsDir, Found: found, Missing: missing, Suggested: suggestedFor(redetect), Folders: topFolders(c.docs)}
+		}
+		if isSpaceDir(c.docs) {
+			return RootCheck{OK: true, RepoRoot: c.repo, DocsDir: c.docsDir, Found: []string{settings.WholeDocsRoot},
+				Missing: slices.Clone(roots), Suggested: []string{settings.WholeDocsRoot}, Folders: topFolders(c.docs)}
+		}
 	}
 	return fail
-}
-
-func probe(dir string, roots []string) (found, missing []string) {
-	found, missing = []string{}, []string{}
-	for _, r := range roots {
-		if settings.SafeIsDir(filepath.Join(dir, filepath.FromSlash(r))) {
-			found = append(found, r)
-		} else {
-			missing = append(missing, r)
-		}
-	}
-	return found, missing
-}
-
-func joinRoots(roots []string) string {
-	out := ""
-	for i, r := range roots {
-		if i > 0 {
-			out += " · "
-		}
-		out += r + "/"
-	}
-	return out
 }
 
 // OpenInVSCode opens a ticket file (path relative to the docs root) at a line, through
@@ -399,7 +402,7 @@ func InspectDocsAllowing(repoRoot, docsDir string, roots []string, allowNetwork 
 	if len(roots) == 0 {
 		roots = settings.DefaultDocsRoots
 	}
-	rc := RootCheck{Found: []string{}, Missing: slices.Clone(roots), RepoRoot: repoRoot, DocsDir: docsDir}
+	rc := RootCheck{Found: []string{}, Missing: slices.Clone(roots), RepoRoot: repoRoot, DocsDir: docsDir, Suggested: []string{}, Folders: []string{}}
 	if msg := settings.RootShapeError(repoRoot, allowNetwork); msg != "" {
 		rc.Message = msg
 		return rc
@@ -416,15 +419,17 @@ func InspectDocsAllowing(repoRoot, docsDir string, roots []string, allowNetwork 
 		return rc
 	}
 	for _, r := range roots {
-		if !settings.IsRelativeInside(r) {
+		if !settings.IsRootInside(r) {
 			rc.Message = "the docs roots must be folders inside the docs folder"
 			return rc
 		}
 	}
-	rc.Found, rc.Missing = probe(filepath.Join(repoRoot, filepath.FromSlash(docsDir)), roots)
+	docsPath := filepath.Join(repoRoot, filepath.FromSlash(docsDir))
+	rc.Found, rc.Missing = probe(docsPath, roots)
+	rc.Folders = topFolders(docsPath)
 	rc.OK = len(rc.Found) > 0
 	if !rc.OK {
-		rc.Message = "expects " + joinRoots(roots) + " inside the folder"
+		rc.Message = ExpectsRootsMessage(roots)
 	}
 	return rc
 }

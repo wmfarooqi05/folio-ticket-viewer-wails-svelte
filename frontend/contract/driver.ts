@@ -31,6 +31,8 @@ export interface Sandbox {
   /** %LOCALAPPDATA% for the Go harness; the cache is in <local>/Folio/cache for both backends */
   local: string
   cacheDir: string
+  /** set by a case before the backend starts: the repo root given as --docs (Node) or FOLIO_ROOT (Go) */
+  override?: string
 }
 
 export function sandbox(): Sandbox {
@@ -153,6 +155,7 @@ export const nodeDriver: Driver = {
     const running: Running = await startNode({
       distDir: dist,
       settingsFile: sb.settingsFile,
+      docs: sb.override,
       cacheDir: sb.cacheDir,
       token,
       timing: { quiet: 200, max: 1000 },
@@ -177,6 +180,7 @@ export const goDriver: Driver = {
   async start(sb) {
     const env: NodeJS.ProcessEnv = { ...process.env, LOCALAPPDATA: sb.local, XDG_CACHE_HOME: sb.local }
     delete env.FOLIO_ROOT
+    if (sb.override) env.FOLIO_ROOT = sb.override
     const child: ChildProcess = spawn(goExe, ['-settings', sb.settingsFile], { env, stdio: ['ignore', 'pipe', 'pipe'] })
     const port = await new Promise<number>((ok, fail) => {
       let out = ''

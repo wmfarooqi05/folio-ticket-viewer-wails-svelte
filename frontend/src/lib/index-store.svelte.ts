@@ -4,7 +4,7 @@
 // `index` is $state.raw on purpose (05 D1): one copy of the index, never proxied.
 import * as api from './api'
 import { createIndexEngine, type IndexEngine, type StartTimings } from './index-engine'
-import { buildIndex, updateIndex, type Index } from './parser'
+import { buildIndex, rootNameFor, updateIndex, type Index } from './parser'
 
 class IndexStore {
   /** The only index. Replaced, never mutated. */
@@ -22,6 +22,8 @@ class IndexStore {
   tooLarge = $state.raw<Record<string, number>>({})
 
   #engine: IndexEngine | null = null
+  /** The space of the docs folder itself: the repo folder's name (what the parser cannot know). */
+  #rootName = ''
   #gen = 0 // bumped by every start(); an older engine can no longer write here
   #unsubscribe: (() => void) | null = null
   #changed = new Set<string>()
@@ -37,7 +39,21 @@ class IndexStore {
   }
 
   /** Warm or cold start, then live refresh. Safe to call again after a root change. */
-  start(): Promise<StartTimings> {
+  async start(): Promise<StartTimings> {
+    await this.#readRootName()
+    return this.#start()
+  }
+
+  async #readRootName() {
+    try {
+      const cfg = await api.getConfig()
+      this.#rootName = rootNameFor(cfg.repoRoot, cfg.docsDir)
+    } catch {
+      this.#rootName = ''
+    }
+  }
+
+  #start(): Promise<StartTimings> {
     this.stop(false) // a newer generation follows: the old engine must not save its index
     this.index = null
     this.tooLarge = {}
@@ -51,7 +67,7 @@ class IndexStore {
         rescan: async () => normalise(await api.rescan()),
         readBatch: api.readBatch,
         updateIndex,
-        emptyIndex: () => buildIndex([]),
+        emptyIndex: () => buildIndex([], this.#rootName),
         parserVersion: __PARSER_VERSION__,
         now: () => performance.now(),
         sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
@@ -90,8 +106,9 @@ class IndexStore {
   }
 
   /** Ctrl+R, and a root change in Settings. Rebuilds from every file. */
-  rescan(): Promise<void> {
-    return this.#engine ? this.#engine.rescan() : Promise.resolve()
+  async rescan(): Promise<void> {
+    await this.#readRootName() // a new folder is a new root name
+    return this.#engine ? this.#engine.rescan() : undefined
   }
 
   stop(save = true) {

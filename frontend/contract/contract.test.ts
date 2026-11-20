@@ -10,6 +10,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { fixturesDocs, goDriver, nodeDriver, sandbox, type Driver, type Handle, type Sandbox } from './driver'
 
 const ROOTS = ['modules', 'handoffs', 'patterns']
+/** What both backends say about a folder with none of the roots and no map.md or issues/ folder (shell.ExpectsMessage in Go). */
+const EXPECTS_MESSAGE = 'expects modules/ · handoffs/ · patterns/, or a map.md or issues/ folder, inside the folder'
 /** What both backends say about a network or device repo root (settings.NetworkRootMessage in Go). */
 const NETWORK_MESSAGE = String.raw`network and device paths (\\server\share, \\?\, \\.\) are not allowed as the repo root`
 /** What both backends say about a repo root that is not a full local path (Windows only). */
@@ -65,6 +67,20 @@ async function withBackend(d: Driver, fn: (c: Ctx) => Promise<void>, prep?: (c: 
   }
 }
 
+/** Every .md under the docs folder, minus _, dot and node_modules folders (what a "." root finds). */
+function walkAll(docs: string): string[] {
+  const out: string[] = []
+  const walk = (dir: string) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) {
+        if (!(e.name === 'node_modules' || e.name.startsWith('.') || e.name.startsWith('_'))) walk(path.join(dir, e.name))
+      } else if (e.name.toLowerCase().endsWith('.md')) out.push(path.relative(docs, path.join(dir, e.name)).split(path.sep).join('/'))
+    }
+  }
+  walk(docs)
+  return out.sort()
+}
+
 const use = async (c: Ctx) => c.b.call('setConfig', { repoRoot: c.repo })
 const sleep = (ms: number) => new Promise((ok) => setTimeout(ok, ms))
 /** Replaces the sandbox folder (random per run and per backend) so reports can be compared. */
@@ -99,7 +115,7 @@ for (const d of drivers) {
       expect(docsCheck).toMatchObject({ ok: true, repoRoot: c.repo, docsDir: 'docs' })
       const none = await c.b.call('checkRoot', empty)
       expect(none.ok).toBe(false)
-      expect(none.message).toBe('expects modules/ · handoffs/ · patterns/ inside the folder')
+      expect(none.message).toBe(EXPECTS_MESSAGE)
       const notDir = await c.b.call('checkRoot', path.join(c.sb.dir, 'nope'))
       expect(notDir).toMatchObject({ ok: false, message: 'that is not a folder' })
       record('checkRoot', norm([repoCheck, docsCheck, none, notDir], c))
@@ -113,6 +129,170 @@ for (const d of drivers) {
       const outside = await c.b.call('checkDocs', c.repo, '../x', ['modules'])
       expect(outside).toMatchObject({ ok: false, message: 'the docs folder must be inside the repo root' })
       record('checkDocs', norm([some, bad, outside], c))
+    })
+
+    // ---- layouts other than modules/<space> (ticket 25) -----------------------------------
+
+    /** This repo's own layout: docs/map.md and docs/issues/NN-*.md, no modules/ folder. */
+    const prepGeneric = ({ docs }: { docs: string }) => {
+      rmSync(docs, { recursive: true, force: true })
+      mkdirSync(path.join(docs, 'issues'), { recursive: true })
+      mkdirSync(path.join(docs, 'assets'), { recursive: true })
+      mkdirSync(path.join(docs, '_templates'), { recursive: true })
+      mkdirSync(path.join(docs, 'node_modules', 'p'), { recursive: true })
+      writeFileSync(path.join(docs, 'map.md'), '# Map\n')
+      writeFileSync(path.join(docs, 'issues', '01-first.md'), '---\ntype: build\nstatus: open\n---\n# 01 — First\n')
+      writeFileSync(path.join(docs, 'issues', '02-second.md'), '# 02 — Second\n')
+      writeFileSync(path.join(docs, 'assets', 'mock.md'), '# Mock\n')
+      writeFileSync(path.join(docs, '_templates', 't.md'), '# skipped\n')
+      writeFileSync(path.join(docs, 'node_modules', 'p', 'readme.md'), '# skipped\n')
+    }
+    const GENERIC_FILES = ['assets/mock.md', 'issues/01-first.md', 'issues/02-second.md', 'map.md']
+
+    t(
+      'a docs/issues + docs/map.md layout is accepted, with "." suggested, and scanned whole',
+      async (c) => {
+        const check = await c.b.call('checkRoot', c.repo)
+        expect(check).toMatchObject({ ok: true, repoRoot: c.repo, docsDir: 'docs', found: ['.'], suggested: ['.'] })
+        expect(list(check.folders)).toEqual(['assets', 'issues'])
+        expect(await c.b.call('checkRoot', c.docs)).toMatchObject({ ok: true, repoRoot: c.repo, docsDir: 'docs', suggested: ['.'] })
+        // the default roots find nothing here, so saving them is refused until "." is chosen
+        await expect(c.b.call('setConfig', { repoRoot: c.repo })).rejects.toThrow('docsRoots: none of the selected folders exist under')
+        const cfg = await c.b.call('setConfig', { repoRoot: c.repo, docsRoots: ['.'] })
+        expect(cfg.docsRoots).toEqual(['.'])
+        const s = await c.b.call('scan')
+        expect(list(s.changed)).toEqual(GENERIC_FILES)
+        const batch = await c.b.call('readBatch', GENERIC_FILES)
+        expect(batch.files.map((f: any) => f.path)).toEqual(GENERIC_FILES)
+        const docsCheck = await c.b.call('checkDocs', c.repo, 'docs', ['.', 'modules', 'issues'])
+        expect(docsCheck).toMatchObject({ ok: true, found: ['.', 'issues'], missing: ['modules'] })
+        record('genericLayout', norm([check, cfg, list(s.changed), docsCheck], c))
+      },
+      prepGeneric,
+    )
+
+    t('a "." root reads the whole docs folder, skips _, dot and node_modules folders, and lists no file twice', async (c) => {
+      mkdirSync(path.join(c.docs, '.hidden'), { recursive: true })
+      writeFileSync(path.join(c.docs, '.hidden', 'x.md'), '# skipped\n')
+      writeFileSync(path.join(c.docs, 'top.md'), '# Top\n')
+      const all = walkAll(c.docs)
+      expect(all).toContain('top.md')
+      expect(all.some((p) => p.startsWith('.hidden') || p.includes('_templates') || p.includes('node_modules'))).toBe(false)
+      await c.b.call('setConfig', { repoRoot: c.repo, docsRoots: ['.'] })
+      const s = await c.b.call('scan')
+      expect(list(s.changed)).toEqual(all)
+      expect(s.count).toBe(all.length)
+      // "." beside modules: the same files, once
+      await c.b.call('setConfig', { docsRoots: ['.', 'modules'] })
+      const both = await c.b.call('rescan')
+      expect(list(both.changed)).toEqual(all)
+      expect(both.count).toBe(all.length)
+      // and the change feed sees a new file at the top, and not one in a skipped folder
+      const ev = await c.b.events()
+      try {
+        await sleep(300)
+        writeFileSync(path.join(c.docs, 'modules', '_templates', 'new.md'), '# skipped\n')
+        writeFileSync(path.join(c.docs, 'fresh.md'), '# Fresh\n')
+        const seenPaths: string[] = []
+        const until = Date.now() + 6000
+        while (!seenPaths.includes('fresh.md') && Date.now() < until) {
+          const cs = await ev.next(1000)
+          if (cs) seenPaths.push(...list(cs.changed))
+        }
+        expect(seenPaths).toContain('fresh.md')
+        expect(seenPaths).not.toContain('modules/_templates/new.md')
+      } finally {
+        ev.close()
+      }
+      record('wholeRoot', { count: all.length, changed: all })
+    })
+
+    t(
+      'roots chosen in Settings win over the ones detected for --docs / FOLIO_ROOT',
+      async (c) => {
+        expect((await c.b.call('getConfig')).docsRoots).toEqual(['.']) // detected for this session
+        const cfg = await c.b.call('setConfig', { docsRoots: ['issues'] })
+        expect(cfg.docsRoots).toEqual(['issues'])
+        expect((await c.b.call('getConfig')).docsRoots).toEqual(['issues'])
+        const s = await c.b.call('scan')
+        expect(list(s.changed)).toEqual(['issues/01-first.md', 'issues/02-second.md'])
+        record('overrideRoots', norm([cfg.docsRoots, list(s.changed)], c))
+      },
+      (x) => {
+        prepGeneric(x)
+        x.sb.override = x.repo
+      },
+    )
+
+    t('a saved "." is re-detected: it neither accepts any folder nor sticks to a modules repo', async (c) => {
+      const random = path.join(c.sb.dir, 'random')
+      mkdirSync(path.join(random, 'docs', 'random'), { recursive: true })
+      writeFileSync(path.join(random, 'docs', 'random', 'README.md'), '# r'+String.fromCharCode(10))
+      await c.b.call('setConfig', { repoRoot: c.repo, docsRoots: ['.'] })
+      const none = await c.b.call('checkRoot', random)
+      expect(none).toMatchObject({ ok: false, message: EXPECTS_MESSAGE })
+      const modular = await c.b.call('checkRoot', c.repo)
+      expect(modular).toMatchObject({ ok: true, found: ROOTS })
+      expect(list(modular.suggested)).toEqual(ROOTS)
+      record('redetect', norm([none, modular], c))
+    })
+
+    t(
+      'a saved "." is re-detected as "." for a map.md layout',
+      async (c) => {
+        await c.b.call('setConfig', { repoRoot: c.repo, docsRoots: ['.'] })
+        const check = await c.b.call('checkRoot', c.repo)
+        expect(check).toMatchObject({ ok: true, found: ['.'] })
+        expect(list(check.suggested)).toEqual(['.'])
+      },
+      prepGeneric,
+    )
+
+    t('a mixed layout: modules/<space> beside a top-level issues/ folder', async (c) => {
+      mkdirSync(path.join(c.docs, 'issues'), { recursive: true })
+      writeFileSync(path.join(c.docs, 'issues', '01-top.md'), '# 01 — Top\n')
+      writeFileSync(path.join(c.docs, 'map.md'), '# Map\n')
+      // the usual roots do not reach the top-level folder, and the layout is not "replaced" by it
+      expect(await c.b.call('checkRoot', c.repo)).toMatchObject({ ok: true, found: ROOTS })
+      expect(list((await c.b.call('checkRoot', c.repo)).suggested)).toEqual([])
+      await use(c)
+      const usual = await c.b.call('scan')
+      expect(list(usual.changed)).not.toContain('issues/01-top.md')
+      expect(list(usual.changed)).toEqual(c.expected)
+      // "." adds the top-level files to the modules ones
+      await c.b.call('setConfig', { docsRoots: ['.'] })
+      const whole = await c.b.call('rescan')
+      expect(list(whole.changed)).toEqual([...c.expected, 'issues/01-top.md', 'map.md'].sort())
+      record('mixedLayout', { usual: list(usual.changed).length, whole: list(whole.changed) })
+    })
+
+    t('a bad root is refused with the same message, by the checks and by setConfig', async (c) => {
+      const out: Record<string, string> = {}
+      const notInside = 'must be a relative folder inside the docs folder'
+      for (const [key, root] of [
+        ['parent', '..'],
+        ['deepParent', 'modules/../..'],
+        ['absolute', path.resolve(c.repo)],
+        ['rooted', '/etc'],
+        ['drive', 'C:\\x'],
+        ['empty', ''],
+      ] as const) {
+        const err = await c.b.call('setConfig', { docsRoots: [root] }).then(() => '', (e: Error) => e.message)
+        expect(err, key).toBe(`invalid settings: docsRoots: ${JSON.stringify(root)} ${notInside}`)
+        const dc = await c.b.call('checkDocs', c.repo, 'docs', [root])
+        expect(dc, key).toMatchObject({ ok: false, message: 'the docs roots must be folders inside the docs folder' })
+        out[key] = norm(err, c) as string
+      }
+      // a root that is fine to write but is not there
+      const missing = await c.b.call('setConfig', { repoRoot: c.repo, docsRoots: ['nothing-here'] }).then(() => '', (e: Error) => e.message)
+      expect(missing).toContain('docsRoots: none of the selected folders exist under')
+      out.missing = norm(missing, c) as string
+      const none = await c.b.call('checkDocs', c.repo, 'docs', ['nothing-here'])
+      expect(none).toMatchObject({ ok: false, found: [], missing: ['nothing-here'], message: 'expects nothing-here/ inside the folder' })
+      expect(await c.b.call('checkDocs', c.repo, 'docs', ['.', 'modules'])).toMatchObject({ ok: true, found: ['.', 'modules'] })
+      // nothing was written
+      expect((await c.b.call('getConfig')).docsRoots).toEqual(ROOTS)
+      record('badRoots', norm([out, none], c))
     })
 
     t('checkRoot and checkDocs refuse network and device paths without touching the network', async (c) => {

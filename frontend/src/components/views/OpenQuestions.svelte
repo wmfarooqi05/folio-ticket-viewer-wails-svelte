@@ -31,7 +31,7 @@
           <span class="text-fg3">Nothing is unanswered.</span>
         {:else}
           {rows.length} unanswered across {spaces}
-          {spaces === 1 ? 'module' : 'modules'}, oldest first.
+          {spaces === 1 ? 'space' : 'spaces'}, oldest first.
         {/if}
       </p>
     </div>

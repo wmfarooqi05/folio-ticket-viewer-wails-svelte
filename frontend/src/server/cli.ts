@@ -20,7 +20,8 @@ Usage:
   folio --docs <path> [--port <n>] [--no-open]
 
 Options:
-  --docs <path>   the repo root or its docs folder (the one that holds modules/, handoffs/, patterns/)
+  --docs <path>   the repo root or its docs folder: one that holds modules/, handoffs/ or patterns/,
+                  or any docs folder with a map.md or an issues/ folder (then the whole docs folder is read)
   --port <n>      listen on this port (default: a random free port)
   --no-open       print the URL but do not open the browser
   --version       print the version
