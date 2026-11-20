@@ -1,8 +1,8 @@
 # Folio
 
-Folio is a read-only desktop viewer for file-based tickets: markdown files with a small frontmatter convention, kept in a repo under `docs/modules/`, `docs/handoffs/` and `docs/patterns/`. It shows the tree, the status of each ticket, and (as the slices land) boards, a dependency graph, waiting-on and open-question views. It never writes to a ticket. The only file it writes is its own `%APPDATA%\Folio\settings.json`.
+Folio is a read-only desktop viewer for file-based tickets: markdown files with a small frontmatter convention, kept in a repo under `docs/modules/`, `docs/handoffs/` and `docs/patterns/`. It shows the tree, the status of each ticket, and (as the slices land) boards, a dependency graph, waiting-on and open-question views. It never writes to a ticket. The only files it writes are its own `%APPDATA%\Folio\settings.json`, a disposable index cache, and the WebView2 profile in `%APPDATA%\folio.exe`.
 
-Folio is lightweight on purpose: idle RAM is the priority (about 160 MB private for the whole process tree, WebView2 included), the exe is about 14 MiB, and a ticket 15 check keeps it that way (see [Budgets](#budgets)).
+Folio is lightweight on purpose: idle RAM is the priority (about 169 MB private for the whole process tree, WebView2 included), the exe is about 14 MiB, and a ticket 15 check keeps it that way (see [Budgets](#budgets)).
 
 ## Install
 
@@ -13,7 +13,7 @@ Folio installs for the current user only: no admin prompt, files in `%LOCALAPPDA
 
 Needs Windows 10 or 11 with the WebView2 runtime (Windows 11 has it; the installer fetches it if it is missing). Uninstalling removes the program and its shortcut and leaves your settings and index cache alone (`%APPDATA%\Folio` and `%LOCALAPPDATA%\Folio`); delete those folders by hand for a clean slate.
 
-Without the installer, `binolio.exe` runs on its own after `task build`.
+Without the installer, `bin\folio.exe` runs on its own after `task build`.
 
 ## First run
 
@@ -92,14 +92,14 @@ Notes:
 | What | Cap |
 |---|---|
 | Initial JS: every chunk `index.html` loads or modulepreloads | 120 KB |
-| CSS | 25 KB |
+| CSS | 15 KB |
 | Largest Mermaid diagram family, from the Vite manifest's import graph (KaTeX's add-on listed apart; ELK is stubbed out) | 450 KB (500 KB for architecture diagrams, which carry cytoscape) |
 | highlight.js chunk | 25 KB |
-| `binolio.exe` | 20 MiB |
+| `bin\folio.exe` | 18 MiB |
 
-Run it alone with `task size` (or `node scripts/size-check.mjs`; `node --test scripts` is its self-test). It needs `frontend/dist` and `frontend/.vite/manifest.json`, both written by `npm run build` in `frontend/`.
+Run it alone with `task size` (or `node scripts/size-check.mjs`; `node --test scripts/size-check.test.mjs` is its self-test). It needs `frontend/dist` and `frontend/.vite/manifest.json`, both written by `npm run build` in `frontend/`.
 
-RAM, where **B** is the idle, indexed process-tree private memory (about 160 to 180 MB): two documents open at most B + 15 MB, after a Mermaid document at most B + 45 MB, and opening 50 documents in a row must not drift by more than 5 MB. `task ram` (`scripts/ram-check.ps1`) launches `binolio.exe` on `fixtures\docs` with a throw-away `%APPDATA%`, sums private bytes and working set over `folio.exe` and every `msedgewebview2.exe` descendant after 30 s idle, three runs per case, and prints medians plus idle CPU with a pulsing status pill on screen. It drives the UI through a dev-only hook, `FOLIO_BENCH=1` with `FOLIO_BENCH_DIR` (see `internal/shell/bench.go`): off unless both are set, no listener, one polled command file. Close other WebView2 apps first for a quieter machine, and do not run builds while it runs. The numbers from the last full run are in [docs/issues/15-budgets-and-packaging.md](docs/issues/15-budgets-and-packaging.md).
+RAM, where **B** is the idle, indexed process-tree private memory (about 169 MB): two documents open at most B + 15 MB, after a Mermaid document at most B + 45 MB, 50 different documents at most B + 30 MB, and a second pass over 50 other documents must not grow it by more than 5 MB (the leak check). `task ram` (`scripts/ram-check.ps1`) launches `bin\folio.exe` on `fixtures\docs` with a throw-away `%APPDATA%`, sums private bytes and working set over `folio.exe` and every `msedgewebview2.exe` descendant after 30 s idle, three runs per case, and prints medians plus idle CPU with a pulsing status pill on screen. It drives the UI through a dev-only hook, `FOLIO_BENCH=1` with `FOLIO_BENCH_DIR` (see `internal/shell/bench.go`): off unless both are set, no listener, one polled command file. Close other WebView2 apps first for a quieter machine, and do not run builds while it runs. The numbers from the last full run are in [docs/issues/15-budgets-and-packaging.md](docs/issues/15-budgets-and-packaging.md).
 
 ## Layout
 

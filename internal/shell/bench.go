@@ -87,6 +87,9 @@ func TakeBenchCommands(dir string) []BenchCommand {
 			out = append(out, BenchCommand{"bench:panel", arg})
 		}
 	}
+	if err := sc.Err(); err != nil {
+		log.Printf("bench: reading %s: %v", taken, err)
+	}
 	return out
 }
 

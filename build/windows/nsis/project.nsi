@@ -65,7 +65,11 @@ ManifestDPIAware true
 
 !insertmacro MUI_PAGE_WELCOME # Welcome to the installer page.
 # !insertmacro MUI_PAGE_LICENSE "resources\eula.txt" # Adds a EULA page to the installer
-!insertmacro MUI_PAGE_DIRECTORY # In which folder install page.
+# A per-user install goes to a fixed folder: the uninstaller does RMDir /r on $INSTDIR, so a folder the
+# user typed in (their Documents, say) must never be possible. Only the all-users build keeps the page.
+!if "${WAILS_INSTALL_SCOPE}" != "user"
+    !insertmacro MUI_PAGE_DIRECTORY # In which folder install page.
+!endif
 !insertmacro MUI_PAGE_INSTFILES # Installing page.
 !insertmacro MUI_PAGE_FINISH # Finished installation page.
 
@@ -86,8 +90,26 @@ OutFile "..\..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the i
 !endif
 ShowInstDetails show # This will always show the installation details.
 
+# The Folio window is titled "Folio" (main.go). A running exe cannot be replaced or removed.
+!macro checkFolioRunning un
+Function ${un}CheckFolioRunning
+   FindWindow $0 "" "Folio"
+   ${If} $0 != 0
+      MessageBox MB_OK|MB_ICONEXCLAMATION "Folio is running. Close it, then run this again."
+      Abort
+   ${EndIf}
+FunctionEnd
+!macroend
+!insertmacro checkFolioRunning ""
+!insertmacro checkFolioRunning "un."
+
 Function .onInit
    !insertmacro wails.checkArchitecture
+   Call CheckFolioRunning
+FunctionEnd
+
+Function un.onInit
+   Call un.CheckFolioRunning
 FunctionEnd
 
 Section
@@ -101,7 +123,7 @@ Section
 
     # The OFL 1.1 text that goes with the embedded Geist fonts (the licence asks for it to travel with them).
     SetOutPath "$INSTDIR\licenses"
-    File "..\..\..rontend\public\licenses\OFL-Geist.txt"
+    File "..\..\..\frontend\public\licenses\OFL-Geist.txt"
     SetOutPath $INSTDIR
 
     # Start menu only: no desktop icon.

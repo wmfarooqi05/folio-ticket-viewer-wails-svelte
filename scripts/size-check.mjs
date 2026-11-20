@@ -17,14 +17,18 @@ import { gzipSync } from 'node:zlib'
 export const KB = 1000
 export const MIB = 1024 * 1024
 
-/** The caps. Each one is the tighter number the tickets used, not the 06 D5 hard cap. */
+/**
+ * The caps. Mermaid (450) is the hard cap from ticket 15, tightened from 06 D5's 400 target only by
+ * the heavy-family exception below. CSS (15 KB) and exe (18 MiB) are 06 D5's targets, which the build meets.
+ * Initial JS is 120 KB, 06 D5's target.
+ */
 export const BUDGETS = {
   initialJs: 120 * KB, // every chunk index.html loads or modulepreloads
-  css: 25 * KB,
+  css: 15 * KB,
   mermaidFamily: 450 * KB, // the largest diagram-family closure, without the KaTeX add-on
   mermaidHeavy: 500 * KB, // the cytoscape families listed in HEAVY_FAMILIES (see below)
   highlight: 25 * KB,
-  exe: 20 * MIB,
+  exe: 18 * MIB,
 }
 
 /**
@@ -94,45 +98,69 @@ const LAYOUTS = new Set(['dagre', 'elk', 'cose-bilkent'])
 const NOT_DIAGRAMS = new Set(['sizeCapture', 'bpmnIcons', 'swimlanes'])
 
 /**
+ * Anonymous Mermaid diagram chunks (`diagram-<hash>`) and the diagram type each one is, read from the
+ * built 12.3.0 chunks. Mermaid is pinned exactly, so the hashes are stable; an unknown hash keeps its
+ * hash as the label.
+ */
+export const ANON_DIAGRAMS = {
+  'diagram-DNEMPZML': 'packet',
+  'diagram-L3MUGCDN': 'radar',
+  'diagram-LA4NIPWU': 'treemap',
+  'diagram-MHCOC4E2': 'eventmodeling',
+  'diagram-XPFHEONP': 'treeView',
+}
+
+/** The one manifest key matching a pattern; throws when it is missing, so a Mermaid upgrade cannot silently drop a charge. */
+function requireKey(manifest, re, what) {
+  const k = Object.keys(manifest).find((x) => re.test(x))
+  if (!k) throw new Error(`size-check: ${what} not found in the manifest (did the Mermaid layout or chunking change?)`)
+  return k
+}
+
+/**
  * The diagram families of Mermaid, as closures over the manifest's import graph. A family is what
  * a document with one diagram of that type loads:
  *
  *   mermaid.ts wrapper + mermaid.core (and everything they import statically)
  *   + the diagram chunk and its static imports
- *   + the layout it needs: dagre (mermaid.ts pins it) unless the family already carries
- *     cytoscape (architecture), cose-bilkent for mindmap
- *   + the @mermaid-js/parser chunk of the same name, when there is one (pie, gitGraph, ...)
+ *   + its layout, when the family needs one: dagre if its closure contains the layout loader (the
+ *     shared chunk that dynamically imports dagre, elk and cose-bilkent; mermaid.ts pins dagre),
+ *     cose-bilkent for mindmap. Architecture carries cytoscape itself and needs neither.
+ *   + the @mermaid-js/parser chunk of the same type, when there is one (pie, gitGraph, packet, ...)
  *
- * The ELK layout is stubbed in vite.config.ts, so its chunk is a few bytes and is not added.
+ * The layout chunks are found anywhere in the manifest: Rolldown puts their dynamic imports on a
+ * shared chunk, not on mermaid.core. The ELK layout is stubbed in vite.config.ts (only the elkjs
+ * library; the 13.5 KB elk wrapper chunk stays) and is never charged to a family.
  * KaTeX is loaded only for a diagram with math; it is returned separately as the add-on.
  */
 export function mermaidFamilies(manifest, gz) {
   const wrapperKey = Object.keys(manifest).find((k) => /(^|\/)render\/mermaid\.ts$/.test(k))
   const coreKey = Object.keys(manifest).find((k) => /(^|\/)mermaid\/dist\/mermaid\.core\.mjs$/.test(k))
   if (!wrapperKey || !coreKey) return null
-  const dyn = manifest[coreKey].dynamicImports ?? []
-  const diagramKeys = dyn.filter((k) => {
+  const dagreKey = requireKey(manifest, /mermaid\.core\/dagre-[A-Z0-9]+\.mjs$/, 'the dagre layout')
+  const elkKey = requireKey(manifest, /mermaid\.core\/elk-[A-Z0-9]+\.mjs$/, 'the elk layout')
+  const coseKey = requireKey(manifest, /mermaid\.core\/cose-bilkent-[A-Z0-9]+\.mjs$/, 'the cose-bilkent layout')
+  const loaderKeys = Object.keys(manifest).filter((k) => (manifest[k].dynamicImports ?? []).includes(dagreKey))
+  if (!loaderKeys.length) throw new Error('size-check: no chunk dynamically imports dagre; the layout loader moved')
+
+  const diagramKeys = (manifest[coreKey].dynamicImports ?? []).filter((k) => {
     if (!k.includes('/mermaid/dist/chunks/mermaid.core/')) return false
     const n = familyName(k)
     return !LAYOUTS.has(n) && !NOT_DIAGRAMS.has(n)
   })
-  const dagreKey = dyn.find((k) => familyName(k) === 'dagre')
-  const elkKey = dyn.find((k) => familyName(k) === 'elk')
-  const coseKey = dyn.find((k) => familyName(k) === 'cose-bilkent')
   const base = staticClosure(manifest, [wrapperKey, coreKey])
-  const dagreSet = dagreKey ? staticClosure(manifest, [dagreKey]) : new Set()
-  const coseSet = coseKey ? staticClosure(manifest, [coseKey]) : new Set()
-  const hasCytoscape = (keys) => [...keys].some((x) => /cytoscape/.test(manifest[x].file))
+  const dagreSet = staticClosure(manifest, [dagreKey])
+  const coseSet = staticClosure(manifest, [coseKey])
   const parserKeys = Object.keys(manifest).filter((k) => k.includes('/mermaid-parser.core/'))
   const norm = (s) => s.toLowerCase().replace(/^railroad-/, '').replace(/diagram$|-definition$|-v2$/g, '')
 
   const families = diagramKeys.map((k) => {
-    const name = familyName(k)
+    const raw = familyName(k)
+    const name = ANON_DIAGRAMS[raw] ?? raw
     const keys = new Set([...base, ...staticClosure(manifest, [k])])
-    // Layout: a family that already carries cytoscape (architecture) does not use dagre; mindmap
-    // needs cose-bilkent; every other family is charged for dagre, which is an upper bound.
-    const layout = /mindmap/.test(name) ? coseSet : hasCytoscape(keys) ? new Set() : dagreSet
-    for (const x of layout) keys.add(x)
+    const hasCytoscape = [...keys].some((x) => /cytoscape/.test(manifest[x].file))
+    const needsDagre = !hasCytoscape && loaderKeys.some((l) => keys.has(l))
+    for (const x of /mindmap/.test(name) ? coseSet : needsDagre ? dagreSet : []) keys.add(x)
     const parser = parserKeys.find((p) => {
       const pn = norm(familyName(p))
       return pn && norm(name).startsWith(pn)
@@ -145,7 +173,7 @@ export function mermaidFamilies(manifest, gz) {
 
   const katexKey = Object.keys(manifest).find((k) => /(^|\/)katex\/dist\/katex\.mjs$/.test(k))
   const katex = katexKey ? closureBytes(manifest, staticClosure(manifest, [katexKey]), gz).bytes : 0
-  const elk = elkKey ? closureBytes(manifest, staticClosure(manifest, [elkKey]), gz).bytes : 0
+  const elk = gz(manifest[elkKey].file) // the wrapper chunk only; elkjs itself is the stub
   const baseBytes = closureBytes(manifest, base, gz).bytes
   return { families, katex, elk, baseBytes }
 }
@@ -228,7 +256,7 @@ export function run({ dist, manifestPath, exePath, checkExe = true, log = consol
       log(`  ${pad(f.name, 26)}${fmtKB(f.bytes)}   +KaTeX ${fmtKB(f.bytes + mer.katex)}   ${f.chunks} chunks`)
     }
     log(`  KaTeX add-on (only when a diagram has math): ${(mer.katex / KB).toFixed(1)} KB`)
-    log(`  ELK layout is stubbed (vite.config.ts): its chunk is ${(mer.elk / KB).toFixed(1)} KB instead of ~466 KB`)
+    log(`  ELK: elkjs is stubbed (vite.config.ts), so ~466 KB is not bundled; Mermaid's own elk wrapper chunk stays, ${(mer.elk / KB).toFixed(1)} KB, never loaded (dagre is pinned)`)
     const over = mer.families.filter((f) => f.bytes + mer.katex > BUDGETS.mermaidFamily).map((f) => f.name)
     if (over.length) log(`  note: with the KaTeX add-on, over ${(BUDGETS.mermaidFamily / KB).toFixed(0)} KB: ${over.join(', ')} (cap is checked without it)`)
   }

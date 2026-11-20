@@ -103,9 +103,12 @@
   // Bench hook (ticket 15): opens an indexed file when the exe runs with FOLIO_BENCH=1; inert otherwise.
   onMount(() =>
     api.onBench((kind, path) => {
-      if (!indexStore.index?.files[path]) return
+      if (!Object.hasOwn(indexStore.index?.files ?? {}, path)) return
       if (kind === 'open') void select(path).then(() => void api.logTimings(`bench: opened ${path}`))
-      else openInPanel(path, null)
+      else {
+        openInPanel(path, null)
+        void api.logTimings(`bench: opened (panel) ${path}`)
+      }
     }),
   )
 

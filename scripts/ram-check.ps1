@@ -10,7 +10,8 @@ Cases (each run is a fresh launch):
   a    idle and indexed (this is B)
   b    two documents open: one in the middle pane, one in the side panel
   c    after a Mermaid document (flowchart)
-  d    50 documents in a row (twice): drift against the same launch's idle sample, and plateau
+  d    two passes over DIFFERENT documents (50 + 50, or the fixture list split in halves): drift against
+       the idle sample, and pass-to-pass drift, which is the leak check
   cpu  average CPU over 30 s with a pulsing in-progress pill on screen (percent of one core)
 
 Isolation: the exe runs with APPDATA and LOCALAPPDATA pointing into a temp folder, so settings.json,
@@ -76,6 +77,7 @@ function Start-Folio([string]$Work) {
   $env:FOLIO_BENCH_DIR = Join-Path $Work 'bench'
   $log = Join-Path $Work 'folio.log'
   $proc = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -RedirectStandardOutput (Join-Path $Work 'out.log')
+  $script:Started.Add($proc)  # the final cleanup kills these processes and nothing else
   $t0 = Get-Date
   # wait until the start timings line is in the log: the index is built and the tree shows
   while (((Get-Date) - $t0).TotalSeconds -lt 60) {
@@ -102,9 +104,10 @@ function Send-Bench($h, [string[]]$Lines) {
   $f = Join-Path $h.Bench 'cmd.txt'
   $tmp = Join-Path $h.Bench 'cmd.new'
   [IO.File]::WriteAllLines($tmp, $Lines)
-  # wait for the previous batch to be taken, then publish atomically
+  # wait for the previous batch to be taken; never overwrite one nobody has taken
   for ($i = 0; $i -lt 40 -and (Test-Path $f); $i++) { Start-Sleep -Milliseconds 100 }
-  Move-Item $tmp $f -Force
+  if (Test-Path $f) { throw "the previous bench batch was not taken within 4 s ($f)" }
+  Move-Item $tmp $f
 }
 
 function Wait-Opened($h, [int]$Count, [int]$TimeoutSec = 30) {
@@ -130,10 +133,14 @@ $mermaidDocs = @('handoffs/ocm-cutover-handoff.md', $flow)
 $all = Get-ChildItem -Path $Docs -Recurse -Filter *.md -File |
   ForEach-Object { $_.FullName.Substring($Docs.Length + 1).Replace('\', '/') } |
   Where-Object { $_ -notin $mermaidDocs -and $_ -notmatch '(^|/)_templates/' } | Sort-Object
-if ($all.Count -lt 50) { throw "need at least 50 plain documents, found $($all.Count)" }
-$fifty = $all | Select-Object -First 50
+# case d: 50 + 50 distinct plain documents when there are 100, otherwise the list split in two halves
+$k = [math]::Min(50, [math]::Floor($all.Count / 2))
+if ($k -lt 10) { throw "need at least 20 plain documents, found $($all.Count)" }
+$pass1 = $all | Select-Object -First $k
+$pass2 = $all | Select-Object -Skip $k -First $k
 
 $results = [System.Collections.Generic.List[object]]::new()
+$script:Started = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
 function Add-Result($case, $run, $extra) {
   $o = [ordered]@{ case = $case; run = $run }
   foreach ($k in $extra.Keys) { $o[$k] = $extra[$k] }
@@ -156,7 +163,7 @@ try {
           }
           'b' {
             Send-Bench $h @("open $plain1", "panel $plain2")
-            [void](Wait-Opened $h 1)
+            [void](Wait-Opened $h 2)  # the open and the panel each log 'bench: opened'
             $m = Wait-Idle $h
             Add-Result b $run ([ordered]@{ private = $m.Private; ws = $m.WS; procs = $m.Procs })
           }
@@ -167,10 +174,12 @@ try {
             Add-Result c $run ([ordered]@{ private = $m.Private; ws = $m.WS; procs = $m.Procs })
           }
           'd' {
+            # Pass 1 and pass 2 open DIFFERENT documents ($k each), so the pass-to-pass drift is the leak check:
+            # growth that continues over documents never seen before. The first pass also warms the renderer up.
             $pre = Wait-Idle $h
             $n = 0
             foreach ($round in 1, 2) {
-              foreach ($doc in $fifty) {
+              foreach ($doc in $(if ($round -eq 1) { $pass1 } else { $pass2 })) {
                 $n++
                 Send-Bench $h @("open $doc")
                 [void](Wait-Opened $h $n)
@@ -180,9 +189,9 @@ try {
             }
             $post2 = Wait-Idle $h
             Add-Result d $run ([ordered]@{
-              pre_private = $pre.Private; post50_private = $post1.Private; post100_private = $post2.Private
-              drift50 = [math]::Round($post1.Private - $pre.Private, 1); drift_second_round = [math]::Round($post2.Private - $post1.Private, 1)
-              pre_ws = $pre.WS; post50_ws = $post1.WS; post100_ws = $post2.WS
+              docs_per_pass = $k; pre_private = $pre.Private; pass1_private = $post1.Private; pass2_private = $post2.Private
+              drift_vs_idle = [math]::Round($post1.Private - $pre.Private, 1); pass_to_pass = [math]::Round($post2.Private - $post1.Private, 1)
+              pre_ws = $pre.WS; pass1_ws = $post1.WS; pass2_ws = $post2.WS
             })
           }
           'cpu' {
@@ -204,10 +213,15 @@ try {
 } finally {
   $env:APPDATA = $saved.APPDATA; $env:LOCALAPPDATA = $saved.LOCALAPPDATA
   Remove-Item Env:FOLIO_ROOT, Env:FOLIO_BENCH, Env:FOLIO_BENCH_DIR -ErrorAction SilentlyContinue
-  # sweep: anything still running from the temp folder or from this exe
+  # sweep: only what this script started. Never match on the exe path or name: that would also hit any
+  # Folio the user is running. The processes come from Start-Process; the tree kill takes the WebView2 children.
+  # HasExited is checked on the Process object we started, so a reused PID is never touched.
+  foreach ($p in $script:Started) {
+    try { if (-not $p.HasExited) { & cmd /c "taskkill /PID $($p.Id) /T /F >nul 2>&1" } } catch {}
+  }
+  # WebView2 processes can outlive a killed parent; theirs carry our temp folder in the command line
   Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine -like "*$tmpRoot*" } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-  Get-Process folio -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $Exe } | Stop-Process -Force -ErrorAction SilentlyContinue
   Start-Sleep -Seconds 1
   Remove-Item -Recurse -Force $tmpRoot -ErrorAction SilentlyContinue
 }
