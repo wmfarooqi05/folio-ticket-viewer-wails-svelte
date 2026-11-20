@@ -2,7 +2,7 @@
 node_modules/
 dist/
 frontend/dist-lib/
-packages/folio-viewer/folio-web.mjs
+packages/folio-issues-kanban-viewer/folio-web.mjs
 *.tgz
 bin/
 build/bin/

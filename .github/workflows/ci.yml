@@ -1,6 +1,6 @@
 # Ticket 17: tests, a reproducible build, the npm package, and a release on a v* tag.
 # Ticket 26: Node only. The Go desktop app is retired and frozen (RETIRED.md), so nothing here installs
-# or runs Go, wails3 or task, and the release is the folio-viewer tarball alone.
+# or runs Go, wails3 or task, and the release is the folio-issues-kanban-viewer tarball alone.
 # Every action is pinned by full commit SHA (the version is in the comment). To update one,
 # look the tag up with `gh api repos/<owner>/<repo>/commits/<tag> -q .sha`.
 name: ci
@@ -84,7 +84,7 @@ jobs:
   # The build jobs get no signing permissions: they run every build dependency, including on
   # pull requests and manual runs. Signing happens in the separate `attest` job below.
   npm-package:
-    name: folio-viewer package
+    name: folio-issues-kanban-viewer package
     needs: [checks, audit]
     runs-on: windows-2025
     permissions:
@@ -107,20 +107,20 @@ jobs:
       - name: Size budgets
         run: node scripts/size-check.mjs
       - name: npm pack
-        working-directory: packages/folio-viewer
+        working-directory: packages/folio-issues-kanban-viewer
         run: |
           npm pack --ignore-scripts
-          sha256sum folio-viewer-*.tgz | tee SHA256SUMS-npm
+          sha256sum folio-issues-kanban-viewer-*.tgz | tee SHA256SUMS-npm
           # list to a file first: `tar | head` makes tar exit with SIGPIPE (141) under pipefail
-          tar -tzf folio-viewer-*.tgz > "$RUNNER_TEMP/tarball-files.txt"
+          tar -tzf folio-issues-kanban-viewer-*.tgz > "$RUNNER_TEMP/tarball-files.txt"
           head -40 "$RUNNER_TEMP/tarball-files.txt"
           echo "($(wc -l < "$RUNNER_TEMP/tarball-files.txt") files)"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: folio-viewer-npm
+          name: folio-issues-kanban-viewer-npm
           path: |
-            packages/folio-viewer/folio-viewer-*.tgz
-            packages/folio-viewer/SHA256SUMS-npm
+            packages/folio-issues-kanban-viewer/folio-issues-kanban-viewer-*.tgz
+            packages/folio-issues-kanban-viewer/SHA256SUMS-npm
           if-no-files-found: error
 
   # Signed build provenance. Only for a v* tag on a public repo: attestations on a private repo
@@ -145,7 +145,7 @@ jobs:
         run: sha256sum -c SHA256SUMS-npm
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: files/folio-viewer-*.tgz
+          subject-path: files/folio-issues-kanban-viewer-*.tgz
 
   release:
     name: GitHub Release
@@ -165,7 +165,7 @@ jobs:
       - name: The tag must match the package version
         run: |
           want="${GITHUB_REF_NAME#v}"
-          have="$(node -p "require('./packages/folio-viewer/package.json').version")"
+          have="$(node -p "require('./packages/folio-issues-kanban-viewer/package.json').version")"
           [ "$want" = "$have" ] || { echo "tag $GITHUB_REF_NAME but package.json says $have"; exit 1; }
       - name: Create the release
         env:

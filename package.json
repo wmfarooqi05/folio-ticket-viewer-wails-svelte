@@ -1,7 +1,7 @@
 {
   "name": "folio-workspace",
   "private": true,
-  "description": "Not a package. It only gives the repo root a place for `npm run web` (ticket 24). The app is in frontend/, the published package in packages/folio-viewer/.",
+  "description": "Not a package. It only gives the repo root a place for `npm run web` (ticket 24). The app is in frontend/, the published package in packages/folio-issues-kanban-viewer/.",
   "scripts": {
     "web": "node scripts/web.mjs",
     "test:contract": "npm --prefix frontend run test:contract"

@@ -31,7 +31,7 @@ tasks:
       - node scripts/web.mjs {{.CLI_ARGS}}
 
   build:
-    summary: Builds packages/folio-viewer (folio-web.mjs and dist/), the folder `npm publish` ships, then checks the size budgets
+    summary: Builds packages/folio-issues-kanban-viewer (folio-web.mjs and dist/), the folder `npm publish` ships, then checks the size budgets
     dir: frontend
     deps: [common:node:check, common:install:frontend:deps]
     cmds:

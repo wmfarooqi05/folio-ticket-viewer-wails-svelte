@@ -81,7 +81,7 @@ const LICENSE_FILE = /^(licen[cs]e|copying|notice)([-_.].*)?$/i
 /** THIRD-PARTY-NOTICES.txt: one block per package, with its licence file(s) and any NOTICE file in full. */
 export function renderNotices(pkgs: BundledPackage[]): string {
   const out = [
-    'Third-party notices for folio-viewer',
+    'Third-party notices for folio-issues-kanban-viewer',
     '',
     'The browser bundle in dist/ contains code from the packages below. Each block gives the package,',
     'its version, its licence and the full licence text (and NOTICE file, where there is one) as shipped in',

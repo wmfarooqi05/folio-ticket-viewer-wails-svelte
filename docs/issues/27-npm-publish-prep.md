@@ -1,7 +1,7 @@
 ---
 type: build
 status: blocked
-status_note: "v0.1.0 tagged, CI tarball verified and dry-run published (Nov 21, 2026); waiting on the owner: npm login and the real publish (step 5)"
+status_note: "renamed to folio-issues-kanban-viewer and v0.1.0 re-tagged (Nov 21, 2026); waiting on the owner: npm login and the real publish (step 5)"
 waiting_on: owner
 blocked_by: []
 blocked_note: null
@@ -83,3 +83,5 @@ All three blockers and the optional items are done. Nothing was published, tagge
 - **Package README:** `--version`, `folio-viewer` command, settings and cache paths for Windows, macOS and Linux, "tested on Windows", uninstall, links to SECURITY.md and Releases (absolute URLs), notices mention, no desktop-app wording.
 - **SECURITY.md:** GitHub private vulnerability reporting, scope (npm package and web mode), desktop app retired and unsupported, no email.
 - **Owner:** turn on private vulnerability reporting before making the repo public.
+
+**Renamed (owner, Nov 21, 2026).** Before anything was published, the npm package became `folio-issues-kanban-viewer` (was `folio-viewer`). The folder is now `packages/folio-issues-kanban-viewer`, and the second command takes the same name; `folio` stays. The README, SECURITY.md, docs/releasing.md, the workflows and the build scripts use the new name. This ticket's earlier text and older tickets keep the old one as history. The first `v0.1.0` tag and Release, built as `folio-viewer`, were deleted and made again from the renamed commit.

@@ -5,7 +5,7 @@ import { noThirdPartyInServer } from './vite.shared'
 
 // Bundles the Node server (src/server) into one file, folio-web.mjs, for the npm package. It imports
 // Node built-ins only, so the output has no dependencies and runs with plain `node`.
-const pkg = JSON.parse(readFileSync(new URL('../packages/folio-viewer/package.json', import.meta.url), 'utf8')) as { version: string }
+const pkg = JSON.parse(readFileSync(new URL('../packages/folio-issues-kanban-viewer/package.json', import.meta.url), 'utf8')) as { version: string }
 
 export default defineConfig({
   publicDir: false,
@@ -13,7 +13,7 @@ export default defineConfig({
   define: { __FOLIO_VERSION__: JSON.stringify(pkg.version) },
   build: {
     ssr: 'src/server/bin.ts',
-    outDir: '../packages/folio-viewer',
+    outDir: '../packages/folio-issues-kanban-viewer',
     emptyOutDir: false, // dist/ (the frontend) lives in the same folder
     target: 'node22',
     minify: false, // readable, and it is 30 KB

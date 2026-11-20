@@ -1,6 +1,6 @@
 # The Go desktop app is retired
 
-Decided Nov 20, 2026 ([ticket 26](docs/issues/26-retire-the-desktop-app.md)). Folio now has one backend: the Node server behind web mode (`folio`, `npx folio-viewer`). Nothing was deleted.
+Decided Nov 20, 2026 ([ticket 26](docs/issues/26-retire-the-desktop-app.md)). Folio now has one backend: the Node server behind web mode (`folio`, `npx folio-issues-kanban-viewer`). Nothing was deleted.
 
 ## What is frozen
 

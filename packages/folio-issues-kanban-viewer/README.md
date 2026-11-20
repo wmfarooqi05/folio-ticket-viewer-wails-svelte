@@ -1,10 +1,10 @@
-# folio-viewer
+# folio-issues-kanban-viewer
 
 A read-only viewer for Markdown tickets. It starts a small web server on your own machine
 and opens your browser. No exe, no dependencies: only Node 22 or newer.
 
 ```
-npx folio-viewer --docs <path>
+npx folio-issues-kanban-viewer --docs <path>
 ```
 
 `<path>` is the repo root, or its docs folder (the one that holds `modules/`, `handoffs/`, `patterns/`).
@@ -12,11 +12,11 @@ npx folio-viewer --docs <path>
 Or install it once:
 
 ```
-npm install -g folio-viewer
-folio-viewer --docs <path>      # or the short name: folio --docs <path>
+npm install -g folio-issues-kanban-viewer
+folio-issues-kanban-viewer --docs <path>      # or the short name: folio --docs <path>
 ```
 
-(`folio-viewer` is the safe name: another npm package called `folio` also installs a `folio` command, and
+(`folio-issues-kanban-viewer` is the safe name: another npm package called `folio` also installs a `folio` command, and
 two global installs would clash.)
 
 | Option | |
@@ -33,7 +33,7 @@ It prints a link whose token works once, and opens it. The server listens on 127
 It never writes to your tickets. Stop it with Ctrl+C (under `npx` on Windows the shell may ask "Terminate batch job (Y/N)?": answer Y).
 
 A Windows shortcut for an app window: make a shortcut with the target
-`cmd /c folio-viewer --app --docs "<path>"`. (Folio does not create the shortcut itself.)
+`cmd /c folio-issues-kanban-viewer --app --docs "<path>"`. (Folio does not create the shortcut itself.)
 
 ## Where it keeps files
 
@@ -49,7 +49,7 @@ Tested on Windows. macOS and Linux should work (the paths above are in the code)
 
 ## Uninstall
 
-- Installed globally: `npm uninstall -g folio-viewer`.
+- Installed globally: `npm uninstall -g folio-issues-kanban-viewer`.
 - Run with `npx`: nothing is installed. Its copy sits in the npm cache; `npm cache clean --force` removes it.
 - To remove its data too, delete the settings file and the cache folder from the table above.
 

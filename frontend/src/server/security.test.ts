@@ -65,15 +65,20 @@ describe('binding', () => {
     const others = Object.values(os.networkInterfaces())
       .flat()
       .filter((i) => i && i.family === 'IPv4' && !i.internal)
-    for (const i of others) {
-      const code = await new Promise<string>((ok) => {
-        const s = net.connect({ host: i!.address, port: srv.port, timeout: 1500 })
-        s.on('connect', () => (s.destroy(), ok('connected')))
-        s.on('timeout', () => (s.destroy(), ok('timeout')))
-        s.on('error', (e: NodeJS.ErrnoException) => ok(e.code ?? 'error'))
-      })
-      expect(code, i!.address).not.toBe('connected')
-    }
+    // all at once: a PC with a VPN or Hyper-V switches has several addresses that drop packets, and
+    // one 1.5 s timeout after another would run past the test's 5 s limit
+    const codes = await Promise.all(
+      others.map(
+        (i) =>
+          new Promise<[string, string]>((ok) => {
+            const s = net.connect({ host: i!.address, port: srv.port, timeout: 1500 })
+            s.on('connect', () => (s.destroy(), ok([i!.address, 'connected'])))
+            s.on('timeout', () => (s.destroy(), ok([i!.address, 'timeout'])))
+            s.on('error', (e: NodeJS.ErrnoException) => ok([i!.address, e.code ?? 'error']))
+          }),
+      ),
+    )
+    for (const [address, code] of codes) expect(code, address).not.toBe('connected')
   })
 
   it('uses a random free port by default', () => {

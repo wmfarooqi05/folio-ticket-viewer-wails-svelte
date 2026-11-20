@@ -8,7 +8,7 @@ import { elkStub, parserVersion, thirdPartyNotices } from './vite.shared'
 // The browser build for web mode (ticket 24). Same app as the desktop build, with two differences:
 //  - lib/backend.ts is swapped for lib/backend-http.ts, so @wailsio/runtime and the generated
 //    bindings are never imported (no wails plugin, and the output has no trace of them);
-//  - it goes to ../packages/folio-viewer/dist, the folder the npm package ships.
+//  - it goes to ../packages/folio-issues-kanban-viewer/dist, the folder the npm package ships.
 // The desktop build (vite.config.ts) is untouched.
 export default defineConfig(async () => ({
   resolve: {
@@ -20,7 +20,7 @@ export default defineConfig(async () => ({
     ],
   },
   build: {
-    outDir: '../packages/folio-viewer/dist',
+    outDir: '../packages/folio-issues-kanban-viewer/dist',
     emptyOutDir: true,
     // The manifest feeds scripts/size-check.mjs (ticket 26: it checks this bundle by default).
     manifest: true,
@@ -35,7 +35,7 @@ export default defineConfig(async () => ({
       name: 'folio-manifest-out',
       apply: 'build',
       closeBundle() {
-        const from = fileURLToPath(new URL('../packages/folio-viewer/dist/.vite', import.meta.url))
+        const from = fileURLToPath(new URL('../packages/folio-issues-kanban-viewer/dist/.vite', import.meta.url))
         const to = fileURLToPath(new URL('./.vite-web', import.meta.url))
         if (!existsSync(from)) return
         rmSync(to, { recursive: true, force: true })

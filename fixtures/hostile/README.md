@@ -6,7 +6,7 @@ could write it: HTML and SVG payloads, Mermaid directive and `click` tricks, eve
 bombs and deep nesting. The "beacon" hosts are `evil.example` (reserved, RFC 2606) and `\\evil\share`,
 so nothing here can reach a real machine even if a check fails.
 
-Open it with `npx folio-viewer --docs fixtures/hostile` (or `task web -- --docs fixtures/hostile`) and
+Open it with `npx folio-issues-kanban-viewer --docs fixtures/hostile` (or `task web -- --docs fixtures/hostile`) and
 watch the network: the only requests must be to `127.0.0.1:<port>`.
 
 `frontend/src/lib/render/hostile.test.ts` renders every file here through the real pipeline (parser,

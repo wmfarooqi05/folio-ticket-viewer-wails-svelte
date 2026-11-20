@@ -11,7 +11,7 @@ Folio needs **Node 22 or newer** and nothing else.
 **On your own PC (Windows), in an app window.** Install it once, then run it with `--app`:
 
 ```
-npm install -g folio-viewer
+npm install -g folio-issues-kanban-viewer
 folio --app --docs E:\projects\ticket_ui
 ```
 
@@ -26,7 +26,7 @@ cmd /c folio --app --docs "E:\projects\ticket_ui"
 and set **Run** to *Minimized* so the console window stays out of the way. If `folio` is not found from a shortcut, use the full path of `node.exe` and of the global package instead (`npm root -g` shows where it is):
 
 ```
-"C:\Program Files\nodejs\node.exe" "%APPDATA%\npm\node_modules\folio-viewer\folio-web.mjs" --app --docs "E:\projects\ticket_ui"
+"C:\Program Files\nodejs\node.exe" "%APPDATA%\npm\node_modules\folio-issues-kanban-viewer\folio-web.mjs" --app --docs "E:\projects\ticket_ui"
 ```
 
 Folio does not write the shortcut for you, on purpose: on a company machine, a Node program that spawns PowerShell to make `.lnk` files can look like malware. Closing the window does not stop the server; stop it with Ctrl+C in its console (or close the minimized console).
@@ -34,7 +34,7 @@ Folio does not write the shortcut for you, on purpose: on a company machine, a N
 **On the company VM (or anywhere), in a browser tab.**
 
 ```
-npx folio-viewer --docs <path>
+npx folio-issues-kanban-viewer --docs <path>
 ```
 
 [Web mode](#web-mode) below has the details.
@@ -44,10 +44,10 @@ npx folio-viewer --docs <path>
 Folio runs in a browser, from Node alone: on your own PC (see [Run it](#run-it)) and on a company VM that has Node.
 
 ```
-npx folio-viewer --docs <path>
+npx folio-issues-kanban-viewer --docs <path>
 ```
 
-`<path>` is the repo root, or its docs folder (one with `modules/`, `handoffs/` or `patterns/`, or with a `map.md` or an `issues/` folder; the latter is read whole). Node 22 or newer is the only requirement. The command starts a server on `127.0.0.1`, prints a link whose token works once, and opens it in your default browser. To install it once instead: `npm install -g folio-viewer`, then `folio --docs <path>`. `--port <n>` picks the port (default: a random free one), `--app` opens an Edge app window instead of a tab (Windows; see [Run it](#run-it)), `--no-open` only prints the link, and without `--docs` the page asks for a path.
+`<path>` is the repo root, or its docs folder (one with `modules/`, `handoffs/` or `patterns/`, or with a `map.md` or an `issues/` folder; the latter is read whole). Node 22 or newer is the only requirement. The command starts a server on `127.0.0.1`, prints a link whose token works once, and opens it in your default browser. To install it once instead: `npm install -g folio-issues-kanban-viewer`, then `folio --docs <path>`. `--port <n>` picks the port (default: a random free one), `--app` opens an Edge app window instead of a tab (Windows; see [Run it](#run-it)), `--no-open` only prints the link, and without `--docs` the page asks for a path.
 
 Stop it with Ctrl+C. Under `npx` on Windows the shell may then ask "Terminate batch job (Y/N)?": answer Y, that is fine.
 
@@ -62,7 +62,7 @@ What is different from the desktop app:
 - No window bounds, no RAM readout, no "Open settings file".
 - Only the browser that used the printed link can talk to the server: it listens on `127.0.0.1` only, accepts only `127.0.0.1:<port>` and `localhost:<port>` as the host, and wants a cookie it gets from the token in the link. Cross-site requests are refused. Images are served under `/doc/` with the same path rules as the desktop app.
 
-For development, from the repo root: `npm run web -- --docs fixtures\docs` (or `task web -- --docs fixtures\docs`) builds what is stale and runs it. `task build` builds `packages/folio-viewer/` (`folio-web.mjs` plus `dist/`), the folder that gets published; run `npm pack` there to check the file list. The server is TypeScript under `frontend/src/server/`, with no dependencies. `task test` runs the frontend tests and the contract suite against the Node server. The Go services are frozen, but `task test:contract:go` (the same as `FOLIO_CONTRACT_GO=1 npm run test:contract`, needs Go) still runs every case against both and checks that the two report the same (`cmd/contract-server` is the Go side of that harness).
+For development, from the repo root: `npm run web -- --docs fixtures\docs` (or `task web -- --docs fixtures\docs`) builds what is stale and runs it. `task build` builds `packages/folio-issues-kanban-viewer/` (`folio-web.mjs` plus `dist/`), the folder that gets published; run `npm pack` there to check the file list. The server is TypeScript under `frontend/src/server/`, with no dependencies. `task test` runs the frontend tests and the contract suite against the Node server. The Go services are frozen, but `task test:contract:go` (the same as `FOLIO_CONTRACT_GO=1 npm run test:contract`, needs Go) still runs every case against both and checks that the two report the same (`cmd/contract-server` is the Go side of that harness).
 
 ## First run
 
@@ -121,7 +121,7 @@ Nothing in your tickets repo, ever. Everything else, in web mode and in the reti
 | WebView2 profile: cookies, cache and local storage of the embedded browser | `%LOCALAPPDATA%\Folio\WebView2` (older builds: `%APPDATA%\folio.exe`) | retired desktop app only |
 | The program | `%LOCALAPPDATA%\Programs\Folio` (per-user install) | desktop installer |
 
-Web mode (`folio`, `npx folio-viewer`) writes only the first two rows (the same files, the same places, from Node). It has no WebView2 profile and starts no other process than your browser, which keeps its own data. On a non-Windows machine the settings file is under `~/.config/Folio` (or `$XDG_CONFIG_HOME`) and the cache under `~/.cache/Folio` (`$XDG_CACHE_HOME`).
+Web mode (`folio`, `npx folio-issues-kanban-viewer`) writes only the first two rows (the same files, the same places, from Node). It has no WebView2 profile and starts no other process than your browser, which keeps its own data. On a non-Windows machine the settings file is under `~/.config/Folio` (or `$XDG_CONFIG_HOME`) and the cache under `~/.cache/Folio` (`$XDG_CACHE_HOME`).
 
 ## Develop
 
@@ -129,7 +129,7 @@ Needs Node 26 (with npm) for release builds and any supported Node for tests, an
 
 ```
 task web -- --docs fixtures\docs   # build what is stale and run it (the same as npm run web -- ...)
-task build                         # builds packages/folio-viewer (folio-web.mjs and dist/), then the size budgets (build:web is the old name)
+task build                         # builds packages/folio-issues-kanban-viewer (folio-web.mjs and dist/), then the size budgets (build:web is the old name)
 task test                          # frontend and Node server tests, the contract suite against the Node server, size-check's self-test
 task check                         # svelte-check
 task test:contract:go              # also runs the frozen Go services through the contract suite (needs Go)
@@ -141,27 +141,27 @@ task test:contract:go              # also runs the frozen Go services through th
 
 `task build` is meant to give the same bytes every time (ticket 17): `npm ci --ignore-scripts` (exactly `package-lock.json`, no dependency install scripts). **A matching hash needs the same Node patch as CI, 26.13.1** (`task build` only refuses a major other than 26; tests and checks run on any supported Node). The first local hashes in ticket 17 came from Node 26.7.0. The retired desktop build also pins Go and wails3; see [Retired: desktop app](#retired-desktop-app).
 
-`.github/workflows/ci.yml` runs on `windows-2025` with every action pinned by commit SHA, and needs Node only (ticket 26 dropped Go, wails3 and the exe job): svelte-check, vitest, the contract tests against the Node server, the size budgets, `npm audit`, then the npm tarball plus `SHA256SUMS-npm`. The build job holds no signing permissions. Every run uploads the files as artifacts; a `v*` tag whose number matches `packages/folio-viewer/package.json` also creates a GitHub Release with the tarball and its checksum file (the release notes name the CI run), and, if the repo is public, a separate `attest` job signs a build-provenance attestation for the tarball. (Releases before ticket 26 also carried `folio.exe`.)
+`.github/workflows/ci.yml` runs on `windows-2025` with every action pinned by commit SHA, and needs Node only (ticket 26 dropped Go, wails3 and the exe job): svelte-check, vitest, the contract tests against the Node server, the size budgets, `npm audit`, then the npm tarball plus `SHA256SUMS-npm`. The build job holds no signing permissions. Every run uploads the files as artifacts; a `v*` tag whose number matches `packages/folio-issues-kanban-viewer/package.json` also creates a GitHub Release with the tarball and its checksum file (the release notes name the CI run), and, if the repo is public, a separate `attest` job signs a build-provenance attestation for the tarball. (Releases before ticket 26 also carried `folio.exe`.)
 
 **Verify a downloaded package.** The checksum files only show that the file was not damaged or swapped in transit, and only if you get the hash from somewhere other than the download itself (the CI run page, or a message from the owner): `SHA256SUMS-npm` sits on the same release as the tarball, so anyone who can edit the release can replace both. The real provenance is the attestation (public repo only):
 
 ```
-(Get-FileHash folio-viewer-0.1.0.tgz).Hash -eq ((Get-Content SHA256SUMS-npm) -split '\s+')[0]
-gh attestation verify folio-viewer-0.1.0.tgz --repo <owner>/<repo> --source-ref refs/tags/v0.1.0 --signer-workflow <owner>/<repo>/.github/workflows/ci.yml
+(Get-FileHash folio-issues-kanban-viewer-0.1.0.tgz).Hash -eq ((Get-Content SHA256SUMS-npm) -split '\s+')[0]
+gh attestation verify folio-issues-kanban-viewer-0.1.0.tgz --repo <owner>/<repo> --source-ref refs/tags/v0.1.0 --signer-workflow <owner>/<repo>/.github/workflows/ci.yml
 ```
 
 The first line prints `True` when the hash matches (the comparison is case-insensitive and reads the `hash *file` format). On a private repo there are no attestations (they need GitHub Enterprise Cloud), so the hash from the run page is all there is. For stronger release protection, turn on GitHub's immutable releases for the repo (Settings > General), so a published release's files and tag cannot be changed afterwards.
 
 **Publishing the npm package** is manual and the owner's decision. For every update after 0.1.0, follow the release checklist in [docs/releasing.md](docs/releasing.md). The order matters (ticket 27; rules from docs.npmjs.com, Nov 20, 2026):
 
-1. **0.1.0 is published by hand**, with the checksummed tarball from CI: `npm login`, `npm publish ./folio-viewer-0.1.0.tgz --dry-run`, then `npm publish ./folio-viewer-0.1.0.tgz`, then `npm logout`. A relative tarball path needs the `./` ([npm publish](https://docs.npmjs.com/cli/v11/commands/npm-publish)). It cannot be done by the workflow: npm only lets you add a trusted publisher to a package that already exists ([npm trust](https://docs.npmjs.com/cli/v11/commands/npm-trust)).
-2. **Trusted publishing starts from 0.1.1**, through the `publish-npm` workflow (Actions tab, "Run workflow", on a `v*` tag). It only runs by hand, refuses a tag that is not on `main`, and publishes the tarball from the CI run of that same commit after checking its checksum and attestation. It uses npm trusted publishing (OIDC): there is no npm token anywhere. Right before the 0.1.1 release: make the repo public; in the repo's Settings > Environments create `npm-publish`, add yourself as a required reviewer and limit it to `v*` tags (the reviewer is the gate that holds even against someone with write access, so set it first); then on npmjs.com open the `folio-viewer` package settings and add a GitHub Actions trusted publisher (this repo, workflow `publish-npm.yml`, environment `npm-publish`) and **tick "npm publish"**: trusted publishers created after Sep 03, 2026 allow only `npm stage publish` by default, and the workflow runs `npm publish` ([trusted publishers](https://docs.npmjs.com/trusted-publishers)). npm needs CLI 11.5.1 or newer; Node 26 ships that.
+1. **0.1.0 is published by hand**, with the checksummed tarball from CI: `npm login`, `npm publish ./folio-issues-kanban-viewer-0.1.0.tgz --dry-run`, then `npm publish ./folio-issues-kanban-viewer-0.1.0.tgz`, then `npm logout`. A relative tarball path needs the `./` ([npm publish](https://docs.npmjs.com/cli/v11/commands/npm-publish)). It cannot be done by the workflow: npm only lets you add a trusted publisher to a package that already exists ([npm trust](https://docs.npmjs.com/cli/v11/commands/npm-trust)).
+2. **Trusted publishing starts from 0.1.1**, through the `publish-npm` workflow (Actions tab, "Run workflow", on a `v*` tag). It only runs by hand, refuses a tag that is not on `main`, and publishes the tarball from the CI run of that same commit after checking its checksum and attestation. It uses npm trusted publishing (OIDC): there is no npm token anywhere. Right before the 0.1.1 release: make the repo public; in the repo's Settings > Environments create `npm-publish`, add yourself as a required reviewer and limit it to `v*` tags (the reviewer is the gate that holds even against someone with write access, so set it first); then on npmjs.com open the `folio-issues-kanban-viewer` package settings and add a GitHub Actions trusted publisher (this repo, workflow `publish-npm.yml`, environment `npm-publish`) and **tick "npm publish"**: trusted publishers created after Sep 03, 2026 allow only `npm stage publish` by default, and the workflow runs `npm publish` ([trusted publishers](https://docs.npmjs.com/trusted-publishers)). npm needs CLI 11.5.1 or newer; Node 26 ships that.
 3. **Publish within 2 days of adding the trusted publisher**, or it expires and has to be recreated (same page). After that, `npm audit signatures` on the installing side checks the provenance.
 
 
 ## Budgets
 
-`task build` ends with `node scripts/size-check.mjs`, which checks the web bundle (`packages/folio-viewer/dist`) and fails the build above these caps (gzip, KB = 1000 bytes) and prints a table with the actual sizes:
+`task build` ends with `node scripts/size-check.mjs`, which checks the web bundle (`packages/folio-issues-kanban-viewer/dist`) and fails the build above these caps (gzip, KB = 1000 bytes) and prints a table with the actual sizes:
 
 | What | Cap |
 |---|---|
@@ -171,7 +171,7 @@ The first line prints `True` when the hash matches (the comparison is case-insen
 | highlight.js chunk | 25 KB |
 | `bin\folio.exe` (only `task desktop:build`, which runs `size-check.mjs --desktop` on the retired desktop build) | 18 MiB |
 
-Run it alone with `task size` (or `node scripts/size-check.mjs`; `node --test scripts/size-check.test.mjs` is its self-test). It needs `packages/folio-viewer/dist` and `frontend/.vite-web/manifest.json`, both written by `npm run build:web` in `frontend/` (`task build`). With `--desktop` it reads `frontend/dist` and `frontend/.vite/manifest.json` (written by the desktop build) and adds the exe.
+Run it alone with `task size` (or `node scripts/size-check.mjs`; `node --test scripts/size-check.test.mjs` is its self-test). It needs `packages/folio-issues-kanban-viewer/dist` and `frontend/.vite-web/manifest.json`, both written by `npm run build:web` in `frontend/` (`task build`). With `--desktop` it reads `frontend/dist` and `frontend/.vite/manifest.json` (written by the desktop build) and adds the exe.
 
 ## Retired: desktop app
 
@@ -265,7 +265,7 @@ internal/shell/          (frozen) ShellService: config, folder picker, CheckRoot
 internal/settings/       (frozen) settings.json: load, validate, atomic save
 internal/mem/            (frozen) the RAM readout: process-tree private bytes, polling, pause
 cmd/contract-server/     (frozen) test harness: the Go services behind the web-mode HTTP API (FOLIO_CONTRACT_GO=1)
-packages/folio-viewer/   the npm package (web mode): package.json, LICENSE; folio-web.mjs and dist/ are built
+packages/folio-issues-kanban-viewer/   the npm package (web mode): package.json, LICENSE; folio-web.mjs and dist/ are built
 scripts/                 size-check.mjs (+ test), restore-bindings.mjs, web.mjs, ram-check.ps1 (desktop)
 build/                   (frozen) Wails build files (Windows only), the NSIS installer script
 frontend/

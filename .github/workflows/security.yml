@@ -118,7 +118,7 @@ jobs:
           npm ci --ignore-scripts
           npm run build:web
       - name: No source maps, no local paths, no install scripts
-        working-directory: packages/folio-viewer
+        working-directory: packages/folio-issues-kanban-viewer
         run: |
           npm pack --dry-run --ignore-scripts --json > pack.json
           node --input-type=module -e '

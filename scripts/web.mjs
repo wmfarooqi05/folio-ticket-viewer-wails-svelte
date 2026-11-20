@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const frontend = path.join(root, 'frontend')
-const pkg = path.join(root, 'packages', 'folio-viewer')
+const pkg = path.join(root, 'packages', 'folio-issues-kanban-viewer')
 const bundle = path.join(pkg, 'folio-web.mjs')
 const page = path.join(pkg, 'dist', 'index.html')
 

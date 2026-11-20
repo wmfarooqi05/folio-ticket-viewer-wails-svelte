@@ -39,7 +39,7 @@ Reached when:
 
 1. **Merged Nov 20, 2026:** 08–14. 08 is done; 09–14 wait on the owner's checks in the app (see each ticket's `status_note`).
 2. **Merged Nov 20, 2026:** 15 (budgets, RAM check, installer config). The installer build and the VM run wait on the owner.
-3. **Company VM (decided Nov 20, 2026):** Folio goes there as a public npm package, `npx folio-viewer --docs <path>` (22). Now: 24 (Node web mode, published to npm), then 23 (first run on the VM). Security work for the desktop exe and both backends: 16, 17, 18 in any order, then 19 (focused review, which also covers the Node server).
+3. **Company VM (decided Nov 20, 2026):** Folio goes there as a public npm package, `npx folio-issues-kanban-viewer --docs <path>` (22). Now: 24 (Node web mode, published to npm), then 23 (first run on the VM). Security work for the desktop exe and both backends: 16, 17, 18 in any order, then 19 (focused review, which also covers the Node server).
 
 ## Tickets
 

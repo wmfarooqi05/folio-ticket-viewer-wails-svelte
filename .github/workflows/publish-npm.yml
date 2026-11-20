@@ -1,9 +1,9 @@
-# Ticket 17: publishing folio-viewer to npm. Manual only: run this workflow by hand from a v* tag.
+# Ticket 17: publishing folio-issues-kanban-viewer to npm. Manual only: run this workflow by hand from a v* tag.
 # It publishes the tarball that ci.yml built and checksummed for that exact commit, using npm
 # trusted publishing (OIDC, no token anywhere; provenance is added automatically).
 #
 # Setup order (ticket 27; checked against docs.npmjs.com on Nov 20, 2026):
-#   - Version 0.1.0 is published BY HAND (`npm publish ./folio-viewer-0.1.0.tgz` after `npm login`), not by
+#   - Version 0.1.0 is published BY HAND (`npm publish ./folio-issues-kanban-viewer-0.1.0.tgz` after `npm login`), not by
 #     this workflow. npm only lets you add a trusted publisher to a package that already exists
 #     (https://docs.npmjs.com/cli/v11/commands/npm-trust: "The package you're configuring must already exist
 #     on the npm registry"). This workflow is for 0.1.1 and later.
@@ -11,7 +11,7 @@
 #       1. The repo is public (npm provenance needs that).
 #       2. Repo Settings > Environments > `npm-publish`: add yourself as a required reviewer, and
 #          restrict deployment branches and tags to `v*` tags.
-#       3. npmjs.com > folio-viewer > Settings > Trusted publisher > GitHub Actions: this repo, workflow
+#       3. npmjs.com > folio-issues-kanban-viewer > Settings > Trusted publisher > GitHub Actions: this repo, workflow
 #          filename `publish-npm.yml`, environment `npm-publish`, and TICK "npm publish". Trusted publishers
 #          created after Sep 03, 2026 allow only `npm stage publish` by default, and this workflow runs
 #          `npm publish` (https://docs.npmjs.com/trusted-publishers).
@@ -57,7 +57,7 @@ jobs:
             echo "::error::$GITHUB_SHA is not an ancestor of origin/main."; exit 1
           fi
           want="${GITHUB_REF_NAME#v}"
-          have="$(node -p "require('./packages/folio-viewer/package.json').version")"
+          have="$(node -p "require('./packages/folio-issues-kanban-viewer/package.json').version")"
           [ "$want" = "$have" ] || { echo "::error::tag $GITHUB_REF_NAME but package.json says $have"; exit 1; }
       - name: Find the successful ci.yml run for this commit
         id: run
@@ -72,14 +72,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_ID: ${{ steps.run.outputs.id }}
-        run: gh run download "$RUN_ID" --name folio-viewer-npm --dir npm-files
+        run: gh run download "$RUN_ID" --name folio-issues-kanban-viewer-npm --dir npm-files
       - name: Check the checksum and the attestation
         working-directory: npm-files
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           sha256sum -c SHA256SUMS-npm
-          gh attestation verify folio-viewer-*.tgz --repo "$GITHUB_REPOSITORY" \
+          gh attestation verify folio-issues-kanban-viewer-*.tgz --repo "$GITHUB_REPOSITORY" \
             --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" --source-ref "$GITHUB_REF"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -90,4 +90,4 @@ jobs:
         run: |
           npm --version
           # a relative path needs the ./ prefix (https://docs.npmjs.com/cli/v11/commands/npm-publish)
-          npm publish ./folio-viewer-*.tgz
+          npm publish ./folio-issues-kanban-viewer-*.tgz

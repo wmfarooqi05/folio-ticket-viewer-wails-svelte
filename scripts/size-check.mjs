@@ -1,6 +1,6 @@
 // Size budgets for Folio (ticket 15; 06 D5, tightened to what tickets 09-14 actually used).
 //
-//   node scripts/size-check.mjs            checks the web bundle (packages/folio-viewer/dist), prints a table
+//   node scripts/size-check.mjs            checks the web bundle (packages/folio-issues-kanban-viewer/dist), prints a table
 //   node scripts/size-check.mjs --desktop  checks the retired desktop build instead: frontend/dist and
 //                                          bin/folio.exe, with the exe budget (`task desktop:build` runs this)
 //   node scripts/size-check.mjs --desktop --no-exe   the desktop frontend only, no exe (when only it is built)
@@ -303,7 +303,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const root = resolve(here, '..')
   const desktop = process.argv.includes('--desktop')
   const code = run({
-    dist: desktop ? join(root, 'frontend', 'dist') : join(root, 'packages', 'folio-viewer', 'dist'),
+    dist: desktop ? join(root, 'frontend', 'dist') : join(root, 'packages', 'folio-issues-kanban-viewer', 'dist'),
     manifestPath: join(root, 'frontend', desktop ? '.vite' : '.vite-web', 'manifest.json'),
     exePath: join(root, 'bin', 'folio.exe'),
     checkExe: desktop && !process.argv.includes('--no-exe'),

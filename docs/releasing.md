@@ -1,6 +1,6 @@
 # Releasing a new version to npm
 
-How to ship an update of `folio-viewer` (0.1.1 and later). It starts from a fix in a pull request and ends with the new version on npm.
+How to ship an update of `folio-issues-kanban-viewer` (0.1.1 and later). It starts from a fix in a pull request and ends with the new version on npm.
 
 There are four stages:
 1. **In the PR, before you merge:** bump the version and check what will ship.
@@ -21,7 +21,7 @@ Do these right before releasing 0.1.1, not earlier. A trusted publisher that has
 - [ ] **Create the `npm-publish` environment.** In the repo, go to Settings › Environments › New environment `npm-publish`:
   - add yourself as a required reviewer;
   - under Deployment branches and tags, allow only the tag pattern `v*`.
-- [ ] **Add the trusted publisher.** On npmjs.com, go to `folio-viewer` › Settings › Trusted publisher › GitHub Actions and enter:
+- [ ] **Add the trusted publisher.** On npmjs.com, go to `folio-issues-kanban-viewer` › Settings › Trusted publisher › GitHub Actions and enter:
   - this repo;
   - workflow `publish-npm.yml`;
   - environment `npm-publish`;
@@ -48,16 +48,16 @@ Not every PR needs a release. You can merge several PRs and release them togethe
 
 ### The checklist
 
-- [ ] **Bump the version** in `packages/folio-viewer/package.json`. That file is the only source:
+- [ ] **Bump the version** in `packages/folio-issues-kanban-viewer/package.json`. That file is the only source:
   - the build bakes it into `folio-web.mjs`, which is what `--version` prints;
   - the CI release job and the publish workflow both refuse a tag that doesn't match it.
 
   ```powershell
-  npm version patch --no-git-tag-version --prefix packages/folio-viewer
+  npm version patch --no-git-tag-version --prefix packages/folio-issues-kanban-viewer
   ```
   Use `minor` instead of `patch` when that fits. `--no-git-tag-version` stops npm from making its own commit and tag: the tag comes later, from main.
 - [ ] **Write the release notes in the PR description.** Say what changed for the user in a few lines, and name anything that breaks. GitHub generates notes from PR titles, and you can paste yours over them later.
-- [ ] **Update the package README** (`packages/folio-viewer/README.md`) if an option, a default or a path changed. npm shows this README on the package page.
+- [ ] **Update the package README** (`packages/folio-issues-kanban-viewer/README.md`) if an option, a default or a path changed. npm shows this README on the package page.
 - [ ] **Pass the local checks** from the repo root (`task check` covers both type checks):
   ```powershell
   task check
@@ -71,7 +71,7 @@ Not every PR needs a release. You can merge several PRs and release them togethe
   `task build` ends with the size budgets, which also check the third-party licence notices.
 - [ ] **Look at exactly what would ship:**
   ```powershell
-  cd packages/folio-viewer; npm pack --dry-run; cd ../..
+  cd packages/folio-issues-kanban-viewer; npm pack --dry-run; cd ../..
   ```
   Check:
   - the version line is the new one;
@@ -80,20 +80,20 @@ Not every PR needs a release. You can merge several PRs and release them togethe
   - the size is close to the last release (about 1.3 MB packed for 0.1.0). A big jump means something new got bundled.
 - [ ] **Try the tarball as a user would**, from a folder outside the repo, with your real docs:
   ```powershell
-  cd packages/folio-viewer; npm pack; cd ../..
+  cd packages/folio-issues-kanban-viewer; npm pack; cd ../..
   ```
   ```powershell
-  npm install -g .\packages\folio-viewer\folio-viewer-0.1.1.tgz
+  npm install -g .\packages\folio-issues-kanban-viewer\folio-issues-kanban-viewer-0.1.1.tgz
   ```
   ```powershell
-  folio-viewer --version
+  folio-issues-kanban-viewer --version
   ```
   ```powershell
-  folio-viewer --docs E:\projects\ticket_ui
+  folio-issues-kanban-viewer --docs E:\projects\ticket_ui
   ```
-  Open a few tickets, then click through what the PR changed. If it touches the window mode, also run `folio-viewer --app`. Uninstall afterwards:
+  Open a few tickets, then click through what the PR changed. If it touches the window mode, also run `folio-issues-kanban-viewer --app`. Uninstall afterwards:
   ```powershell
-  npm uninstall -g folio-viewer
+  npm uninstall -g folio-issues-kanban-viewer
   ```
 - [ ] **Check the dependencies:**
   - CI's `npm audit` and `npm audit signatures` must pass;
@@ -156,13 +156,13 @@ If it fails, read the step that failed. Before the publish step nothing has reac
 
 - [ ] **Check the published package from a clean folder:**
   ```powershell
-  npm view folio-viewer version
+  npm view folio-issues-kanban-viewer version
   ```
   ```powershell
-  npx folio-viewer@0.1.1 --version
+  npx folio-issues-kanban-viewer@0.1.1 --version
   ```
   ```powershell
-  npx folio-viewer@0.1.1 --docs E:\projects\ticket_ui
+  npx folio-issues-kanban-viewer@0.1.1 --docs E:\projects\ticket_ui
   ```
 - [ ] **Check the provenance.** The npm page for the version should show "Built and signed on GitHub Actions" with a link to the run. From any project that installs it:
   ```powershell
@@ -170,7 +170,7 @@ If it fails, read the step that failed. Before the publish step nothing has reac
   ```
 - [ ] **Update your own install**, if you use a global one:
   ```powershell
-  npm install -g folio-viewer@latest
+  npm install -g folio-issues-kanban-viewer@latest
   ```
 
 ---
@@ -179,9 +179,9 @@ If it fails, read the step that failed. Before the publish step nothing has reac
 
 | Situation | What to do |
 |---|---|
-| It's broken, but not dangerous | Release a fixed patch the normal way. Optionally deprecate the bad version so `npm install` warns about it: `npm deprecate folio-viewer@0.1.1 "Broken, use 0.1.2"` |
+| It's broken, but not dangerous | Release a fixed patch the normal way. Optionally deprecate the bad version so `npm install` warns about it: `npm deprecate folio-issues-kanban-viewer@0.1.1 "Broken, use 0.1.2"` |
 | It's dangerous: leaked data, or a security bug | Deprecate it right away, ship the fix as a new version, and publish a GitHub security advisory. |
-| It was published by mistake, and it's under 72 hours old | `npm unpublish folio-viewer@0.1.1` is allowed. The number 0.1.1 can still never be used again, so the next release is 0.1.2. Prefer deprecating. |
+| It was published by mistake, and it's under 72 hours old | `npm unpublish folio-issues-kanban-viewer@0.1.1` is allowed. The number 0.1.1 can still never be used again, so the next release is 0.1.2. Prefer deprecating. |
 
 Never move or reuse a tag that has been published. Tags, releases and npm versions should always match.
 
@@ -190,7 +190,7 @@ Never move or reuse a tag that has been published. Tags, releases and npm versio
 ## Quick version
 
 1. **PR:**
-   - bump with `npm version patch --no-git-tag-version --prefix packages/folio-viewer`;
+   - bump with `npm version patch --no-git-tag-version --prefix packages/folio-issues-kanban-viewer`;
    - write the release notes;
    - update the README if needed;
    - pass `task check`, `task test` and `task build`;
@@ -199,4 +199,4 @@ Never move or reuse a tag that has been published. Tags, releases and npm versio
    - get the checks green, then merge.
 2. **Main green:** `git tag vX.Y.Z`, then `git push origin vX.Y.Z`. Wait for the tag's CI and check the Release.
 3. **Publish:** Actions › `publish-npm` › Run workflow on the tag, then approve it.
-4. **After:** check with `npx folio-viewer@X.Y.Z --version` and a real run, and look for the provenance on npm.
+4. **After:** check with `npx folio-issues-kanban-viewer@X.Y.Z --version` and a real run, and look for the provenance on npm.
