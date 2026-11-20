@@ -23,6 +23,8 @@ export function validateExternalUrl(input: string): string {
     const h = raw.indexOf('#', q)
     if (/[ "<>\\^`{|}]/.test(raw.slice(q + 1, h < 0 ? undefined : h))) throw new Error('link query contains unsafe characters')
   }
+  // WHATWG URL forgives "https:///path" (it reads the host as "path"); the rule here is stricter.
+  if (!/^https?:\/\/[^/\?#]/i.test(raw)) throw new Error('link needs a host and no credentials')
   if (u.hostname === '' || u.username !== '' || u.password !== '') throw new Error('link needs a host and no credentials')
   return u.href
 }
