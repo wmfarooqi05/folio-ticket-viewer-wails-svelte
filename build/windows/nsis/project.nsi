@@ -33,6 +33,12 @@ Unicode true
 ####
 ## Include the wails tools
 ####
+# Folio installs per user: no admin prompt, files under %LOCALAPPDATA%\Programs\Folio, shortcut and
+# uninstall entry in the current user's profile. `task package` passes the same define; this default
+# keeps a bare `makensis` run consistent. Pass -DWAILS_INSTALL_SCOPE=machine for a Program Files install.
+!ifndef WAILS_INSTALL_SCOPE
+    !define WAILS_INSTALL_SCOPE "user"
+!endif
 !include "wails_tools.nsh"
 
 # The version information for this two must consist of 4 parts
@@ -93,8 +99,13 @@ Section
     
     !insertmacro wails.files
 
+    # The OFL 1.1 text that goes with the embedded Geist fonts (the licence asks for it to travel with them).
+    SetOutPath "$INSTDIR\licenses"
+    File "..\..\..rontend\public\licenses\OFL-Geist.txt"
+    SetOutPath $INSTDIR
+
+    # Start menu only: no desktop icon.
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
-    CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
@@ -109,8 +120,9 @@ Section "uninstall"
 
     RMDir /r $INSTDIR
 
+    # Settings (%APPDATA%\Folio\settings.json) and the index cache (%LOCALAPPDATA%\Folio\cache) are the
+    # user's and are left alone; the cache is disposable and the settings hold their folder choice.
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
-    Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
 
     !insertmacro wails.unassociateFiles
     !insertmacro wails.unassociateCustomProtocols

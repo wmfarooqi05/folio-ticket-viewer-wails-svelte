@@ -93,13 +93,13 @@ tasks:
         sh: 'wails3 tool docker-mounts'
 
   package:
-    summary: Packages the application
+    summary: Packages the application (per-user installer unless INSTALL_SCOPE=machine)
     cmds:
       - task: create:nsis:installer
         vars:
-          INSTALL_SCOPE: '{{.INSTALL_SCOPE | default "machine"}}'
+          INSTALL_SCOPE: '{{.INSTALL_SCOPE | default "user"}}'
     vars:
-      INSTALL_SCOPE: '{{.INSTALL_SCOPE | default "machine"}}'
+      INSTALL_SCOPE: '{{.INSTALL_SCOPE | default "user"}}'
 
   generate:syso:
     summary: Generates Windows `.syso` file
@@ -115,6 +115,8 @@ tasks:
     deps:
       - task: build
     preconditions:
+      - sh: command -v makensis
+        msg: "makensis (NSIS 3.x) is not on PATH. Install it (winget install NSIS.NSIS, or https://nsis.sourceforge.io/Download) and open a new shell."
       - sh: '[ "{{.INSTALL_SCOPE}}" = "user" ] || [ "{{.INSTALL_SCOPE}}" = "machine" ]'
         msg: "INSTALL_SCOPE must be 'user' or 'machine', got '{{.INSTALL_SCOPE}}'"
     cmds:
@@ -129,7 +131,7 @@ tasks:
     vars:
       ARCH: '{{.ARCH | default ARCH}}'
       ARG_FLAG: '{{if eq .ARCH "amd64"}}AMD64{{else}}ARM64{{end}}'
-      INSTALL_SCOPE: '{{.INSTALL_SCOPE | default "machine"}}'
+      INSTALL_SCOPE: '{{.INSTALL_SCOPE | default "user"}}'
 
   run:
     cmds:
