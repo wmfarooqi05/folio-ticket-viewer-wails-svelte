@@ -1,6 +1,6 @@
 # Folio
 
-Folio is a read-only desktop viewer for file-based tickets: markdown files with a small frontmatter convention, kept in a repo under `docs/modules/`, `docs/handoffs/` and `docs/patterns/`. It shows the tree, the status of each ticket, and (as the slices land) boards, a dependency graph, waiting-on and open-question views. It never writes to a ticket. The only files it writes are its own `%APPDATA%\Folio\settings.json`, a disposable index cache, and the WebView2 profile in `%APPDATA%\folio.exe`.
+Folio is a read-only desktop viewer for file-based tickets: markdown files with a small frontmatter convention, kept in a repo under `docs/modules/`, `docs/handoffs/` and `docs/patterns/`. It shows the tree, the status of each ticket, and (as the slices land) boards, a dependency graph, waiting-on and open-question views. It never writes to a ticket. The only files it writes are its own `%APPDATA%\Folio\settings.json`, a disposable index cache, and the WebView2 profile in `%LOCALAPPDATA%\Folio\WebView2` (the embedded browser's own cache and cookies; local, so it never roams, and `/doc/` images are sent `no-store`).
 
 Folio is lightweight on purpose: idle RAM is the priority (about 169 MB private for the whole process tree, WebView2 included), the exe is about 14 MiB, and a ticket 15 check keeps it that way (see [Budgets](#budgets)).
 
@@ -11,7 +11,7 @@ Folio installs for the current user only: no admin prompt, files in `%LOCALAPPDA
 1. Get `folio-amd64-installer.exe` (build it with `task package`, see below, or take it from whoever built it) and run it.
 2. Start Folio from the Start menu.
 
-Needs Windows 10 or 11 with the WebView2 runtime (Windows 11 has it; the installer fetches it if it is missing). Uninstalling removes the program and its shortcut and leaves your settings and index cache alone (`%APPDATA%\Folio` and `%LOCALAPPDATA%\Folio`); delete those folders by hand for a clean slate.
+Needs Windows 10 or 11 with the WebView2 runtime (Windows 11 has it; the installer fetches it if it is missing). Uninstalling removes the program, its shortcut and the WebView2 profile (`%LOCALAPPDATA%\Folio\WebView2`) and leaves your settings and index cache alone (`%APPDATA%\Folio` and `%LOCALAPPDATA%\Folio`); delete those folders by hand for a clean slate.
 
 Without the installer, `bin\folio.exe` runs on its own after `task build`.
 

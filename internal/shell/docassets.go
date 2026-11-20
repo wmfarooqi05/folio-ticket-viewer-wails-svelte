@@ -76,7 +76,8 @@ func DocAssets(root func() string) func(http.Handler) http.Handler {
 			h.Set("X-Content-Type-Options", "nosniff")
 			// An SVG opened as a document must not run anything.
 			h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
-			h.Set("Cache-Control", "no-cache")
+			// no-store, not no-cache: company diagrams must not land in the WebView2 HTTP cache (ticket 16, M2).
+			h.Set("Cache-Control", "no-store")
 			http.ServeContent(w, r, "", st.ModTime(), f)
 		})
 	}

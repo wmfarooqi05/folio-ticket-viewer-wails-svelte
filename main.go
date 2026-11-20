@@ -5,11 +5,13 @@ import (
 	"embed"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/docs"
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/mem"
+	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/paths"
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/settings"
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/shell"
 )
@@ -45,6 +47,17 @@ func main() {
 		app.Event.Emit(mem.Event, b)
 	})
 
+	profile, err := paths.WebView2Dir() // %LOCALAPPDATA%\Folio\WebView2, not the roaming %APPDATA% (ticket 16, M2)
+	if err != nil {
+		log.Fatalf("folio: webview2 profile path: %v", err)
+	}
+	// Only Folio's own origin may call the Wails runtime. In `wails3 dev` the page comes from Vite.
+	devURL := os.Getenv("FRONTEND_DEVSERVER_URL")
+	origins := []string{shell.AppOrigin}
+	if devURL != "" {
+		origins = append(origins, strings.TrimRight(devURL, "/"))
+	}
+
 	app = application.New(application.Options{
 		Name:        "Folio",
 		Description: "Read-only viewer of file-based tickets",
@@ -56,13 +69,18 @@ func main() {
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 			// /doc/<path> serves images from the docs folder (ticket 10, 06 D6).
-			Middleware: shell.DocAssets(func() string { return shell.RootsOf(shellSvc).Docs }),
+			// The runtime guard is outermost, so it sees every request before Wails' own transport (ticket 16).
+			Middleware: shell.Chain(
+				shell.RuntimeGuard(origins...),
+				shell.DocAssets(func() string { return shell.RootsOf(shellSvc).Docs }),
+			),
 		},
 		// WebView2 tuning from ticket 07 (docs/assets/07-findings.md). GPU off is the real
 		// win: about -75 MB private at idle with no CPU cost. The rest is housekeeping.
 		// Extra disabled features must go in DisabledFeatures: Wails emits its own
 		// --disable-features, and a second one in AdditionalBrowserArgs would override it.
 		Windows: application.WindowsOptions{
+			WebviewUserDataPath: profile,
 			DisabledFeatures: []string{
 				"SpareRendererForSitePerProcess", "Translate", "TranslateUI",
 				"OptimizationHints", "OptimizationGuideModelDownloading", "MediaRouter",
@@ -84,7 +102,12 @@ func main() {
 		MinWidth:  900,
 		MinHeight: 560,
 		URL:       "/",
+		// Deny every capability request (ticket 16, H3). Clipboard write is not a permission.
+		Permissions:                shell.DeniedPermissions(),
+		DefaultContextMenuDisabled: true, // no Save as / Print / Inspect menu (ticket 16, M1)
+		Windows:                    application.WindowsWindow{Permissions: shell.DeniedWebView2Permissions()},
 	}))
+	shell.WatchNavigation(win, devURL == "")
 	shell.RememberWindow(shellSvc, win)
 	mem.Attach(memMon, win) // paused while the window is minimised or hidden
 	// Dev-only RAM bench hook (ticket 15): off unless FOLIO_BENCH=1 and FOLIO_BENCH_DIR are set.

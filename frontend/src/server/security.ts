@@ -9,7 +9,7 @@ export const cookieName = (port: number) => `folio_session_${port}`
 
 /** The CSP of frontend/src/../index.html (a test keeps them equal), plus the one directive only a header can carry. */
 export const CSP =
-  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'none'"
 
 /** The headers every response carries, errors and images included. */
 export const SECURITY_HEADERS: Record<string, string> = {
