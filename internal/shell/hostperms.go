@@ -65,62 +65,123 @@ func DevOrigin(devURL string) string {
 	return "http://" + net.JoinHostPort("wails.localhost", u.Port())
 }
 
-// The liveness handshake (ticket 16, H1).
+// The navigation watchdog (ticket 16, H1).
 //
-// Wails v3.1.0 gives Go no way to cancel a navigation or even to read the current URL, and a
-// reset run inside the foreign page (location.replace) can be cancelled by that page. So Go
-// resets from outside. After every navigation Go pings the page (window.__folioPing, defined by
-// Folio's frontend), and Folio's page answers by calling the bound ShellService.Ready(location.href).
-// Only Folio's origin passes the runtime guard, so a foreign page cannot answer. No answer within
-// the grace period and Go navigates the window back to "/" itself. A slow tick repeats the ping,
-// which also catches a page whose load never finishes (no NavigationCompleted ever fires).
+// Wails v3.1.0 gives Go no way to cancel a navigation, and a reset run inside the foreign page
+// (location.replace) can be cancelled by that page. So Go resets from outside, and it learns where
+// the window really is from the browser, not from the page: Go runs `chrome.webview.postMessage(
+// 'folio:where')` in the current page, and Wails hands the message to Options.RawMessageHandler with
+// OriginInfo.TopOrigin, which is WebView2's own ICoreWebView2.get_Source (webview_window_windows.go,
+// processMessage, `sender.GetSource()`). The page cannot choose or fake that value, and a message
+// that arrives late still reports where the window is when Go reads it, so it cannot vouch for a
+// page that came after it.
+//
+//   - TopOrigin is not Folio's origin: reset at once.
+//   - No message at all (the page deleted chrome.webview, or Folio's own page is too busy to run the
+//     ping): reset only after a long silence, about 5 s, and only once Folio has answered at least
+//     once, so a slow first load on a fresh profile is never reset.
+//   - The periodic ping does not start until the first answer.
+//   - Resets in a row that never get an answer (a "Leave site?" dialog the user keeps answering with
+//     Stay, say) back off to one per 30 s instead of stopping for good.
 const (
-	watchGrace = 600 * time.Millisecond
-	watchStep  = 100 * time.Millisecond
-	watchTick  = 2 * time.Second
-	// after this many resets in a row with no answer Folio's own page is broken; stop reloading it
-	watchMaxResets = 5
+	watchSilence  = 5 * time.Second
+	watchStep     = 250 * time.Millisecond
+	watchTick     = 10 * time.Second
+	watchMinGap   = 400 * time.Millisecond // between resets while the page is still answering "foreign"
+	watchBackoff  = 30 * time.Second       // between resets once watchMaxResets in a row have failed
+	watchMaxQuick = 5
 )
 
-const pingJS = `if (window.__folioPing) window.__folioPing();`
+// PingJS asks the browser to report the window's top-level URL to RawMessageHandler.
+const PingJS = `try { window.chrome.webview.postMessage('folio:where'); } catch (e) {}`
 
-// Watchdog sends a window back to Folio when the page does not prove it is Folio.
+// WhereMessage is the raw message PingJS sends.
+const WhereMessage = "folio:where"
+
+// RawHandler returns the application's RawMessageHandler: it routes WhereMessage to the watchdog,
+// which is looked up through get because the window (and so the watchdog) is built after the app.
+func RawHandler(get func() *Watchdog) func(application.Window, string, *application.OriginInfo) {
+	return func(_ application.Window, msg string, o *application.OriginInfo) {
+		if msg != WhereMessage || o == nil {
+			return
+		}
+		if d := get(); d != nil {
+			d.Where(o.TopOrigin)
+		}
+	}
+}
+
+// Watchdog sends a window back to Folio when its top-level page is not Folio's.
 type Watchdog struct {
 	origin string
 	ping   func()
 	reset  func()
-	grace  time.Duration
-	step   time.Duration
 
-	mu     sync.Mutex
-	gen    int
-	ready  bool
-	resets int
+	silence, step, minGap, backoff time.Duration
+	tick                           time.Duration
+	onFirstAnswer                  func() // starts the periodic ping; set by WatchNavigation
+
+	mu        sync.Mutex
+	gen       int
+	answered  bool // an answer for the current check
+	started   bool // Folio has answered at least once
+	resets    int  // resets in a row with no Folio answer in between
+	lastReset time.Time
+	once      sync.Once
 }
 
-// NewWatchdog builds a watchdog. ping asks the page to call Ready; reset navigates the window to Folio.
+// NewWatchdog builds a watchdog for origin. ping runs PingJS in the current page; reset navigates
+// the window to Folio's home page.
 func NewWatchdog(origin string, ping, reset func()) *Watchdog {
-	return &Watchdog{origin: origin, ping: ping, reset: reset, grace: watchGrace, step: watchStep}
+	return &Watchdog{origin: origin, ping: ping, reset: reset, silence: watchSilence, step: watchStep,
+		tick: watchTick, minGap: watchMinGap, backoff: watchBackoff}
 }
 
-// Ready is the page's answer. href is the page's own location.href, so an about:blank page that
-// inherited Folio's origin does not count.
-func (d *Watchdog) Ready(href string) {
-	if !strings.HasPrefix(href, d.origin+"/") {
+func (d *Watchdog) isApp(top string) bool {
+	return top == d.origin || strings.HasPrefix(top, d.origin+"/")
+}
+
+// Where handles one report of the window's top-level URL.
+func (d *Watchdog) Where(top string) {
+	if d.isApp(top) {
+		d.mu.Lock()
+		d.answered, d.started, d.resets = true, true, 0
+		d.mu.Unlock()
+		d.once.Do(func() {
+			if d.onFirstAnswer != nil {
+				go d.onFirstAnswer()
+			}
+		})
 		return
 	}
-	d.mu.Lock()
-	d.ready = true
-	d.resets = 0
-	d.mu.Unlock()
+	d.resetNow("top-level page is " + top)
 }
 
-// Arm starts one check: ping until the page answers, and reset it if it does not within the grace period.
+// resetNow returns the window to Folio, throttled: quick at first, then once per backoff.
+func (d *Watchdog) resetNow(why string) {
+	d.mu.Lock()
+	gap := d.minGap
+	if d.resets >= watchMaxQuick {
+		gap = d.backoff
+	}
+	if !d.lastReset.IsZero() && time.Since(d.lastReset) < gap {
+		d.mu.Unlock()
+		return
+	}
+	d.resets++
+	d.lastReset = time.Now()
+	d.mu.Unlock()
+	log.Printf("shell: watchdog: %s; returning to %s/", why, d.origin)
+	d.reset()
+}
+
+// Arm starts one check: ping until the browser reports where the window is, and reset it if it stays
+// silent for the silence period (once Folio has answered before).
 func (d *Watchdog) Arm() {
 	d.mu.Lock()
 	d.gen++
 	g := d.gen
-	d.ready = false
+	d.answered = false
 	d.mu.Unlock()
 	go func() {
 		start := time.Now()
@@ -128,41 +189,30 @@ func (d *Watchdog) Arm() {
 			d.ping()
 			time.Sleep(d.step)
 			d.mu.Lock()
-			superseded, answered := d.gen != g, d.ready
-			if !superseded && !answered && time.Since(start) >= d.grace {
-				d.resets++
-				give := d.resets > watchMaxResets
-				d.mu.Unlock()
-				if give {
-					log.Printf("shell: watchdog: the page did not answer %d times; not reloading again", watchMaxResets)
-				} else {
-					log.Printf("shell: watchdog: page did not prove it is Folio; returning to %s/", d.origin)
-					d.reset()
-				}
-				return
-			}
+			superseded, answered, started := d.gen != g, d.answered, d.started
 			d.mu.Unlock()
 			if superseded || answered {
 				return
 			}
+			if time.Since(start) >= d.silence {
+				if started {
+					d.resetNow("no report from the page")
+				}
+				return
+			}
 		}
 	}()
 }
 
-// WatchNavigation runs the watchdog on win: it arms after every completed navigation and on a slow
-// tick. Wails' own page-side link guard (lib/render/dom.ts) is the first line; this is the backstop.
-// An upstream issue asks for cancellable NavigationStarting (see ticket 16, Outcome).
+// WatchNavigation runs the watchdog on win: a check after every completed navigation, and a slow
+// periodic one that starts at the first answer (it catches a page whose load never finishes, which
+// fires no NavigationCompleted). Wails' own page-side link guard (lib/render/dom.ts) is the first
+// line; this is the backstop. An upstream issue asks for cancellable NavigationStarting.
 func WatchNavigation(win *application.WebviewWindow, d *Watchdog) {
-	win.RegisterHook(events.Windows.WebViewNavigationCompleted, func(*application.WindowEvent) { d.Arm() })
-	go func() {
-		for range time.Tick(watchTick) {
+	d.onFirstAnswer = func() {
+		for range time.Tick(d.tick) {
 			d.Arm()
 		}
-	}()
-}
-
-// NewWindowWatchdog wires a Watchdog to a real window. The window's own SetURL resolves "/" against
-// the app origin (the dev server's port in `wails3 dev`).
-func NewWindowWatchdog(win *application.WebviewWindow, origin string) *Watchdog {
-	return NewWatchdog(origin, func() { win.ExecJS(pingJS) }, func() { win.SetURL("/") })
+	}
+	win.RegisterHook(events.Windows.WebViewNavigationCompleted, func(*application.WindowEvent) { d.Arm() })
 }

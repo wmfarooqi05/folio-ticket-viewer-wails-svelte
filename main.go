@@ -53,9 +53,17 @@ func main() {
 	// Only Folio's own origin may call the Wails runtime, and the watchdog trusts only it.
 	origin := appOrigin()
 
+	// The navigation watchdog (ticket 16): Go asks the browser where the window is and resets it unless
+	// it is Folio's page. win is set below; the closures only run once the window exists.
+	var win *application.WebviewWindow
+	watchdog := shell.NewWatchdog(origin,
+		func() { win.ExecJS(shell.PingJS) },
+		func() { win.SetURL("/") })
+
 	app = application.New(application.Options{
-		Name:        "Folio",
-		Description: "Read-only viewer of file-based tickets",
+		RawMessageHandler: shell.RawHandler(func() *shell.Watchdog { return watchdog }),
+		Name:              "Folio",
+		Description:       "Read-only viewer of file-based tickets",
 		Services: []application.Service{
 			application.NewService(docsSvc),
 			application.NewService(shellSvc),
@@ -66,6 +74,7 @@ func main() {
 			// /doc/<path> serves images from the docs folder (ticket 10, 06 D6).
 			// The runtime guard is outermost, so it sees every request before Wails' own transport (ticket 16).
 			Middleware: shell.Chain(
+				shell.FrameGuard,
 				shell.RuntimeGuard(origin),
 				shell.DocAssets(func() string { return shell.RootsOf(shellSvc).Docs }),
 			),
@@ -90,7 +99,7 @@ func main() {
 		},
 	})
 
-	win := app.Window.NewWithOptions(shell.Harden(shell.WindowOptions(shellSvc, application.WebviewWindowOptions{
+	win = app.Window.NewWithOptions(shell.Harden(shell.WindowOptions(shellSvc, application.WebviewWindowOptions{
 		Title:     "Folio",
 		Width:     1440,
 		Height:    900,
@@ -98,9 +107,6 @@ func main() {
 		MinHeight: 560,
 		URL:       "/",
 	})))
-	// The navigation watchdog (ticket 16): Go resets the window unless the page answers Ready.
-	watchdog := shell.NewWindowWatchdog(win, origin)
-	shellSvc.SetReadyHandler(watchdog.Ready)
 	shell.WatchNavigation(win, watchdog)
 	shell.RememberWindow(shellSvc, win)
 	mem.Attach(memMon, win) // paused while the window is minimised or hidden

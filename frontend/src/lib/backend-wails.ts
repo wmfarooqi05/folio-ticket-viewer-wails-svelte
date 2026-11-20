@@ -9,14 +9,6 @@ import type { Backend } from './backend-types'
 
 export const isWeb = false
 
-// The Go navigation watchdog (internal/shell/hostperms.go) pings this after every navigation and
-// resets the window to "/" unless the page answers. Only Folio's origin gets through the runtime guard.
-if (typeof window !== 'undefined') {
-  ;(window as unknown as { __folioPing?: () => void }).__folioPing = () => {
-    void ShellService.Ready(location.href)
-  }
-}
-
 export const backend: Backend = {
   getConfig: () => ShellService.GetConfig(),
   setConfig: (patch) => ShellService.SetConfig(patch),

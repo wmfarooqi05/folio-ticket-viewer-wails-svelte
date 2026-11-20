@@ -50,13 +50,6 @@ const (
 
 var allowedObjects = map[int]bool{ObjectCall: true, ObjectEvents: true, ObjectCancelCall: true}
 
-type pendingUpload struct {
-	total   int
-	chunks  map[int][]byte
-	size    int
-	created time.Time
-}
-
 // RuntimeGuard rejects /wails/runtime*, /wails/stream/ and /wails/eventpayload/ requests that do not
 // come from one of origins, or that call a runtime object outside the allowlist. Everything else
 // passes to next. A chunked call is held back here until it is whole, checked as one JSON document,
@@ -66,8 +59,7 @@ func RuntimeGuard(origins ...string) func(http.Handler) http.Handler {
 	for _, o := range origins {
 		ok[o] = true
 	}
-	var mu sync.Mutex
-	pending := map[string]*pendingUpload{}
+	store := newChunkStore()
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			p := r.URL.Path
@@ -106,7 +98,7 @@ func RuntimeGuard(origins ...string) func(http.Handler) http.Handler {
 			}
 			var body []byte
 			if id := r.Header.Get("x-wails-chunk-id"); id != "" {
-				whole, status := takeChunk(&mu, pending, id, r)
+				whole, status := store.take(id, r)
 				if status != 0 {
 					if status == http.StatusOK {
 						w.WriteHeader(http.StatusOK) // a middle chunk: Wails answers 200 and waits
@@ -142,9 +134,41 @@ func RuntimeGuard(origins ...string) func(http.Handler) http.Handler {
 	}
 }
 
-// takeChunk stores one chunk. It returns the whole body once the last chunk is in. The status is 0 for
+type pendingUpload struct {
+	total   int
+	chunks  map[int][]byte
+	size    int
+	created time.Time
+}
+
+// chunkStore holds the chunks of calls that are not whole yet. Uploads expire after chunkTTL (each one
+// schedules its own removal, so an abandoned upload does not hold memory until the next request), and
+// all pending uploads together are capped at maxPendingBytes (Wails' own streams use 128 MiB).
+type chunkStore struct {
+	mu      sync.Mutex
+	pending map[string]*pendingUpload
+	bytes   int
+	limit   int           // maxPendingBytes; a field so tests can use a small one
+	ttl     time.Duration // chunkTTL
+}
+
+const maxPendingBytes = 128 << 20
+
+func newChunkStore() *chunkStore {
+	return &chunkStore{pending: map[string]*pendingUpload{}, limit: maxPendingBytes, ttl: chunkTTL}
+}
+
+// drop removes an upload and frees its bytes. Caller holds mu.
+func (c *chunkStore) drop(id string) {
+	if u := c.pending[id]; u != nil {
+		c.bytes -= u.size
+		delete(c.pending, id)
+	}
+}
+
+// take stores one chunk. It returns the whole body once the last chunk is in. The status is 0 for
 // a whole body, 200 for "stored, more to come" and anything else for a refusal.
-func takeChunk(mu *sync.Mutex, pending map[string]*pendingUpload, id string, r *http.Request) ([]byte, int) {
+func (c *chunkStore) take(id string, r *http.Request) ([]byte, int) {
 	total, err1 := strconv.Atoi(r.Header.Get("x-wails-chunk-total"))
 	index, err2 := strconv.Atoi(r.Header.Get("x-wails-chunk-index"))
 	if err1 != nil || err2 != nil || total <= 0 || total > maxChunkTotal || index < 0 || index >= total {
@@ -154,41 +178,62 @@ func takeChunk(mu *sync.Mutex, pending map[string]*pendingUpload, id string, r *
 	if err != nil || len(chunk) > maxChunkBody {
 		return nil, http.StatusRequestEntityTooLarge
 	}
-	mu.Lock()
-	defer mu.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	now := time.Now()
-	for k, u := range pending { // expire stale uploads, as Wails does
-		if now.Sub(u.created) > chunkTTL {
-			delete(pending, k)
+	for k, u := range c.pending { // expire stale uploads when a new request arrives, too
+		if now.Sub(u.created) > c.ttl {
+			c.drop(k)
 		}
 	}
-	u := pending[id]
+	u := c.pending[id]
 	if u == nil {
-		if len(pending) >= maxPendingUploads {
+		if len(c.pending) >= maxPendingUploads {
 			return nil, http.StatusServiceUnavailable
 		}
 		u = &pendingUpload{total: total, chunks: map[int][]byte{}, created: now}
-		pending[id] = u
+		c.pending[id] = u
+		created := u
+		time.AfterFunc(c.ttl+time.Second, func() {
+			c.mu.Lock()
+			if c.pending[id] == created {
+				c.drop(id)
+			}
+			c.mu.Unlock()
+		})
 	}
 	if u.total != total {
-		delete(pending, id)
+		c.drop(id)
 		return nil, http.StatusBadRequest
 	}
-	u.size += len(chunk) - len(u.chunks[index])
-	u.chunks[index] = chunk
-	if u.size > maxRuntimeBody {
-		delete(pending, id)
+	delta := len(chunk) - len(u.chunks[index])
+	if u.size+delta > maxRuntimeBody || c.bytes+delta > c.limit {
+		c.drop(id)
 		return nil, http.StatusRequestEntityTooLarge
 	}
+	u.size += delta
+	c.bytes += delta
+	u.chunks[index] = chunk
 	if len(u.chunks) < u.total {
 		return nil, http.StatusOK
 	}
-	delete(pending, id)
 	whole := make([]byte, 0, u.size)
 	for i := 0; i < u.total; i++ {
 		whole = append(whole, u.chunks[i]...)
 	}
+	c.drop(id)
 	return whole, 0
+}
+
+// FrameGuard forbids framing Folio's pages. A meta CSP cannot carry frame-ancestors, so the headers
+// go on every response the asset middleware sends. The web server does the same (server/security.ts).
+func FrameGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("Content-Security-Policy", "frame-ancestors 'none'")
+		h.Set("X-Frame-Options", "DENY")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func deny(w http.ResponseWriter, r *http.Request, why string) {
