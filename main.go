@@ -1,3 +1,5 @@
+// RETIRED (ticket 26): the Go desktop app is frozen, Node web mode is the backend. See RETIRED.md.
+
 // Folio is a read-only desktop viewer of file-based tickets. See README.md.
 package main
 

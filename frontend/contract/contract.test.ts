@@ -1,8 +1,15 @@
-// The contract suite (ticket 24): the same cases against the Go services and the Node server, so
-// the two backends cannot drift. Every case runs once per backend with literal expectations; what
-// each backend reported is also collected, and the last block checks the two reports are equal.
+// The contract suite (ticket 24): the same cases against the Node server and, when asked, the Go
+// services, so the two backends cannot drift. Every case runs once per backend with literal
+// expectations; what each backend reported is also collected, and the last block checks the two
+// reports are equal.
 //
-//   npm run test:contract        (from frontend/; needs Go on PATH, and Windows for the junction case)
+// Ticket 26 retired the Go desktop app: by default the suite runs against the Node server only, and
+// needs no Go. The Go side is frozen but still runnable:
+//
+//   npm run test:contract        Node only (what CI runs)
+//   FOLIO_CONTRACT_GO=1 npm run test:contract
+//                                 Node and Go, plus the cross-backend equality checks (needs Go on
+//                                 PATH; `task test:contract:go`)
 import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -23,7 +30,9 @@ const NETWORK_ROOTS: [string, string][] = [
   ['devicePrefix', String.raw`\\?\C:\repo`],
   ['dotPrefix', String.raw`\\.\C:\repo`],
 ]
-const drivers: Driver[] = [goDriver, nodeDriver].filter((d) => d.available())
+const withGo = process.env.FOLIO_CONTRACT_GO === '1'
+if (withGo && !goDriver.available()) throw new Error('FOLIO_CONTRACT_GO=1 needs Go on PATH (it builds cmd/contract-server)')
+const drivers: Driver[] = withGo ? [goDriver, nodeDriver] : [nodeDriver]
 
 /** What each backend reported, by case, for the final comparison. */
 const seen: Record<string, Record<string, unknown>> = { go: {}, node: {} }
