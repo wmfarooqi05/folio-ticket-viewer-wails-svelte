@@ -10,6 +10,12 @@ updates:
     open-pull-requests-limit: 5
     # the versions are exact pins (package.json) and the lockfile is committed: keep it that way
     versioning-strategy: increase
+    # `typescript` stays on 6.x: svelte-check 4.7.8 needs TypeScript's JavaScript API, which 7.x does not
+    # ship. TypeScript 7 is installed as `typescript-7` and `npm run check` runs its tsc as well. Remove
+    # this ignore once svelte-check accepts TypeScript 7 (its peer range says ^5 || ^6 today).
+    ignore:
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
     groups:
       npm-minor-and-patch:
         update-types: [minor, patch]

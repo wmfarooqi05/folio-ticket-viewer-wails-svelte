@@ -29,16 +29,29 @@ const until = async (ok: () => boolean, ms = 3000) => {
   for (const t0 = Date.now(); !ok() && Date.now() - t0 < ms; ) await new Promise((r) => setTimeout(r, 20))
 }
 
+// until no change set has arrived for `ms`
+const settled = async (ms = 400) => {
+  for (let n = -1, t = Date.now(); Date.now() - t < ms; await new Promise((r) => setTimeout(r, 20)))
+    if (events.length !== n) (n = events.length), (t = Date.now())
+}
+
 describe('watcher', () => {
   it('reports a renamed folder as removed plus changed', async () => {
     mkdirSync(path.join(docs, 'modules', 'fresh', 'issues'), { recursive: true })
     writeFileSync(path.join(docs, 'modules', 'fresh', 'issues', '01-a.md'), '# a\n')
     const s = await svc.scan()
     await svc.readBatch(s.changed)
+    // On a slow runner the OS can still deliver the events for the folder created above after the scan,
+    // and they would then show up as a change of modules/fresh/... Let them flush first (quiet is 100 ms).
+    await settled()
+    events.length = 0
     renameSync(path.join(docs, 'modules', 'fresh'), path.join(docs, 'modules', 'fresher'))
     // the removal and the walk of the new folder may land in one flush or two: look at the union
-    const all = () => ({ removed: events.flatMap((e) => e.removed), changed: events.flatMap((e) => e.changed) })
-    await until(() => all().removed.length > 0 && all().changed.length > 0)
+    const all = () => ({
+      removed: [...new Set(events.flatMap((e) => e.removed))],
+      changed: [...new Set(events.flatMap((e) => e.changed))],
+    })
+    await until(() => all().removed.length > 0 && all().changed.includes('modules/fresher/issues/01-a.md'))
     expect(all().removed).toEqual(['modules/fresh/issues/01-a.md'])
     expect(all().changed).toEqual(['modules/fresher/issues/01-a.md'])
   })
