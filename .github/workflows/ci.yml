@@ -1,0 +1,272 @@
+# Ticket 17: tests, a reproducible exe build, the npm package, and a release on a v* tag.
+# Every action is pinned by full commit SHA (the version is in the comment). To update one,
+# look the tag up with `gh api repos/<owner>/<repo>/commits/<tag> -q .sha`.
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+# Read-only by default; the jobs that need more ask for it themselves.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  GO_VERSION: '1.27.4'
+  NODE_VERSION: '26.7.0'
+  TASK_VERSION: 'v3.54.0'
+  WAILS_VERSION: 'v3.1.0'
+  GOVULNCHECK_VERSION: 'v1.10.0'
+  GOFLAGS: '-mod=readonly'
+  GOTOOLCHAIN: 'local'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  checks:
+    name: tests and static checks
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install the pinned tools
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@${WAILS_VERSION}
+          go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Frontend dependencies (npm ci)
+        working-directory: frontend
+        run: npm ci --ignore-scripts
+      - name: go mod verify
+        run: go mod verify
+      - name: Stub frontend/dist (main.go embeds it)
+        run: mkdir -p frontend/dist && touch frontend/dist/.gitkeep
+      - name: go test
+        run: go test ./...
+      - name: go vet
+        run: go vet ./...
+      - name: govulncheck
+        run: govulncheck ./...
+      - name: Generate the TS bindings
+        run: wails3 generate bindings -clean=true -ts -i
+      - name: svelte-check
+        working-directory: frontend
+        run: npm run check
+      - name: vitest
+        working-directory: frontend
+        run: npm test
+      - name: Contract tests (Go services against the Node server)
+        working-directory: frontend
+        run: npm run test:contract
+      - name: Size-check self-test
+        run: node --test scripts/size-check.test.mjs
+
+  audit:
+    name: npm audit
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      # What ships (the frontend's `dependencies`, bundled into the exe and the npm package)
+      # fails the build at high or critical. Dev-only advisories (the test and build tools) are
+      # printed in the next step and never fail it: they are not in the shipped files.
+      - name: Production dependencies (fails at high)
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+      - name: All dependencies (report only)
+        working-directory: frontend
+        continue-on-error: true
+        run: npm audit
+
+  exe:
+    name: folio.exe
+    needs: [checks, audit]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write      # attestation signing (public repos only, see the step)
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install the pinned tools
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@${WAILS_VERSION}
+          go install github.com/go-task/task/v3/cmd/task@${TASK_VERSION}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      # task build = go mod verify, npm ci, bindings, vite build, go build with
+      # -tags production -trimpath -buildvcs=false, then the size check.
+      - name: task build
+        run: task build
+      - name: Size budgets
+        run: task size
+      - name: Show the build settings
+        run: |
+          go version -m bin/folio.exe | tee build-info.txt
+          grep -q -- '-tags=production' build-info.txt
+          grep -q -- '-trimpath=true' build-info.txt
+          echo "linked modules: $(grep -c -P '^\tdep\t' build-info.txt) plus the main module"
+      - name: SHA256SUMS
+        working-directory: bin
+        run: |
+          sha256sum folio.exe | tee SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: folio-exe
+          path: |
+            bin/folio.exe
+            bin/SHA256SUMS
+          if-no-files-found: error
+      # Attestations need a public repo on GitHub Free, Pro or Team (private needs Enterprise
+      # Cloud). On a private repo this step is skipped and the SHA-256 above is the record.
+      - name: Attest the build provenance
+        if: ${{ !github.event.repository.private && github.event_name != 'pull_request' }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: bin/folio.exe
+
+  npm-package:
+    name: folio-viewer package
+    needs: [checks, audit]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Install the pinned task
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@${TASK_VERSION}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: task build:web
+        run: task build:web
+      - name: npm pack
+        working-directory: packages/folio-viewer
+        run: |
+          npm pack --ignore-scripts
+          sha256sum folio-viewer-*.tgz | tee SHA256SUMS-npm
+          tar -tzf folio-viewer-*.tgz | head -40
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: folio-viewer-npm
+          path: |
+            packages/folio-viewer/folio-viewer-*.tgz
+            packages/folio-viewer/SHA256SUMS-npm
+          if-no-files-found: error
+      - name: Attest the build provenance
+        if: ${{ !github.event.repository.private && github.event_name != 'pull_request' }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: packages/folio-viewer/folio-viewer-*.tgz
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [exe, npm-package]
+    runs-on: windows-latest
+    permissions:
+      contents: write      # creates the release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: release-files
+          merge-multiple: true
+      - name: The tag must match the package version
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          have="$(node -p "require('./packages/folio-viewer/package.json').version")"
+          [ "$want" = "$have" ] || { echo "tag $GITHUB_REF_NAME but package.json says $have"; exit 1; }
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l release-files
+          gh release create "$GITHUB_REF_NAME" release-files/* --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+
+  # Opt-in. It does nothing unless all of these hold: a v* tag, the repo is public (npm
+  # provenance needs that), and an NPM_TOKEN secret exists. Without them the job still passes
+  # and publishes nothing. Publishing by hand stays the default: see the README.
+  publish-npm:
+    name: npm publish (opt-in)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [release]
+    runs-on: windows-latest
+    environment: npm-publish   # add required reviewers to this environment for a manual gate
+    permissions:
+      contents: read
+      id-token: write          # npm provenance
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      REPO_PRIVATE: ${{ github.event.repository.private }}
+    steps:
+      - name: Gate
+        id: gate
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then echo "No NPM_TOKEN secret: nothing to publish."; echo "ok=false" >> "$GITHUB_OUTPUT"
+          elif [ "$REPO_PRIVATE" != "false" ]; then echo "The repo is not public: npm provenance would fail. Nothing published."; echo "ok=false" >> "$GITHUB_OUTPUT"
+          else echo "ok=true" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: steps.gate.outputs.ok == 'true'
+        with:
+          name: folio-viewer-npm
+          path: npm-files
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.gate.outputs.ok == 'true'
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+      - name: Publish the exact tarball that was checksummed
+        if: steps.gate.outputs.ok == 'true'
+        working-directory: npm-files
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          sha256sum -c SHA256SUMS-npm
+          npm publish folio-viewer-*.tgz --provenance --access public

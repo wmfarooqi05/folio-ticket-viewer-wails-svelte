@@ -106,6 +106,25 @@ set FOLIO_ROOT=E:\projects\ticket_ui\fixtures\docs
 bin\folio.exe
 ```
 
+### Reproducible builds and releases
+
+`task build` and `task build:web` are meant to give the same bytes every time (ticket 17): `npm ci --ignore-scripts` (exactly `package-lock.json`, no dependency install scripts), `GOFLAGS=-mod=readonly`, `go mod verify` instead of `go mod tidy`, `-trimpath -buildvcs=false`, and a pinned `wails3` (`task tools:install`; the build stops if `wails3 version` is not v3.1.0). `.github/workflows/ci.yml` runs the same steps on `windows-latest` with every action pinned by commit SHA: go test, go vet, govulncheck, svelte-check, vitest, the contract tests, the size budgets, `npm audit`, then builds `folio.exe` plus `SHA256SUMS` and the npm tarball plus `SHA256SUMS-npm`. Every run uploads them as artifacts; a `v*` tag whose number matches `packages/folio-viewer/package.json` also creates a GitHub Release with all four files. Publishing to npm stays a manual `npm publish` (see below).
+
+**Verify a downloaded exe or package** (the files are in the release, or in the run's Artifacts):
+
+```
+certutil -hashfile folio.exe SHA256        (or: (Get-FileHash folio.exe).Hash)
+type SHA256SUMS
+certutil -hashfile folio-viewer-0.1.0.tgz SHA256
+type SHA256SUMS-npm
+```
+
+The two hashes must match. To also check what was built: `go version -m folio.exe` lists `-tags=production`, `-trimpath=true` and the linked modules (Folio, wails v3.1.0, fsnotify, go-ole, x/sys). The SHA-256 on the release came from the CI run named in the release notes; it proves the file is the one CI built, not who triggered it.
+
+When the repo is public, CI also signs a build-provenance attestation for the exe and the tarball (`actions/attest-build-provenance`). Check it with `gh attestation verify folio.exe --repo <owner>/<repo>`. On a private repo the step is skipped: attestations on private repos need GitHub Enterprise Cloud.
+
+**Publishing the npm package** (manual, by the owner): download the `folio-viewer-npm` artifact from the run (or the release), check its hash as above, then `npm publish folio-viewer-<version>.tgz --access public`. That publishes the exact tarball that was checksummed. The workflow also has an opt-in `publish-npm` job that does `npm publish --provenance`; it runs only on a `v*` tag, only when the repo is public and an `NPM_TOKEN` secret exists, and does nothing otherwise. After a provenance publish, `npm audit signatures` on the installing side verifies it.
+
 Packaging needs **NSIS 3** (`makensis` on PATH): `winget install NSIS.NSIS`, then open a new shell. `task package` builds the exe, fetches the WebView2 bootstrapper through `wails3 generate webview2bootstrapper`, and runs `makensis` on `build/windows/nsis/project.nsi`. It installs per user by default; `task package INSTALL_SCOPE=machine` makes an all-users (admin) installer. The OFL licence for the embedded Geist fonts is installed next to the exe, in `licenses\`.
 
 Notes:

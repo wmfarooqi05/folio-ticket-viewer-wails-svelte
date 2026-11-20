@@ -10,11 +10,20 @@ vars:
   # `task build PRODUCTION=true` is the default; `task build DEV=true` makes a debug build.
   DEV: '{{.DEV | default "false"}}'
 
+# Reproducible builds (ticket 17): modules are never changed by a build.
+env:
+  GOFLAGS: '-mod=readonly'
+
 includes:
   common: ./build/Taskfile.yml
   windows: ./build/windows/Taskfile.yml
 
 tasks:
+  tools:install:
+    summary: Installs the pinned wails3 CLI (v3.1.0, the version in go.mod)
+    cmds:
+      - go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+
   dev:
     summary: Runs the app in development mode (Vite hot reload, Go rebuild on change)
     cmds:
