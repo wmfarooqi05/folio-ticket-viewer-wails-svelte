@@ -61,7 +61,7 @@ Reached when:
 | 14 | [Dependency graph, Mermaid and syntax highlighting](issues/14-graph-mermaid-highlight.md) | build | [10](issues/10-document-view.md), [12](issues/12-cross-space-views.md) | — | blocked — merged, waiting on owner Graph check | — |
 | 15 | [Budgets enforced, installer, v1 release](issues/15-budgets-and-packaging.md) | build | [09](issues/09-cache-and-live-refresh.md), [11](issues/11-side-panel.md), [13](issues/13-settings-dialog.md), [14](issues/14-graph-mermaid-highlight.md) | — | blocked — merged, waiting on owner (installer, VM run) | — |
 | 16 | [Harden the WebView2 host](issues/16-webview2-host-hardening.md) | build | — | — | in-progress | — |
-| 17 | [Reproducible build and CI release](issues/17-reproducible-ci-release.md) | build | — | — | in-progress | — |
+| 17 | [Reproducible build and CI release](issues/17-reproducible-ci-release.md) | build | — | owner | blocked — merged, waiting on owner (tag, compare CI hashes) | — |
 | 18 | [Input and data hardening](issues/18-input-and-data-hardening.md) | build | — | — | in-progress | — |
 | 19 | [Focused security review](issues/19-security-review.md) | verify | [16](issues/16-webview2-host-hardening.md), [17](issues/17-reproducible-ci-release.md), [18](issues/18-input-and-data-hardening.md), [24](issues/24-node-web-mode.md) | — | blocked | — |
 | 20 | [Find out what company IT allows](issues/20-company-it-requirements.md) | task | — | — | dropped — npm route needs nothing from IT | — |

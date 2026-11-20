@@ -1,8 +1,8 @@
 ---
 type: build
-status: in-progress
-status_note: null
-waiting_on: null
+status: blocked
+status_note: "merged Nov 20, 2026; waiting on the owner: push, tag v0.1.0, compare the CI hashes with the local ones (AC1)"
+waiting_on: owner
 blocked_by: []
 blocked_note: null
 related: ["15", "21", "22", "23", "24"]
