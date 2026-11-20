@@ -155,7 +155,7 @@ export async function main(argv: string[], version = ''): Promise<void> {
   if (args.help) return void console.log(HELP)
   if (args.version) return void console.log(version || 'dev')
   if (Number(process.versions.node.split('.')[0]) < 22) {
-    console.error('folio needs Node 22 or newer.')
+    console.error(`folio needs Node 22 or newer (this is ${process.version}).`)
     process.exit(1)
   }
 

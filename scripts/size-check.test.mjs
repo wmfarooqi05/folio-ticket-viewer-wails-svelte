@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { BUDGETS, closureBytes, HEAVY_FAMILIES, familyName, htmlAssets, mermaidFamilies, run, staticClosure } from './size-check.mjs'
+import { BUDGETS, closureBytes, HEAVY_FAMILIES, familyName, htmlAssets, mermaidFamilies, missingNotices, run, staticClosure } from './size-check.mjs'
 
 test('htmlAssets lists the script, every modulepreload and the stylesheet', () => {
   const html = `<script type="module" crossorigin src="/assets/index-A.js"></script>
@@ -100,6 +100,49 @@ test('run fails above a cap and passes below it', () => {
     assert.equal(code, 1) // css over 25 KB, and no mermaid/highlight in this tiny manifest
     assert.ok(lines.some((l) => l.startsWith('CSS') && l.includes('FAIL')))
     assert.equal(run({ dist: join(dir, 'nope'), manifestPath: mp, exePath: '', checkExe: false, log: () => {} }), 2)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+const BAR = '='.repeat(78)
+const block = (id, body) => `${BAR}\n${id}\nLicense: MIT\n${BAR}\n\n${body}\n`
+const MIT = 'Permission is hereby granted, free of charge, to any person obtaining a copy of this software.'
+
+test('missingNotices names a bundled package with no block, or an empty one', () => {
+  const pkgs = [{ name: 'a', version: '1.0.0' }, { name: '@s/b', version: '2.0.0' }, { name: 'c', version: '3.0.0' }]
+  const text = 'header\n\n' + block('a@1.0.0', MIT) + block('@s/b@2.0.0', '') + block('c@3.0.0', MIT)
+  assert.deepEqual(missingNotices(pkgs, text), ['@s/b@2.0.0'])
+  assert.deepEqual(missingNotices(pkgs, 'header'), ['a@1.0.0', '@s/b@2.0.0', 'c@3.0.0'])
+  // a different version of the same package does not count
+  assert.deepEqual(missingNotices([{ name: 'a', version: '1.0.1' }], block('a@1.0.0', MIT)), ['a@1.0.1'])
+  assert.deepEqual(missingNotices(pkgs.slice(0, 1), block('a@1.0.0', MIT)), [])
+})
+
+test('run fails when a bundled package has no notice, and passes when every one has', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'size-check-'))
+  try {
+    const dist = join(dir, 'dist')
+    mkdirSync(join(dist, 'assets'), { recursive: true })
+    mkdirSync(join(dist, 'licenses'), { recursive: true })
+    writeFileSync(join(dist, 'assets', 'i.js'), 'export {}')
+    writeFileSync(join(dist, 'index.html'), '<script type="module" src="/assets/i.js"></script>')
+    const mp = join(dir, 'manifest.json')
+    writeFileSync(mp, JSON.stringify({ 'index.html': { file: 'assets/i.js', isEntry: true } }))
+    const pp = join(dir, 'bundled-packages.json')
+    writeFileSync(pp, JSON.stringify([{ name: 'a', version: '1.0.0' }, { name: 'b', version: '1.0.0' }]))
+    const row = (lines) => lines.find((l) => l.startsWith('third-party notices'))
+    const go = () => {
+      const lines = []
+      run({ dist, manifestPath: mp, exePath: '', checkExe: false, packagesPath: pp, log: (l) => lines.push(l) })
+      return row(lines)
+    }
+    writeFileSync(join(dist, 'licenses', 'THIRD-PARTY-NOTICES.txt'), block('a@1.0.0', MIT))
+    assert.match(go(), /FAIL.*b@1\.0\.0/)
+    writeFileSync(join(dist, 'licenses', 'THIRD-PARTY-NOTICES.txt'), block('a@1.0.0', MIT) + block('b@1.0.0', MIT))
+    assert.match(go(), /ok/)
+    rmSync(join(dist, 'licenses', 'THIRD-PARTY-NOTICES.txt'))
+    assert.match(go(), /FAIL/)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
-import { elkStub, parserVersion } from './vite.shared'
+import { elkStub, parserVersion, thirdPartyNotices } from './vite.shared'
 
 // The browser build for web mode (ticket 24). Same app as the desktop build, with two differences:
 //  - lib/backend.ts is swapped for lib/backend-http.ts, so @wailsio/runtime and the generated
@@ -28,6 +28,7 @@ export default defineConfig(async () => ({
   define: { __PARSER_VERSION__: JSON.stringify(await parserVersion()) },
   plugins: [
     elkStub,
+    thirdPartyNotices,
     {
       // Vite writes the manifest into dist/.vite, and dist/ is what `npm publish` ships. Move it to
       // frontend/.vite-web (gitignored) once the bundle is written; size-check.mjs reads it there.

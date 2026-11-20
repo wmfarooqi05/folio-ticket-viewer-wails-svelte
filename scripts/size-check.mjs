@@ -188,12 +188,31 @@ export function highlightBytes(manifest, initialFiles, gz) {
   return closureBytes(manifest, keys, gz).bytes
 }
 
+/**
+ * Third-party notices (ticket 27): every bundled package listed in bundled-packages.json (written by the web
+ * build from the modules it bundled) must have a block in THIRD-PARTY-NOTICES.txt with its licence text.
+ * Returns the `name@version` of each package whose block is missing or empty.
+ */
+export function missingNotices(packages, noticesText) {
+  const bar = '='.repeat(78)
+  const missing = []
+  for (const { name, version } of packages) {
+    const head = `${bar}\n${name}@${version}\nLicense: `
+    const at = noticesText.indexOf(head)
+    const bodyStart = at < 0 ? -1 : noticesText.indexOf(`${bar}\n`, at + head.length)
+    const next = bodyStart < 0 ? -1 : noticesText.indexOf(`\n${bar}\n`, bodyStart + bar.length)
+    const body = bodyStart < 0 ? '' : noticesText.slice(bodyStart + bar.length, next < 0 ? undefined : next)
+    if (body.trim().length < 40) missing.push(`${name}@${version}`)
+  }
+  return missing
+}
+
 // ---- the check ----------------------------------------------------------------------------
 
 const fmtKB = (n) => (n / KB).toFixed(1).padStart(7) + ' KB'
 const fmtMiB = (n) => (n / MIB).toFixed(2).padStart(7) + ' MiB'
 
-export function run({ dist, manifestPath, exePath, checkExe = true, log = console.log }) {
+export function run({ dist, manifestPath, exePath, checkExe = true, packagesPath = null, log = console.log }) {
   const indexPath = join(dist, 'index.html')
   if (!existsSync(indexPath) || !existsSync(manifestPath)) {
     log(`size-check: build output missing (${indexPath} or ${manifestPath}). Run "task build" (web) or "task desktop:build" (with --desktop) first.`)
@@ -244,6 +263,17 @@ export function run({ dist, manifestPath, exePath, checkExe = true, log = consol
     }
   }
 
+  if (packagesPath) {
+    const noticesPath = join(dist, 'licenses', 'THIRD-PARTY-NOTICES.txt')
+    if (!existsSync(packagesPath) || !existsSync(noticesPath)) {
+      rows.push({ label: 'third-party notices', value: null, cap: 0, fmt: String, ok: false, detail: `${existsSync(noticesPath) ? packagesPath : noticesPath} not found` })
+    } else {
+      const packages = JSON.parse(readFileSync(packagesPath, 'utf8'))
+      const missing = missingNotices(packages, readFileSync(noticesPath, 'utf8'))
+      rows.push({ label: 'third-party notices', value: missing.length, cap: 0, fmt: (n) => `${n} missing`, ok: missing.length === 0 && packages.length > 0, detail: missing.length ? `no notice for ${missing.join(', ')}` : `${packages.length} bundled packages, all with licence text` })
+    }
+  }
+
   const pad = (s, n) => String(s).padEnd(n)
   log('')
   log(pad('budget', 26) + pad('actual', 14) + pad('cap', 14) + pad('', 6) + 'detail')
@@ -277,6 +307,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     manifestPath: join(root, 'frontend', desktop ? '.vite' : '.vite-web', 'manifest.json'),
     exePath: join(root, 'bin', 'folio.exe'),
     checkExe: desktop && !process.argv.includes('--no-exe'),
+    packagesPath: desktop ? null : join(root, 'frontend', '.vite-web', 'bundled-packages.json'),
   })
   process.exit(code)
 }

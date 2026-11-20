@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { builtinModules } from 'node:module'
 import { defineConfig } from 'vite'
+import { noThirdPartyInServer } from './vite.shared'
 
 // Bundles the Node server (src/server) into one file, folio-web.mjs, for the npm package. It imports
 // Node built-ins only, so the output has no dependencies and runs with plain `node`.
@@ -8,6 +9,7 @@ const pkg = JSON.parse(readFileSync(new URL('../packages/folio-viewer/package.js
 
 export default defineConfig({
   publicDir: false,
+  plugins: [noThirdPartyInServer],
   define: { __FOLIO_VERSION__: JSON.stringify(pkg.version) },
   build: {
     ssr: 'src/server/bin.ts',
