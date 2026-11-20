@@ -3,7 +3,7 @@
 // filters over `Index`, and the tree's pinned counts come from the same functions, so a
 // count and the list it opens cannot disagree.
 
-import type { DocRecord, Index, Item, Person, Status, TicketMeta } from './parser'
+import { fileAt, type DocRecord, type Index, type Item, type Person, type Status, type TicketMeta } from './parser'
 
 /** The cross-space views reachable from the tree's pinned rows. */
 export type ViewId = 'waiting' | 'questions'
@@ -161,7 +161,7 @@ export interface BoardData {
 
 /** The tickets of a map: the files directly in its issues folder. */
 export function mapTickets(index: Index, mapPath: string): TicketRec[] {
-  const dir = index.files[mapPath]?.map?.issuesDir
+  const dir = fileAt(index, mapPath)?.map?.issuesDir
   if (dir === undefined) return []
   return Object.values(index.files)
     .filter((r): r is TicketRec => isTicket(r) && r.path.slice(0, r.path.lastIndexOf('/')) === dir)
@@ -198,7 +198,7 @@ function blockersByTicket(index: Index, paths: Set<string>): Record<string, Bloc
   const out: Record<string, Blocker[]> = {}
   for (const e of index.edges) {
     if (e.field !== 'blocked_by' || !paths.has(e.from)) continue
-    const target = e.to.path ? index.files[e.to.path] : undefined
+    const target = e.to.path ? fileAt(index, e.to.path) : undefined
     if (target && isTicket(target) && isClosed(target.meta.status)) continue
     if (target && e.to.itemId) {
       const item = target.items.find((i) => i.id === e.to.itemId || i.fragments?.includes(e.to.itemId!))

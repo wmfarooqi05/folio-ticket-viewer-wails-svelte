@@ -1,0 +1,25 @@
+# Ticket 19: update proposals for the npm lockfile and the pinned GitHub Actions. Weekly, grouped so a
+# week is one PR per ecosystem. The frozen Go module (RETIRED.md) is left out on purpose.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # the versions are exact pins (package.json) and the lockfile is committed: keep it that way
+    versioning-strategy: increase
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ['*']

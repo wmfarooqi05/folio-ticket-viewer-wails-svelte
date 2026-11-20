@@ -1,0 +1,153 @@
+# Ticket 19: the security checks that are not in ci.yml. They also run weekly, so a new advisory or a
+# new fuzz seed is seen without a code change.
+#   - npm audit (every dependency: everything the package ships is bundled from devDependencies) and
+#     npm audit signatures (registry signatures and provenance of what the lockfile installs);
+#   - semgrep with the p/typescript and p/javascript rule packs;
+#   - the hostile corpus and the fuzz/property tests, with more runs and a new seed each time;
+#   - what `npm pack` would publish: no source maps and no local paths;
+#   - actionlint on every workflow.
+# Every action is pinned by full commit SHA, and every container by digest (the version is in the
+# comment). Look an action up with `git ls-remote https://github.com/<owner>/<repo> refs/tags/<tag>` and
+# an image with `docker buildx imagetools inspect <image>:<tag>`. Dependabot (.github/dependabot.yml)
+# proposes updates to the actions; the two images are updated by hand.
+name: security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 5 * * 1' # Mondays 05:17 UTC
+  workflow_dispatch:
+
+# Nothing by default; each job asks for read access to the code only.
+permissions: {}
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '26.13.1'
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  npm-audit:
+    name: npm audit and signatures
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: npm ci (no install scripts)
+        working-directory: frontend
+        run: npm ci --ignore-scripts
+      - name: Registry signatures and attestations of every installed package
+        working-directory: frontend
+        run: npm audit signatures
+      - name: Advisories, every dependency (fails at moderate)
+        working-directory: frontend
+        run: npm audit --audit-level=moderate
+
+  semgrep:
+    name: semgrep (p/typescript, p/javascript)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    container:
+      image: semgrep/semgrep:1.186.0@sha256:6e1b04340e60e910fbb4ddbf3c857ab0918f064417ad5ac530014ccb3cf8c8f1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The rule packs come from the registry at run time. --error fails the job on any finding; a
+      # finding that is accepted gets a `nosemgrep: <rule-id>` comment with the reason on the same line.
+      - name: Scan
+        shell: sh # the image has no bash
+        run: semgrep scan --metrics=off --error --config p/typescript --config p/javascript frontend/src scripts
+
+  fuzz:
+    name: hostile corpus and fuzz tests
+    runs-on: windows-2025 # the path rules are Windows rules: drive letters, UNC, junctions, device names
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: npm ci (no install scripts)
+        working-directory: frontend
+        run: npm ci --ignore-scripts
+      # ten times the runs of `task test`, and a new seed for every workflow run (printed by a failure)
+      - name: Fuzz and property tests
+        working-directory: frontend
+        env:
+          FOLIO_FUZZ_N: '4000'
+          FOLIO_FUZZ_SEED: ${{ github.run_id }}
+        run: npx vitest run src/lib/render/hostile.test.ts src/lib/render/fuzz.test.ts src/server/fuzz.test.ts
+
+  package-contents:
+    name: what npm would publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+      - name: Build the package
+        working-directory: frontend
+        run: |
+          npm ci --ignore-scripts
+          npm run build:web
+      - name: No source maps, no local paths, no install scripts
+        working-directory: packages/folio-viewer
+        run: |
+          npm pack --dry-run --ignore-scripts --json > pack.json
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs"
+            const [p] = JSON.parse(readFileSync("pack.json", "utf8"))
+            const files = p.files.map((f) => f.path)
+            const bad = files.filter((f) => /\.map$|(^|\/)\.|\.ts$|\.tgz$/.test(f))
+            for (const f of files) {
+              const text = readFileSync(f, "latin1")
+              if (/sourceMappingURL=/.test(text)) bad.push(f + ": sourceMappingURL")
+              if (/[A-Za-z]:(\\{1,2}|\/)(Users|projects)\b|\/home\/runner\/|\/Users\/[A-Za-z]/.test(text)) bad.push(f + ": a local path")
+            }
+            const pkg = JSON.parse(readFileSync("package.json", "utf8"))
+            for (const s of ["preinstall", "install", "postinstall", "prepare"]) if (pkg.scripts?.[s]) bad.push("package.json: " + s + " script")
+            console.log(files.length + " files, " + p.size + " bytes packed")
+            if (bad.length) { console.error(bad.join("\n")); process.exit(1) }
+          '
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    container:
+      image: rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lint the workflows
+        shell: sh # the image has no bash
+        run: actionlint -color

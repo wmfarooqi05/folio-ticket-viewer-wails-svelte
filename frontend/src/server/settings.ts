@@ -303,6 +303,9 @@ export function isWholeRoot(p: string): boolean {
 function templateError(t: string): string | null {
   if (t === '') return null
   if (!t.includes('{id}')) return 'must contain {id}'
+  // WHATWG URL forgives what Go's url.Parse refuses: "https:///{id}" and "https:\\host" (it finds a host
+  // there), a leading space, and tabs or newlines (it drops them). Check the raw text first (ticket 19).
+  if (!/^https:\/\/[^/\\?#]/i.test(t) || /[\0-\x1f\x7f]/.test(t)) return 'must be an https:// URL'
   try {
     const u = new URL(t.replaceAll('{id}', '0'))
     if (u.protocol === 'https:' && u.host !== '') return null

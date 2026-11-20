@@ -153,6 +153,22 @@ describe('token', () => {
     }
   })
 
+  it('never redirects to another site: a raw backslash path is refused before the exchange (ticket 19)', async () => {
+    const own = await start({ distDir: path.join(tmp, 'dist'), docs, settingsFile: path.join(tmp, 's5.json'), cacheDir: path.join(tmp, 'cache5'), token: 'redirect-token-0123456789' })
+    try {
+      for (const p of ['/\\evil.example.com/', '/\\/evil.example.com/', '/a\\b']) {
+        const r = await req(`${p}?token=${own.token}`, {}, 'GET', undefined, own.port)
+        expect(r.status, p).toBe(400)
+        expect(r.headers.location, p).toBeUndefined()
+        expect(r.headers['set-cookie'], p).toBeUndefined()
+      }
+      // the link was not spent by the refused requests
+      expect((await req(`/?token=${own.token}`, {}, 'GET', undefined, own.port)).headers.location).toBe('/')
+    } finally {
+      await own.close()
+    }
+  })
+
   it('names the cookie after the port, so two instances do not overwrite each other', async () => {
     const other = await start({ distDir: path.join(tmp, 'dist'), docs, settingsFile: path.join(tmp, 's4.json'), cacheDir: path.join(tmp, 'cache4'), token: 'other-token-0123456789' })
     try {

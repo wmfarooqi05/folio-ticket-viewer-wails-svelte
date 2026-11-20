@@ -748,4 +748,18 @@ describe('keys that are names on Object.prototype', () => {
     expect(slugs.filter((s) => s.startsWith('constructor'))).toEqual(['constructor', 'constructor-1'])
     expect(({} as any).constructor).toBe(Object)
   })
+
+  // ticket 19: a link to one of those names threw (rec.items is not iterable) and emptied the whole index
+  it.each(['/__proto__#a', '/constructor#q1', '/toString', '/__proto__', 'hasOwnProperty#x'])('resolves a link to %j as a missing file', (href) => {
+    const path = 'modules/a/issues/01-a.md'
+    const text = `# T\n\n[x](${href}) and [y](/valueOf#d1)\n`
+    const idx = buildIndex([{ path, text, mtime: 0 }])
+    const r = resolveHref(href, path, idx)
+    expect(r.ok).toBe(false)
+    expect(r.kind === 'internal' && r.problem).toBe('no-file')
+    // and the same after the JSON round trip of the cache, which gives back plain objects
+    const warm = JSON.parse(JSON.stringify(idx)) as Index
+    expect(resolveHref(href, path, warm).ok).toBe(false)
+    expect(() => updateIndex(warm, [{ path, text: text + ' ', mtime: 1 }], [])).not.toThrow()
+  })
 })

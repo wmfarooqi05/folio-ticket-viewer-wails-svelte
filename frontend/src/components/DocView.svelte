@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte'
   import * as api from '../lib/api'
-  import type { Index, LineRange } from '../lib/parser'
+  import { fileAt, type Index, type LineRange } from '../lib/parser'
   import { attachDocHandlers, installNavGuard, scrollToAnchor } from '../lib/render/dom'
   import { enhanceDoc } from '../lib/render/enhance'
   import { renderMarkdown } from '../lib/render/markdown'
@@ -41,7 +41,7 @@
     onpanel,
   }: Props = $props()
 
-  const rec = $derived(path && index ? (index.files[path] ?? null) : null)
+  const rec = $derived(path && index ? (fileAt(index, path) ?? null) : null)
   const urls = $derived(makeUrls(config))
   const isTicket = $derived(rec?.kind === 'ticket' && rec.meta !== null)
   // The render is keyed on the record's mtime, the text and the link templates, not on `index`:

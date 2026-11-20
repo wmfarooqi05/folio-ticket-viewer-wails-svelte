@@ -151,6 +151,19 @@ describe('Mermaid output hardening (ticket 14 review)', () => {
     }
   })
 
+  // ticket 19: Mermaid measures HTML labels in the live page before sanitizeSvg runs, so a label's
+  // <img> was requested from there (only the CSP stopped it). Mermaid hands labels to DOMPurify with this config.
+  // (happy-dom's DOM does not run DOMPurify faithfully, so the effect was checked in Chromium: no
+  // securitypolicyviolation for img-src and no request from a label once this is set.)
+  it('gives Mermaid a label config that drops everything that loads or links', async () => {
+    const m = await vi.importActual<typeof import('./mermaid')>('./mermaid')
+    for (const t of ['style', 'img', 'image', 'iframe', 'object', 'embed', 'link', 'meta', 'base', 'form', 'svg', 'math', 'a', 'video', 'audio', 'source', 'use'])
+      expect(m.LABEL_PURIFY.FORBID_TAGS, t).toContain(t)
+    for (const a of ['src', 'srcset', 'href', 'xlink:href', 'action', 'formaction', 'poster', 'background', 'data'])
+      expect(m.LABEL_PURIFY.FORBID_ATTR, a).toContain(a)
+    expect(m.SECURE_KEYS).toContain('dompurifyConfig') // a directive cannot replace it
+  })
+
   it('strips the data attributes the document layer routes on, keeps the rest', async () => {
     const m = await vi.importActual<typeof import('./mermaid')>('./mermaid')
     const out = m.sanitizeSvg(

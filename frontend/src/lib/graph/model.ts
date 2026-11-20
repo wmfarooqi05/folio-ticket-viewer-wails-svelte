@@ -1,7 +1,7 @@
 // From the parser index to the graph's input: which tickets are shown, which edges are live
 // and which blockers live outside the map (stubs). Pure, so the tests read it without a DOM.
 
-import type { DocRecord, Index, TicketMeta } from '../parser'
+import { fileAt, type DocRecord, type Index, type TicketMeta } from '../parser'
 import { isClosed, mapTickets } from '../views'
 import type { GraphInput } from './layout'
 
@@ -44,7 +44,7 @@ export function graphFor(index: Index, mapPath: string): GraphModel {
 
   for (const e of index.edges) {
     if (e.field !== 'blocked_by' || !shownSet.has(e.from)) continue
-    const target = e.to.path ? index.files[e.to.path] : undefined
+    const target = e.to.path ? fileAt(index, e.to.path) : undefined
     if (!target) {
       // a blocker that does not resolve still blocks: a dashed "unresolved" stub, not a ticket
       // that looks free (the header card flags the same ref as not found)

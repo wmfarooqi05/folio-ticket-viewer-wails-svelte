@@ -81,6 +81,15 @@ describe('settings file', () => {
     expect(S.isNetworkPath(p)).toBe(false)
   })
 
+  // ticket 19: WHATWG URL finds a host in these, Go's url.Parse does not; both backends now refuse them
+  it.each(['https:///{id}', 'https:\\\\evil.example\\{id}', 'https:/evil.example/{id}', ' https://ado.example/{id}', 'https://ado.exa\tmple/{id}', 'https://ado.example/{id}\n'])('refuses the ADO template %j', (t) => {
+    expect(() => S.validate({ ...S.defaults(), adoWorkItemUrl: t })).toThrow('adoWorkItemUrl: must be an https:// URL')
+    expect(() => S.validate({ ...S.defaults(), adoPrUrl: t })).toThrow('adoPrUrl: must be an https:// URL')
+  })
+  it.each(['https://ado.example/{id}', 'HTTPS://ado.example/_workitems/edit/{id}', 'https://ado.example:8443/x?id={id}'])('accepts the ADO template %j', (t) => {
+    expect(() => S.validate({ ...S.defaults(), adoWorkItemUrl: t })).not.toThrow()
+  })
+
   it('validate refuses a network repo root before looking at the disk', () => {
     const s = { ...S.defaults(), repoRoot: String.raw`\\folio-no-such-host\share\repo` }
     expect(() => S.validate(s)).toThrow(S.NETWORK_ROOT_MESSAGE)

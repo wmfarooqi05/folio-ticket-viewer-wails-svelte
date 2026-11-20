@@ -165,6 +165,11 @@ describe('AC1: images', () => {
     expect(resolveImagePath('/modules/a/p.png', from)).toBe('modules/a/p.png')
     expect(resolveImagePath('..\\..\\p.png', from)).toBe('modules/p.png')
     expect(resolveImagePath('../../../../p.png', from)).toBeNull()
+    // ticket 19: an encoded slash or backslash would become a real separator in the /doc/ URL, and the
+    // browser would resolve the ".." to /api/events or any other path on the origin
+    expect(resolveImagePath('..%2f..%2f..%2f..%2fapi%2fevents', from)).toBeNull()
+    expect(resolveImagePath('img/..%5C..%5Cp.png', from)).toBeNull()
+    expect(resolveImagePath('img/a%2fb.png', from)).toBeNull()
     expect(resolveImagePath('data:image/png;base64,AAAA', from)).toBeNull()
     expect(resolveImagePath('https://x.test/p.png', from)).toBe('external')
   })
