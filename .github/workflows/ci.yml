@@ -20,7 +20,7 @@ concurrency:
 
 env:
   GO_VERSION: '1.27.4'
-  NODE_VERSION: '26.7.0'
+  NODE_VERSION: '26.13.1'
   TASK_VERSION: 'v3.54.0'
   WAILS_VERSION: 'v3.1.0'
   GOVULNCHECK_VERSION: 'v1.10.0'
@@ -34,7 +34,7 @@ defaults:
 jobs:
   checks:
     name: tests and static checks
-    runs-on: windows-latest
+    runs-on: windows-2025
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -81,7 +81,7 @@ jobs:
 
   audit:
     name: npm audit
-    runs-on: windows-latest
+    runs-on: windows-2025
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -101,14 +101,14 @@ jobs:
         continue-on-error: true
         run: npm audit
 
+  # The build jobs get no signing permissions: they run every build dependency, including on
+  # pull requests and manual runs. Signing happens in the separate `attest` job below.
   exe:
     name: folio.exe
     needs: [checks, audit]
-    runs-on: windows-latest
+    runs-on: windows-2025
     permissions:
       contents: read
-      id-token: write      # attestation signing (public repos only, see the step)
-      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -130,8 +130,6 @@ jobs:
       # -tags production -trimpath -buildvcs=false, then the size check.
       - name: task build
         run: task build
-      - name: Size budgets
-        run: task size
       - name: Show the build settings
         run: |
           go version -m bin/folio.exe | tee build-info.txt
@@ -149,22 +147,13 @@ jobs:
             bin/folio.exe
             bin/SHA256SUMS
           if-no-files-found: error
-      # Attestations need a public repo on GitHub Free, Pro or Team (private needs Enterprise
-      # Cloud). On a private repo this step is skipped and the SHA-256 above is the record.
-      - name: Attest the build provenance
-        if: ${{ !github.event.repository.private && github.event_name != 'pull_request' }}
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: bin/folio.exe
 
   npm-package:
     name: folio-viewer package
     needs: [checks, audit]
-    runs-on: windows-latest
+    runs-on: windows-2025
     permissions:
       contents: read
-      id-token: write
-      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -196,17 +185,40 @@ jobs:
             packages/folio-viewer/folio-viewer-*.tgz
             packages/folio-viewer/SHA256SUMS-npm
           if-no-files-found: error
-      - name: Attest the build provenance
-        if: ${{ !github.event.repository.private && github.event_name != 'pull_request' }}
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+
+  # Signed build provenance. Only for a v* tag on a public repo: attestations on a private repo
+  # need GitHub Enterprise Cloud. It signs the files the build jobs uploaded, after checking them
+  # against their checksum files, and runs no build tools of its own.
+  attest:
+    name: attest build provenance
+    if: startsWith(github.ref, 'refs/tags/v') && !github.event.repository.private
+    needs: [exe, npm-package]
+    runs-on: windows-2025
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          subject-path: packages/folio-viewer/folio-viewer-*.tgz
+          path: files
+          merge-multiple: true
+      - name: Check the files against their checksums
+        working-directory: files
+        run: |
+          sha256sum -c SHA256SUMS
+          sha256sum -c SHA256SUMS-npm
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            files/folio.exe
+            files/folio-viewer-*.tgz
 
   release:
     name: GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [exe, npm-package]
-    runs-on: windows-latest
+    runs-on: windows-2025
     permissions:
       contents: write      # creates the release
     steps:
@@ -225,48 +237,8 @@ jobs:
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           ls -l release-files
-          gh release create "$GITHUB_REF_NAME" release-files/* --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
-
-  # Opt-in. It does nothing unless all of these hold: a v* tag, the repo is public (npm
-  # provenance needs that), and an NPM_TOKEN secret exists. Without them the job still passes
-  # and publishes nothing. Publishing by hand stays the default: see the README.
-  publish-npm:
-    name: npm publish (opt-in)
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [release]
-    runs-on: windows-latest
-    environment: npm-publish   # add required reviewers to this environment for a manual gate
-    permissions:
-      contents: read
-      id-token: write          # npm provenance
-    env:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      REPO_PRIVATE: ${{ github.event.repository.private }}
-    steps:
-      - name: Gate
-        id: gate
-        run: |
-          if [ -z "$NPM_TOKEN" ]; then echo "No NPM_TOKEN secret: nothing to publish."; echo "ok=false" >> "$GITHUB_OUTPUT"
-          elif [ "$REPO_PRIVATE" != "false" ]; then echo "The repo is not public: npm provenance would fail. Nothing published."; echo "ok=false" >> "$GITHUB_OUTPUT"
-          else echo "ok=true" >> "$GITHUB_OUTPUT"; fi
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        if: steps.gate.outputs.ok == 'true'
-        with:
-          name: folio-viewer-npm
-          path: npm-files
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        if: steps.gate.outputs.ok == 'true'
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          registry-url: 'https://registry.npmjs.org'
-          package-manager-cache: false
-      - name: Publish the exact tarball that was checksummed
-        if: steps.gate.outputs.ok == 'true'
-        working-directory: npm-files
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          sha256sum -c SHA256SUMS-npm
-          npm publish folio-viewer-*.tgz --provenance --access public
+          gh release create "$GITHUB_REF_NAME" release-files/* --title "$GITHUB_REF_NAME" --generate-notes --verify-tag \
+            --notes "Built by CI run $RUN_URL (commit $GITHUB_SHA). Verify the files as the README describes."
