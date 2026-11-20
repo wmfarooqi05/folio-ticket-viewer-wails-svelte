@@ -27,6 +27,7 @@ jobs:
     permissions:
       contents: read
       actions: read        # download the artifact from the ci.yml run
+      attestations: read   # gh attestation verify
       id-token: write      # trusted publishing (OIDC)
     defaults:
       run:
@@ -61,7 +62,8 @@ jobs:
       - name: Download the tarball from that run
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run download "${{ steps.run.outputs.id }}" --name folio-viewer-npm --dir npm-files
+          RUN_ID: ${{ steps.run.outputs.id }}
+        run: gh run download "$RUN_ID" --name folio-viewer-npm --dir npm-files
       - name: Check the checksum and the attestation
         working-directory: npm-files
         env:

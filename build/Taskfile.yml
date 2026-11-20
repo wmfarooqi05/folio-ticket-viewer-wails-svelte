@@ -8,6 +8,15 @@ tasks:
     cmds:
       - go mod verify
 
+  node:check:
+    summary: Release builds only (build, build:web) need Node 26; tests and checks run on any supported Node
+    internal: true
+    run: once
+    preconditions:
+      # CI builds with Node 26.13.1. The check is major-only, so a matching hash also needs the same patch.
+      - sh: 'case "$(node -v)" in v26.*) true;; *) false;; esac'
+        msg: "Release builds need Node 26 (CI uses 26.13.1); found a different major. See the README on reproducible builds."
+
   install:frontend:deps:
     summary: Install frontend dependencies
     run: once
@@ -24,9 +33,6 @@ tasks:
     preconditions:
       - sh: npm version
         msg: "Looks like npm isn't installed. Npm is part of the Node installer: https://nodejs.org/en/download/"
-      # Same hashes need the same toolchain: CI pins Node 26.13.1 and Go 1.27.4 (go.mod).
-      - sh: 'case "$(node -v)" in v26.*) true;; *) false;; esac'
-        msg: "Folio builds with Node 26 (CI uses 26.13.1); found a different major. See the README on reproducible builds."
     cmds:
       # npm ci installs exactly package-lock.json and fails if it disagrees with package.json.
       # --ignore-scripts: no dependency install scripts run (the only one in the lock is
@@ -90,6 +96,7 @@ tasks:
     generates:
       - dist/**/*
     deps:
+      - task: node:check
       - task: install:frontend:deps
       - task: generate:bindings
         vars:

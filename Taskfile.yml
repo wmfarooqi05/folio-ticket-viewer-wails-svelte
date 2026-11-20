@@ -91,7 +91,7 @@ tasks:
   build:web:
     summary: Builds packages/folio-viewer (folio-web.mjs and dist/), the folder `npm publish` ships
     dir: frontend
-    deps: [common:install:frontend:deps]
+    deps: [common:node:check, common:install:frontend:deps]
     cmds:
       - npm run build:web
 
