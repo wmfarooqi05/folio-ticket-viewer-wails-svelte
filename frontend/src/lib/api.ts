@@ -75,3 +75,16 @@ export async function readAll(paths: string[]): Promise<{ files: SourceFile[]; m
 export function onDocsChanged(handler: (cs: ChangeSet) => void): () => void {
   return Events.On('docs:changed', (e) => handler(e.data as ChangeSet))
 }
+
+/**
+ * The bench hook (ticket 15, internal/shell/bench.go): Go emits these only when the exe was started
+ * with FOLIO_BENCH=1. The handler gets a docs-relative path and decides whether to use it.
+ */
+export function onBench(handler: (kind: 'open' | 'panel', path: string) => void): () => void {
+  const offs = (['open', 'panel'] as const).map((kind) =>
+    Events.On(`bench:${kind}`, (e) => {
+      if (typeof e.data === 'string') handler(kind, e.data)
+    }),
+  )
+  return () => offs.forEach((off) => off())
+}

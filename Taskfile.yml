@@ -21,11 +21,26 @@ tasks:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
   build:
-    summary: Builds the production exe into bin/ (regenerates the TS bindings first)
+    summary: Builds the production exe into bin/ (regenerates the TS bindings first), then checks the size budgets
     cmds:
       - task: windows:build
         vars:
           DEV: '{{.DEV}}'
+      - cmd: node scripts/size-check.mjs
+        platforms: [windows]
+        # a DEV=true build is unminified, so the budgets mean nothing there
+        if: '[ "{{.DEV}}" != "true" ]'
+
+  size:
+    summary: Checks the size budgets against the last build (frontend/dist, bin/folio.exe)
+    cmds:
+      - node scripts/size-check.mjs
+      - node --test scripts/size-check.test.mjs
+
+  ram:
+    summary: RAM and CPU benchmark of bin/folio.exe on the fixtures (about 25 minutes; see README)
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ram-check.ps1 {{.CLI_ARGS}}
 
   run:
     summary: Runs the built exe (set FOLIO_ROOT to skip the folder picker)

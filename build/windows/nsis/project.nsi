@@ -33,6 +33,12 @@ Unicode true
 ####
 ## Include the wails tools
 ####
+# Folio installs per user: no admin prompt, files under %LOCALAPPDATA%\Programs\Folio, shortcut and
+# uninstall entry in the current user's profile. `task package` passes the same define; this default
+# keeps a bare `makensis` run consistent. Pass -DWAILS_INSTALL_SCOPE=machine for a Program Files install.
+!ifndef WAILS_INSTALL_SCOPE
+    !define WAILS_INSTALL_SCOPE "user"
+!endif
 !include "wails_tools.nsh"
 
 # The version information for this two must consist of 4 parts
@@ -59,7 +65,11 @@ ManifestDPIAware true
 
 !insertmacro MUI_PAGE_WELCOME # Welcome to the installer page.
 # !insertmacro MUI_PAGE_LICENSE "resources\eula.txt" # Adds a EULA page to the installer
-!insertmacro MUI_PAGE_DIRECTORY # In which folder install page.
+# A per-user install goes to a fixed folder: the uninstaller does RMDir /r on $INSTDIR, so a folder the
+# user typed in (their Documents, say) must never be possible. Only the all-users build keeps the page.
+!if "${WAILS_INSTALL_SCOPE}" != "user"
+    !insertmacro MUI_PAGE_DIRECTORY # In which folder install page.
+!endif
 !insertmacro MUI_PAGE_INSTFILES # Installing page.
 !insertmacro MUI_PAGE_FINISH # Finished installation page.
 
@@ -80,8 +90,26 @@ OutFile "..\..\..\bin\${INFO_PROJECTNAME}-${ARCH}-installer.exe" # Name of the i
 !endif
 ShowInstDetails show # This will always show the installation details.
 
+# The Folio window is titled "Folio" (main.go). A running exe cannot be replaced or removed.
+!macro checkFolioRunning un
+Function ${un}CheckFolioRunning
+   FindWindow $0 "" "Folio"
+   ${If} $0 != 0
+      MessageBox MB_OK|MB_ICONEXCLAMATION "Folio is running. Close it, then run this again."
+      Abort
+   ${EndIf}
+FunctionEnd
+!macroend
+!insertmacro checkFolioRunning ""
+!insertmacro checkFolioRunning "un."
+
 Function .onInit
    !insertmacro wails.checkArchitecture
+   Call CheckFolioRunning
+FunctionEnd
+
+Function un.onInit
+   Call un.CheckFolioRunning
 FunctionEnd
 
 Section
@@ -93,8 +121,13 @@ Section
     
     !insertmacro wails.files
 
+    # The OFL 1.1 text that goes with the embedded Geist fonts (the licence asks for it to travel with them).
+    SetOutPath "$INSTDIR\licenses"
+    File "..\..\..\frontend\public\licenses\OFL-Geist.txt"
+    SetOutPath $INSTDIR
+
+    # Start menu only: no desktop icon.
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
-    CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
@@ -109,8 +142,9 @@ Section "uninstall"
 
     RMDir /r $INSTDIR
 
+    # Settings (%APPDATA%\Folio\settings.json) and the index cache (%LOCALAPPDATA%\Folio\cache) are the
+    # user's and are left alone; the cache is disposable and the settings hold their folder choice.
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
-    Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
 
     !insertmacro wails.unassociateFiles
     !insertmacro wails.unassociateCustomProtocols
