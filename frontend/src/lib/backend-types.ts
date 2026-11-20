@@ -4,10 +4,27 @@ import type { ChangeSet, ScanResult, SourceFile } from '../../bindings/github.co
 import type { ConfigPatch, RootCheck } from '../../bindings/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/shell'
 import type { Settings } from '../../bindings/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/settings'
 
+/** A .md that ReadBatch skipped because it is over the per-file cap (ticket 18, L6). */
+export interface TooLargeFile {
+  path: string
+  /** bytes */
+  size: number
+}
+
 export interface BatchResult {
   files?: SourceFile[] | null
   missing?: string[] | null
   failed?: string[] | null
+  tooLarge?: TooLargeFile[] | null
+}
+
+/** What "Clear data" did (ticket 18, L5). */
+export interface ClearDataResult {
+  cacheDir: string
+  cacheDeleted: boolean
+  /** desktop: the WebView2 profile is deleted at the next start, because a running WebView2 locks it */
+  profileScheduled: boolean
+  profileDirs: string[]
 }
 
 export interface Backend {
@@ -33,6 +50,9 @@ export interface Backend {
   /** Web mode: the folder given with --docs (it wins over the saved one this session), or null. */
   docsFromCommandLine(): Promise<string | null>
   onDocsChanged(handler: (cs: ChangeSet) => void): () => void
+
+  /** Deletes the index cache now; on the desktop also schedules the WebView2 profile for the next start. */
+  clearData(): Promise<ClearDataResult>
 
   setMemoryEnabled(on: boolean): Promise<void>
   onMemory(handler: (bytes: number) => void): () => void

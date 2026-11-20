@@ -2,6 +2,7 @@
 // `wails3 generate bindings`, which `task build` and `task check` run first).
 import { Events } from '@wailsio/runtime'
 import { DocsService } from '../../bindings/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/docs'
+import { LocalDataService } from '../../bindings/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/localdata'
 import { MemoryService } from '../../bindings/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/mem'
 import { ShellService } from '../../bindings/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/shell'
 import type { ChangeSet } from '../../bindings/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/docs'
@@ -31,6 +32,11 @@ export const backend: Backend = {
   readBatch: (paths) => DocsService.ReadBatch(paths),
   docsFromCommandLine: async () => null,
   onDocsChanged: (handler) => Events.On('docs:changed', (e) => handler(e.data as ChangeSet)),
+
+  clearData: async () => {
+    const r = await LocalDataService.ClearData()
+    return { cacheDir: r.cacheDir, cacheDeleted: r.cacheDeleted, profileScheduled: r.profileScheduled, profileDirs: r.profileDirs ?? [] }
+  },
 
   setMemoryEnabled: (on) => MemoryService.SetEnabled(on),
   onMemory: (handler) =>

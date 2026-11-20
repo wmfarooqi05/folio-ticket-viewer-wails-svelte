@@ -92,6 +92,8 @@ export async function start(opts: Options): Promise<Running> {
     readBatch: ([ps]) => docs.readBatch(strs(ps)),
     loadCache: ([v]) => docs.loadCache(str(v)),
     saveCache: ([v, index]) => docs.saveCache(str(v), index).then(() => null),
+    // Web mode keeps no WebView2 profile: "Clear data" is the cache only.
+    clearData: () => docs.clearCache(),
     logTimings: () => null,
   }
 

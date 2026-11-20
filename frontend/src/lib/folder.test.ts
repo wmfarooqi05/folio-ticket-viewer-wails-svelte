@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkPath, pickRoot, rootsLabel, type PickApi } from './folder'
+import { checkPath, isNetworkPath, pickRoot, rootsLabel, type PickApi } from './folder'
 
 const fake = (picked: string, check: Partial<Awaited<ReturnType<PickApi['checkRoot']>>>): PickApi => ({
   pickFolder: async () => picked,
@@ -26,6 +26,21 @@ describe('pickRoot', () => {
   it('returns the picked folder and the message when it has no roots', async () => {
     const r = await pickRoot(fake('E:\\empty', { ok: false, message: 'expects modules/ inside the folder' }))
     expect(r).toEqual({ kind: 'no-roots', picked: 'E:\\empty', message: 'expects modules/ inside the folder' })
+  })
+})
+
+describe('network and device paths', () => {
+  it('are told apart from local ones', () => {
+    for (const p of [String.raw`\\host\share`, '//host/share', String.raw`\\?\C:\x`, String.raw`\\.\C:\x`]) expect(isNetworkPath(p), p).toBe(true)
+    for (const p of [String.raw`C:\repo`, 'C:/repo', '/home/me', '']) expect(isNetworkPath(p), p).toBe(false)
+  })
+  it('a refused network folder is marked, so the UI does not say it "has none of the roots"', async () => {
+    const deps = { checkRoot: async () => ({ ok: false, message: 'network and device paths are not allowed', repoRoot: '', docsDir: '', found: [], missing: [] }) as never }
+    expect(await checkPath(String.raw`\\host\share\repo`, deps, true)).toMatchObject({ kind: 'no-roots', refused: true })
+  })
+  it('a network folder picked in the desktop dialog that lacks the roots is an ordinary no-roots, not refused', async () => {
+    const r = await pickRoot(fake(String.raw`\\host\share\empty`, { ok: false, message: 'expects modules/ inside the folder' }))
+    expect(r).toEqual({ kind: 'no-roots', picked: String.raw`\\host\share\empty`, message: 'expects modules/ inside the folder' })
   })
 })
 

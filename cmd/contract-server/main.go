@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/docs"
+	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/localdata"
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/shell"
 )
 
@@ -162,6 +163,14 @@ func main() {
 				return nil, err
 			}
 			return nil, svc.SaveCache(v, idx)
+		},
+		// Web mode's "Clear data": the cache only, in the same shape as the desktop's answer.
+		"clearData": func(a args) (any, error) {
+			r, err := svc.ClearCache()
+			if err != nil {
+				return nil, err
+			}
+			return localdata.Result{CacheDir: r.CacheDir, CacheDeleted: r.CacheDeleted, ProfileDirs: []string{}}, nil
 		},
 		"logTimings": func(a args) (any, error) { return nil, nil },
 	}

@@ -3,16 +3,55 @@
 // never keeps file text.
 import { createHash, randomBytes } from 'node:crypto'
 import { closeSync, fsyncSync, mkdirSync, openSync, renameSync, unlinkSync, writeFileSync, watch, type FSWatcher } from 'node:fs'
-import { readFile, readdir, stat, unlink } from 'node:fs/promises'
+import { lstat, open, readFile, readdir, rm, stat, unlink } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { inScope, resolveMarkdown, skipDir } from './paths'
+import { pathReachesNetwork } from './settings'
 
 export const CHANGED_EVENT = 'docs:changed'
 const READ_WORKERS = 4
 const DEBOUNCE_QUIET = 200 // ms, trailing
 const DEBOUNCE_MAX = 1000 // ms, a flush is forced after this long
 const CACHE_VERSION = 1
+/** The per-file cap (L6), the same as Go's docs.MaxFileBytes: a .md over this is not read. */
+export const MAX_FILE_BYTES = 5 << 20
+const megabytes = (n: number) => `${(n / (1 << 20)).toFixed(1)} MB`
+const tooLargeMessage = (size: number) => `file is too large (${megabytes(size)}; the limit is ${megabytes(MAX_FILE_BYTES)})`
+
+/**
+ * The file's text, or 'grew' if it passed the stat check and was over the cap by the time it was read.
+ * Reads through a handle and stops one byte past the cap, so a file that grew costs at most the cap.
+ */
+async function readCapped(full: string): Promise<string | 'grew'> {
+  const fh = await open(full, 'r')
+  try {
+    const chunks: Buffer[] = []
+    let n = 0
+    for (;;) {
+      const buf = Buffer.allocUnsafe(Math.min(256 * 1024, MAX_FILE_BYTES + 1 - n))
+      const { bytesRead } = await fh.read(buf, 0, buf.length, null)
+      if (bytesRead === 0) break
+      chunks.push(bytesRead === buf.length ? buf : buf.subarray(0, bytesRead))
+      n += bytesRead
+      if (n > MAX_FILE_BYTES) return 'grew'
+    }
+    return stripBom(Buffer.concat(chunks, n).toString('utf8'))
+  } finally {
+    await fh.close()
+  }
+}
+
+/** The size of a file that passed the size check and was over the cap when read: a fresh stat. */
+async function grownSize(full: string): Promise<number> {
+  try {
+    const st = await stat(full)
+    if (st.size > MAX_FILE_BYTES) return st.size
+  } catch {
+    /* gone: report the minimum */
+  }
+  return MAX_FILE_BYTES + 1
+}
 
 export interface SourceFile {
   path: string
@@ -24,11 +63,27 @@ export interface ScanResult {
   removed: string[]
   count: number
   walkMs: number
+  /** every .md on disk over MAX_FILE_BYTES (not a delta), sorted by path */
+  tooLarge: TooLargeFile[]
+}
+export interface TooLargeFile {
+  path: string
+  /** bytes */
+  size: number
 }
 export interface BatchResult {
   files: SourceFile[]
   missing: string[]
   failed: string[]
+  /** over MAX_FILE_BYTES: stat only, never read */
+  tooLarge: TooLargeFile[]
+}
+export interface ClearResult {
+  cacheDir: string
+  cacheDeleted: boolean
+  /** web mode has no WebView2 profile */
+  profileScheduled: boolean
+  profileDirs: string[]
 }
 export interface ChangeSet {
   changed: string[]
@@ -60,6 +115,24 @@ export function defaultCacheDir(): string {
   return path.join(base, 'Folio', 'cache')
 }
 
+/** True for <something>/Folio/cache: the only folder clearCache will delete. */
+export function isFolioCacheDir(dir: string): boolean {
+  const d = path.resolve(dir)
+  return path.basename(d).toLowerCase() === 'cache' && path.basename(path.dirname(d)).toLowerCase() === 'folio'
+}
+
+/**
+ * Fails when the docs folder or a docs root is, or sits behind, a link to a network path: a repo whose docs or
+ * docs/modules is a symlink to \\host\share would start SMB on the first stat. Runs before the watcher and the walk.
+ */
+export function refuseNetworkLinks(r: Roots): void {
+  if (pathReachesNetwork(r.docs)) throw new Error(`the docs folder ${r.docs} leads to a network path through a link`)
+  for (const root of r.roots) {
+    const base = path.join(r.docs, root)
+    if (pathReachesNetwork(base)) throw new Error(`the docs root ${base} leads to a network path through a link`)
+  }
+}
+
 /** The docs root as the cache sees it: case-insensitive, forward slashes. */
 export function normRoot(docs: string): string {
   let n = path.normalize(docs)
@@ -73,6 +146,7 @@ export class DocsService {
   private watcher: Watcher | null = null
   private closed = false
   private gen = 0
+  private noSave = false // set by clearCache: nothing is written to the cache again until restart
 
   constructor(
     private roots: () => Roots,
@@ -112,12 +186,15 @@ export class DocsService {
   private async doScan(announce: boolean): Promise<ScanResult> {
     const r = this.roots()
     if (r.docs === '') throw new Error('no docs root is configured')
+    refuseNetworkLinks(r)
     const gen = this.startWatcher(r)
     const start = Date.now()
     const found = await walkMarkdown(r)
     const walkMs = Date.now() - start
     if (this.gen !== gen || !sameRoots(r, this.roots())) throw new Superseded()
-    const res: ScanResult = { changed: [], removed: [], count: found.size, walkMs }
+    const res: ScanResult = { changed: [], removed: [], count: found.size, walkMs, tooLarge: [] }
+    for (const [p, st] of found) if (st.size > MAX_FILE_BYTES) res.tooLarge.push({ path: p, size: st.size })
+    res.tooLarge.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
     for (const [p, st] of found) {
       const old = this.stamps.get(p)
       if (!old || !same(old, st)) {
@@ -143,15 +220,26 @@ export class DocsService {
     // Validate every path first, so one bad path fails the whole call before any I/O.
     const fulls: string[] = []
     for (const p of paths) fulls.push(await resolveMarkdown(r.docs, p))
-    type Out = { file?: SourceFile; stamp?: Stamp; missing?: boolean; err?: unknown }
+    type Out = { file?: SourceFile; stamp?: Stamp; missing?: boolean; err?: unknown; tooBig?: number }
     const out: Out[] = new Array(paths.length)
     let next = 0
     const worker = async () => {
       for (let i = next++; i < paths.length; i = next++) {
         try {
           const st = await stat(fulls[i])
-          const text = stripBom(await readFile(fulls[i], 'utf8'))
+          // A FIFO or a device named *.md: opening it could block. Not a document.
+          if (!st.isFile()) throw new Error('not a regular file')
           const stamp = stampOf(st)
+          if (st.size > MAX_FILE_BYTES) {
+            // Over the cap: reported from the stat alone, so a huge file costs no read.
+            out[i] = { tooBig: st.size, stamp }
+            continue
+          }
+          const text = await readCapped(fulls[i])
+          if (text === 'grew') {
+            out[i] = { tooBig: await grownSize(fulls[i]), stamp }
+            continue
+          }
           out[i] = { stamp, file: { path: paths[i], text, mtime: stamp.mtime } }
         } catch (e) {
           out[i] = (e as NodeJS.ErrnoException).code === 'ENOENT' ? { missing: true } : { err: e }
@@ -159,13 +247,18 @@ export class DocsService {
       }
     }
     await Promise.all(Array.from({ length: Math.min(READ_WORKERS, paths.length) }, worker))
-    const res: BatchResult = { files: [], missing: [], failed: [] }
+    const res: BatchResult = { files: [], missing: [], failed: [], tooLarge: [] }
     paths.forEach((p, i) => {
       const o = out[i]
       if (o.err) {
         // One unreadable file (a sharing violation, say) must not fail the batch.
         res.failed.push(p)
         this.announced.delete(p)
+      } else if (o.tooBig !== undefined) {
+        // Delivered, as far as the server is concerned: the frontend holds a stub for it, so a later
+        // delete is seen by scan and an unchanged file is not read again. scan's tooLarge says why.
+        res.tooLarge.push({ path: p, size: o.tooBig })
+        this.stamps.set(p, o.stamp!)
       } else if (o.missing) {
         res.missing.push(p)
         this.stamps.delete(p)
@@ -180,8 +273,56 @@ export class DocsService {
 
   /** One file's text for rendering. It does not touch stamps. */
   async readFile(p: string): Promise<string> {
-    return stripBom(await readFile(await resolveMarkdown(this.roots().docs, p), 'utf8'))
+    const full = await resolveMarkdown(this.roots().docs, p)
+    const st = await stat(full)
+    if (!st.isFile()) throw new Error('not a regular file')
+    if (st.size > MAX_FILE_BYTES) throw new Error(tooLargeMessage(st.size))
+    const text = await readCapped(full)
+    if (text === 'grew') throw new Error(tooLargeMessage(await grownSize(full)))
+    return text
   }
+
+  /**
+   * "Clear data" (L5): deletes the cache folder and stops writing it until restart. Only a folder named
+   * <something>/Folio/cache is ever deleted, and never through a link.
+   */
+  clearCache(): Promise<ClearResult> {
+    return this.serial(async () => {
+      const dir = this.cacheDir
+      const res: ClearResult = { cacheDir: dir, cacheDeleted: false, profileScheduled: false, profileDirs: [] }
+      if (!isFolioCacheDir(dir)) throw new Error(`refusing to delete ${dir}: it is not a Folio cache folder`)
+      this.noSave = true
+      // No link anywhere from the folder that holds Folio/ down to the cache: a junction in the
+      // middle would make the delete land somewhere else.
+      const base = path.dirname(path.dirname(path.resolve(dir)))
+      let cur = base
+      for (const part of path.relative(base, path.resolve(dir)).split(path.sep)) {
+        cur = path.join(cur, part)
+        let st
+        try {
+          st = await lstat(cur)
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code === 'ENOENT') return res
+          throw e
+        }
+        if (st.isSymbolicLink()) throw new Error(`refusing to delete ${dir}: ${cur} is a link`)
+        if (cur === path.resolve(dir) && !st.isDirectory()) throw new Error(`refusing to delete ${dir}: it is not a folder`)
+      }
+      await rm(dir, { recursive: true, force: true })
+      res.cacheDeleted = true
+      return res
+    })
+  }
+
+  /** One cache save or clear at a time, so a save in flight cannot re-create what Clear data just deleted. */
+  private chain: Promise<unknown> = Promise.resolve()
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.chain.then(fn)
+    this.chain = run.catch(() => undefined)
+    return run
+  }
+  /** @internal for tests: runs after the envelope is built and before the file is written */
+  testHooks: { beforeCacheWrite?: () => Promise<void> } = {}
 
   // ---- cache (cache.go) --------------------------------------------------------
 
@@ -225,16 +366,24 @@ export class DocsService {
   }
 
   /** Writes {envelope, stamps, index} atomically. */
-  async saveCache(parserVersion: string, index: unknown): Promise<void> {
+  saveCache(parserVersion: string, index: unknown): Promise<void> {
     const r = this.roots()
-    if (r.docs === '') throw new Error('no docs root is configured')
-    if (index === undefined || index === null) throw new Error('empty index')
+    if (r.docs === '') return Promise.reject(new Error('no docs root is configured'))
+    if (index === undefined || index === null) return Promise.reject(new Error('empty index'))
+    return this.serial(async () => {
+      if (this.noSave) return // "Clear data" ran: the cache stays gone until restart
+      await this.writeCache(r, parserVersion, index)
+    })
+  }
+
+  private async writeCache(r: Roots, parserVersion: string, index: unknown): Promise<void> {
     const stamps: Record<string, [number, number]> = {}
     for (const p of [...this.stamps.keys()].sort()) {
       const s = this.stamps.get(p)!
       stamps[p] = [s.mtime, s.size]
     }
     const env = { v: CACHE_VERSION, parserVersion, docsRoot: normRoot(r.docs), roots: r.roots, stamps, index }
+    await this.testHooks.beforeCacheWrite?.()
     await writeAtomic(this.cachePath(r), JSON.stringify(env))
   }
 
@@ -357,7 +506,7 @@ async function walkMarkdown(r: Roots): Promise<Map<string, Stamp>> {
   for (const root of r.roots) {
     const base = path.join(r.docs, root)
     try {
-      if (!(await stat(base)).isDirectory()) continue
+      if (pathReachesNetwork(base) || !(await stat(base)).isDirectory()) continue
     } catch {
       continue // a missing root is skipped
     }
@@ -472,7 +621,7 @@ class Watcher {
     // No .md extension: a new directory (walk it for files made before the watch saw it), or one
     // deleted or renamed away (the event names only the directory, so sweep what is known beneath it).
     this.busy++
-    stat(abs).then(
+    ;(pathReachesNetwork(abs) ? Promise.reject(Object.assign(new Error('link to a network path'), { code: 'ELINK' })) : stat(abs)).then(
       (st) => {
         if (st.isDirectory() && !skipDir(path.basename(abs))) void this.walkNew(abs).finally(() => this.busy--)
         else this.busy--

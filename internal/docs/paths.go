@@ -3,10 +3,13 @@ package docs
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/settings"
 )
 
 // ErrEscapesRoot is returned for any path that is absolute or leaves the docs root.
@@ -37,6 +40,12 @@ func SafeJoin(root, rel string) (string, error) {
 	full := filepath.Join(root, filepath.FromSlash(rel))
 	r, err := filepath.Rel(root, full)
 	if err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
+		return "", ErrEscapesRoot
+	}
+	// A link anywhere on the way (in the docs folder, in a folder, in a link's target) that leads to
+	// \\host\share would make the Lstat and EvalSymlinks below talk SMB with the user's credentials (a
+	// hostile cloned repo). Resolve the path by hand first: Lstat and Readlink only, one part at a time.
+	if settings.PathReachesNetwork(full) {
 		return "", ErrEscapesRoot
 	}
 	// Junctions. Go's EvalSymlinks does not follow them (it fails or returns them unchanged),
@@ -90,9 +99,21 @@ func ResolveMarkdown(root, rel string) (string, error) {
 // readText reads a file and strips a UTF-8 byte order mark, so the parser's
 // leading "---" check is not defeated by editors that write one.
 func readText(full string) (string, error) {
-	b, err := os.ReadFile(full)
+	f, err := os.Open(full)
 	if err != nil {
 		return "", err
 	}
+	defer f.Close()
+	// One byte past the cap tells a file that grew after its stat from one that fits.
+	b, err := io.ReadAll(io.LimitReader(f, MaxFileBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if len(b) > MaxFileBytes {
+		return "", errFileGrew
+	}
 	return strings.TrimPrefix(string(b), "\ufeff"), nil
 }
+
+// errFileGrew means a file passed the size check and was over the cap by the time it was read.
+var errFileGrew = errors.New("file grew past the size cap while it was read")

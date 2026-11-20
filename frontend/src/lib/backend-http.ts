@@ -75,6 +75,9 @@ export const backend: Backend = {
     return () => es.close()
   },
 
+  // Web mode keeps no WebView2 profile: the server deletes the cache folder only.
+  clearData: () => call('clearData'),
+
   // The RAM readout measures the desktop process; it is not shown in the browser.
   setMemoryEnabled: async () => {},
   onMemory: () => () => {},

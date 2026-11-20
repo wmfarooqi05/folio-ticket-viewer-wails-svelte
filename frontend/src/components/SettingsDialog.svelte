@@ -4,7 +4,7 @@
   import { onDestroy, onMount, untrack } from 'svelte'
   import * as api from '../lib/api'
   import type { Config, RootCheck } from '../lib/api'
-  import { checkPath, pickRoot, rootsLabel } from '../lib/folder'
+  import { checkPath, isNetworkPath, pickRoot, rootsLabel } from '../lib/folder'
   import {
     SECTIONS,
     THEMES,
@@ -54,6 +54,7 @@
     folder: noRoots || !!errors.docsRoots || !!errors.docsDir,
     links: !!errors.adoWorkItemUrl || !!errors.adoPrUrl,
     appearance: false,
+    data: false,
   })
 
   // Which roots exist on disk, re-checked when the folder, docs name or roots change.
@@ -92,7 +93,8 @@
         draft.repoRoot = res.repoRoot
         draft.docsDir = res.docsDir
       } else if (res.kind === 'no-roots') {
-        draft.repoRoot = res.picked // shows the "No roots" warning
+        if (res.refused) saveError = res.message
+        else draft.repoRoot = res.picked // shows the "No roots" warning
       }
     } catch (err) {
       saveError = message(err)
@@ -107,16 +109,34 @@
   })
   async function chooseTyped() {
     try {
-      const res = await checkPath(typed)
+      const res = await checkPath(typed, undefined, true)
       if (res.kind === 'ok') {
         draft.repoRoot = res.repoRoot
         draft.docsDir = res.docsDir
         typed = res.repoRoot
       } else if (res.kind === 'no-roots') {
-        draft.repoRoot = res.picked // shows the "No roots" warning
+        if (res.refused) saveError = res.message // a network or device path: web mode has no dialog to pick it in
+        else draft.repoRoot = res.picked // shows the "No roots" warning
       }
     } catch (err) {
       saveError = message(err)
+    }
+  }
+
+  // "Clear data" (ticket 18, L5): two clicks, then what was done and what is left for the next start.
+  let confirmClear = $state(false)
+  let clearing = $state(false)
+  let cleared = $state.raw<api.ClearDataResult | null>(null)
+  async function clearData() {
+    clearing = true
+    saveError = null
+    try {
+      cleared = await api.clearData()
+      confirmClear = false
+    } catch (err) {
+      saveError = message(err)
+    } finally {
+      clearing = false
     }
   }
 
@@ -258,6 +278,15 @@
                       <button type="button" class="btn" onclick={choose}>Choose folder…</button>
                     </div>
                   {/if}
+                  {#if isNetworkPath(draft.repoRoot)}
+                    <div class="warn" role="note" style="margin-top:8px">
+                      <span class="dot" style="width:7px;height:7px;background:var(--s-rev)"></span>
+                      <span style="flex:1;min-width:0">
+                        A network folder: Folio reads it over the network with your Windows sign-in. It is forgotten when Folio closes, so
+                        choose it again next time.
+                      </span>
+                    </div>
+                  {/if}
                   {#if noRoots}
                     <div class="warn" role="alert">
                       <span class="dot" style="width:7px;height:7px;background:var(--s-rev)"></span>
@@ -382,6 +411,38 @@
                 </div>
               {/if}
             {/each}
+            {#if sec === 'data'}
+              <div>
+                <div class="lbl">Clear data</div>
+                <div class="hint" style="line-height:1.5;margin-bottom:10px">
+                  {#if api.isWeb}
+                    Deletes the index cache, a copy of your ticket text that Folio keeps so the next start is quick. It is not written
+                    again until you restart folio, and it is rebuilt then. Your settings and your tickets are not touched.
+                  {:else}
+                    Deletes the index cache (<span class="mono">%LOCALAPPDATA%\Folio\cache</span>), a copy of your ticket text that
+                    Folio keeps so the next start is quick, and Folio's browser profile (<span class="mono">%LOCALAPPDATA%\Folio\WebView2</span>).
+                    The cache goes now and is not written again until you restart Folio. The profile is locked while Folio runs, so it is
+                    deleted the next time Folio starts. Your settings and your tickets are not touched.
+                  {/if}
+                </div>
+                {#if confirmClear}
+                  <div class="row">
+                    <button type="button" class="btn" disabled={clearing} onclick={clearData}>Yes, delete it</button>
+                    <button type="button" class="btn" disabled={clearing} onclick={() => (confirmClear = false)}>Cancel</button>
+                  </div>
+                {:else}
+                  <button type="button" class="btn" onclick={() => ((confirmClear = true), (cleared = null))}>Clear data…</button>
+                {/if}
+                {#if cleared}
+                  <div class="hint" role="status" style="margin-top:8px;line-height:1.5">
+                    {cleared.cacheDeleted ? 'The index cache was deleted.' : 'There was no index cache to delete.'}
+                    {#if cleared.profileScheduled}
+                      The browser profile will be deleted the next time Folio starts: close Folio and open it again to finish.
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+            {/if}
             {#if sec === 'links'}
               <div class="hint" style="line-height:1.5">
                 <span class="mono" style="color:var(--fg2)">{'{id}'}</span> is replaced with the number from a ticket’s

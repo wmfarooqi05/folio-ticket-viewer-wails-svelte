@@ -5,6 +5,7 @@ package docs
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"log"
 	"os"
@@ -13,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/settings"
 )
 
 // ChangedEvent is the one debounced event Go emits (a ChangeSet payload).
@@ -34,13 +37,38 @@ type ScanResult struct {
 	Removed []string `json:"removed"` // known before, no longer on disk
 	Count   int      `json:"count"`   // .md files on disk
 	WalkMs  int64    `json:"walkMs"`
+	// TooLarge is every .md on disk over MaxFileBytes, not a delta: it is what the walk's own stat
+	// said, so the tree can say "too large" for a file whose stamp has not changed (a warm start).
+	TooLarge []TooLargeFile `json:"tooLarge"`
+}
+
+// MaxFileBytes is the per-file cap (L6): a .md over this is not read, and the tree says why.
+// 5 MB is far beyond any ticket and keeps one stray file from stalling a scan or the parser.
+const MaxFileBytes = 5 << 20
+
+// TooLargeFile is a .md that ReadBatch skipped because it is over MaxFileBytes.
+type TooLargeFile struct {
+	Path string `json:"path"`
+	Size int64  `json:"size"` // bytes
 }
 
 // BatchResult is the answer to ReadBatch.
 type BatchResult struct {
-	Files   []SourceFile `json:"files"`
-	Missing []string     `json:"missing"` // deleted between scan and read
-	Failed  []string     `json:"failed"`  // could not be read now (a sharing violation); retry
+	Files    []SourceFile   `json:"files"`
+	Missing  []string       `json:"missing"`  // deleted between scan and read
+	Failed   []string       `json:"failed"`   // could not be read now (a sharing violation); retry
+	TooLarge []TooLargeFile `json:"tooLarge"` // over MaxFileBytes: stat only, never read
+}
+
+// megabytes formats a size the way both backends print it: "10.0 MB".
+func megabytes(n int64) string { return fmt.Sprintf("%.1f MB", float64(n)/(1<<20)) }
+
+// errNotRegular is the error for a path that is not a plain file.
+var errNotRegular = errors.New("not a regular file")
+
+// errTooLarge is the ReadFile error for a file over MaxFileBytes.
+func errTooLarge(size int64) error {
+	return fmt.Errorf("file is too large (%s; the limit is %s)", megabytes(size), megabytes(MaxFileBytes))
 }
 
 // ChangeSet is the payload of the "docs:changed" event.
@@ -75,8 +103,10 @@ type DocsService struct {
 	announced map[string]stamp
 	watch     *watcher
 	closed    bool
-	gen       uint64 // bumped by every startWatcher; a scan from an older one is discarded
-	cacheDir  string // empty means %LOCALAPPDATA%\Folio\cache
+	gen       uint64     // bumped by every startWatcher; a scan from an older one is discarded
+	cacheDir  string     // empty means %LOCALAPPDATA%\Folio\cache
+	saveMu    sync.Mutex // held for a whole SaveCache and a whole ClearCache; always taken before mu
+	noSave    bool       // set by ClearCache: nothing is written to the cache again until restart
 }
 
 // NewService builds the service. roots is called on every request. emit sends
@@ -146,6 +176,9 @@ func (s *DocsService) scan(announce bool) (ScanResult, error) {
 	if r.Docs == "" {
 		return ScanResult{}, errors.New("no docs root is configured")
 	}
+	if err := refuseNetworkLinks(r); err != nil {
+		return ScanResult{}, err
+	}
 	gen := s.startWatcher(r)
 
 	start := time.Now()
@@ -162,7 +195,13 @@ func (s *DocsService) scan(announce bool) (ScanResult, error) {
 	if s.gen != gen || !sameRoots(r, s.roots()) {
 		return ScanResult{}, errSuperseded
 	}
-	res := ScanResult{Changed: []string{}, Removed: []string{}, Count: len(found), WalkMs: walkMs}
+	res := ScanResult{Changed: []string{}, Removed: []string{}, Count: len(found), WalkMs: walkMs, TooLarge: []TooLargeFile{}}
+	for p, st := range found {
+		if st.Size > MaxFileBytes {
+			res.TooLarge = append(res.TooLarge, TooLargeFile{Path: p, Size: st.Size})
+		}
+	}
+	slices.SortFunc(res.TooLarge, func(a, b TooLargeFile) int { return strings.Compare(a.Path, b.Path) })
 	for p, st := range found {
 		if old, ok := s.stamps[p]; !ok || old != st {
 			res.Changed = append(res.Changed, p)
@@ -200,6 +239,8 @@ func (s *DocsService) ReadBatch(paths []string) (BatchResult, error) {
 		file    SourceFile
 		stamp   stamp
 		missing bool
+		tooBig  bool
+		size    int64
 		err     error
 	}
 	out := make([]outcome, len(paths))
@@ -231,22 +272,36 @@ func (s *DocsService) ReadBatch(paths []string) (BatchResult, error) {
 				out[i].err = err
 				return
 			}
+			if !st.Mode().IsRegular() {
+				// A FIFO, a device or a folder named *.md: opening it could block. Not a document.
+				out[i].err = errNotRegular
+				return
+			}
+			out[i].stamp = stamp{Mtime: st.ModTime().UnixMilli(), Size: st.Size()}
+			if st.Size() > MaxFileBytes {
+				// Over the cap: reported from the stat alone, so a huge file costs no read.
+				out[i].tooBig, out[i].size = true, st.Size()
+				return
+			}
 			text, err := readText(fulls[i])
 			if errors.Is(err, fs.ErrNotExist) {
 				out[i].missing = true
+				return
+			}
+			if errors.Is(err, errFileGrew) {
+				out[i].tooBig, out[i].size = true, grownSize(fulls[i])
 				return
 			}
 			if err != nil {
 				out[i].err = err
 				return
 			}
-			out[i].stamp = stamp{Mtime: st.ModTime().UnixMilli(), Size: st.Size()}
 			out[i].file = SourceFile{Path: paths[i], Text: text, Mtime: out[i].stamp.Mtime}
 		}()
 	}
 	wg.Wait()
 
-	res := BatchResult{Files: make([]SourceFile, 0, len(paths)), Missing: []string{}, Failed: []string{}}
+	res := BatchResult{Files: make([]SourceFile, 0, len(paths)), Missing: []string{}, Failed: []string{}, TooLarge: []TooLargeFile{}}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i, o := range out {
@@ -257,6 +312,11 @@ func (s *DocsService) ReadBatch(paths []string) (BatchResult, error) {
 			log.Printf("docs.ReadBatch: %s: %v", paths[i], o.err)
 			res.Failed = append(res.Failed, paths[i])
 			delete(s.announced, paths[i])
+		case o.tooBig:
+			// Delivered, as far as Go is concerned: the frontend holds a stub for it, so a later
+			// delete is seen by Scan and an unchanged file is not read again. Scan's TooLarge says why.
+			res.TooLarge = append(res.TooLarge, TooLargeFile{Path: paths[i], Size: o.size})
+			s.stamps[paths[i]] = o.stamp
 		case o.missing:
 			res.Missing = append(res.Missing, paths[i])
 			delete(s.stamps, paths[i])
@@ -275,7 +335,19 @@ func (s *DocsService) ReadFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return readText(full)
+	if st, err := os.Stat(full); err == nil {
+		if !st.Mode().IsRegular() {
+			return "", errNotRegular
+		}
+		if st.Size() > MaxFileBytes {
+			return "", errTooLarge(st.Size())
+		}
+	}
+	text, err := readText(full)
+	if errors.Is(err, errFileGrew) {
+		return "", errTooLarge(grownSize(full))
+	}
+	return text, err
 }
 
 // walkMarkdown returns the stamp of every .md file under the configured roots,
@@ -284,7 +356,7 @@ func walkMarkdown(r Roots) (map[string]stamp, error) {
 	found := map[string]stamp{}
 	for _, root := range r.Roots {
 		base := filepath.Join(r.Docs, filepath.FromSlash(root))
-		if st, err := os.Stat(base); err != nil || !st.IsDir() {
+		if !settings.SafeIsDir(base) {
 			continue
 		}
 		err := filepath.WalkDir(base, func(p string, d fs.DirEntry, err error) error {
@@ -307,6 +379,9 @@ func walkMarkdown(r Roots) (map[string]stamp, error) {
 			if err != nil {
 				return nil
 			}
+			if t := info.Mode().Type(); t != 0 && t != fs.ModeSymlink {
+				return nil // a FIFO or a device named *.md: not a document, and opening it could block
+			}
 			rel, err := filepath.Rel(r.Docs, p)
 			if err != nil {
 				return nil
@@ -319,6 +394,31 @@ func walkMarkdown(r Roots) (map[string]stamp, error) {
 		}
 	}
 	return found, nil
+}
+
+// grownSize is the size of a file that passed the size check and was over the cap when it was
+// read: a fresh stat, never less than one byte over the cap.
+func grownSize(full string) int64 {
+	if st, err := os.Stat(full); err == nil && st.Size() > MaxFileBytes {
+		return st.Size()
+	}
+	return MaxFileBytes + 1
+}
+
+// refuseNetworkLinks fails when the docs folder or a docs root is, or sits behind, a link to a
+// network path: a repo whose docs or docs/modules is a symlink to \\host\share would start SMB on
+// the first stat. It runs before the watcher is started and before the walk.
+func refuseNetworkLinks(r Roots) error {
+	if settings.PathReachesNetwork(r.Docs) {
+		return fmt.Errorf("the docs folder %s leads to a network path through a link: %w", r.Docs, settings.ErrNetworkLink)
+	}
+	for _, root := range r.Roots {
+		base := filepath.Join(r.Docs, filepath.FromSlash(root))
+		if settings.PathReachesNetwork(base) {
+			return fmt.Errorf("the docs root %s leads to a network path through a link: %w", base, settings.ErrNetworkLink)
+		}
+	}
+	return nil
 }
 
 // skipDir is the scope rule shared by the walk and the watcher: node_modules, dot

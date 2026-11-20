@@ -11,9 +11,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 )
@@ -96,7 +99,7 @@ func Defaults() Settings {
 		DocsDir:    DefaultDocsDir,
 		DocsRoots:  slices.Clone(DefaultDocsRoots),
 		Theme:      ThemeSystem,
-		ShowMemory: true,
+		ShowMemory: false, // L1: process enumeration can trip endpoint security, so it is opt-in
 		Window:     Window{Width: 1440, Height: 900},
 	}
 }
@@ -124,27 +127,143 @@ var ErrCorrupt = errors.New("settings file is corrupt")
 
 var knownKeys = []string{"v", "repoRoot", "docsDir", "docsRoots", "adoWorkItemUrl", "adoPrUrl", "theme", "showMemory", "window", "sidebarWidth", "panelWidth", "sidebarCollapsed"}
 
-// Load reads path. A missing file yields Defaults and no error. A corrupt file is
-// renamed to <path>.bad, and Load returns Defaults with an error wrapping ErrCorrupt.
-// Fields missing from the file keep their default values.
+// Load reads path. A missing file yields Defaults and no error. A file that is not a JSON
+// object is renamed to <path>.bad, and Load returns Defaults with an error wrapping ErrCorrupt.
+// Fields missing from the file keep their default values, and so does any field that is
+// rejected (a wrong type, or a value Validate would refuse, L2): the rest of the file is kept
+// and what was rejected is logged.
 func Load(path string) (Settings, error) {
+	s, rejected, err := LoadReport(path)
+	for _, r := range rejected {
+		log.Printf("settings: %s: %s: %s; using the default", path, r.Field, r.Message)
+	}
+	return s, err
+}
+
+// LoadReport is Load without the logging: it also returns what was rejected, field by field.
+func LoadReport(path string) (Settings, []FieldError, error) {
 	s := Defaults()
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return s, nil
+		return s, nil, nil
 	}
 	if err != nil {
-		return s, err
+		return s, nil, err
 	}
 	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 
-	if err := json.Unmarshal(data, &s); err != nil {
-		return Defaults(), quarantine(path, err)
-	}
 	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return Defaults(), quarantine(path, err)
+	if err := json.Unmarshal(data, &raw); err != nil || raw == nil {
+		if err == nil {
+			err = errors.New("not a JSON object")
+		}
+		return Defaults(), nil, quarantine(path, err)
 	}
+	var rejected []FieldError
+	reject := func(field, msg string) { rejected = append(rejected, FieldError{field, msg}) }
+	// get decodes src[key] into dst. A missing or null key is skipped; a wrong type is rejected.
+	get := func(src map[string]json.RawMessage, field, key string, dst any) bool {
+		rm, ok := src[key]
+		if !ok || string(bytes.TrimSpace(rm)) == "null" {
+			return false
+		}
+		if err := json.Unmarshal(rm, dst); err != nil {
+			reject(field, "wrong type")
+			return false
+		}
+		return true
+	}
+	var str string
+	for _, f := range []struct {
+		key string
+		dst *string
+	}{{"repoRoot", &s.RepoRoot}, {"docsDir", &s.DocsDir}, {"adoWorkItemUrl", &s.AdoWorkItemURL}, {"adoPrUrl", &s.AdoPRURL}, {"theme", &s.Theme}} {
+		if get(raw, f.key, f.key, &str) {
+			*f.dst = str
+		}
+	}
+	var n int
+	// Whole numbers only, and only those a JavaScript number holds exactly (the Node backend's rule):
+	// 1e3 and 1.0 already fail to decode into an int; this adds the range.
+	const maxSafe = 1<<53 - 1
+	for _, f := range []struct {
+		key string
+		dst *int
+	}{{"v", &s.V}, {"sidebarWidth", &s.SidebarWidth}, {"panelWidth", &s.PanelWidth}} {
+		if get(raw, f.key, f.key, &n) {
+			if n > maxSafe || n < -maxSafe {
+				reject(f.key, "wrong type")
+				continue
+			}
+			*f.dst = n
+		}
+	}
+	var b bool
+	if get(raw, "showMemory", "showMemory", &b) {
+		s.ShowMemory = b
+	}
+	if get(raw, "sidebarCollapsed", "sidebarCollapsed", &b) {
+		s.SidebarCollapsed = b
+	}
+	var roots []string
+	if get(raw, "docsRoots", "docsRoots", &roots) {
+		s.DocsRoots = roots
+	}
+	var win map[string]json.RawMessage
+	if get(raw, "window", "window", &win) {
+		for _, f := range []struct {
+			key string
+			dst *int
+		}{{"x", &s.Window.X}, {"y", &s.Window.Y}, {"width", &s.Window.Width}, {"height", &s.Window.Height}} {
+			if get(win, "window."+f.key, f.key, &n) {
+				if n > maxSafe || n < -maxSafe {
+					reject("window."+f.key, "wrong type")
+					continue
+				}
+				*f.dst = n
+			}
+		}
+		if get(win, "window.maximised", "maximised", &b) {
+			s.Window.Maximised = b
+		}
+	}
+
+	// Values of the right type that Validate would refuse. repoRoot is checked for its shape only
+	// (a network or device path); whether it exists is the first-run screen's business.
+	d := Defaults()
+	if !slices.Contains([]string{ThemeSystem, ThemeLight, ThemeDark}, s.Theme) {
+		reject("theme", "must be system, light or dark")
+		s.Theme = d.Theme
+	}
+	if !isRelativeInside(s.DocsDir) {
+		reject("docsDir", "must be a relative folder inside the repo root")
+		s.DocsDir = d.DocsDir
+	}
+	if msg := rootsError(s.DocsRoots); msg != "" {
+		reject("docsRoots", msg)
+		s.DocsRoots = d.DocsRoots
+	}
+	if err := validateURLTemplate(s.AdoWorkItemURL); err != nil {
+		reject("adoWorkItemUrl", err.Error())
+		s.AdoWorkItemURL = ""
+	}
+	if err := validateURLTemplate(s.AdoPRURL); err != nil {
+		reject("adoPrUrl", err.Error())
+		s.AdoPRURL = ""
+	}
+	if msg := RootShapeError(s.RepoRoot, nil); msg != "" {
+		reject("repoRoot", msg)
+		s.RepoRoot = ""
+	}
+	if s.SidebarWidth != 0 && ClampSidebarWidth(s.SidebarWidth) != s.SidebarWidth {
+		reject("sidebarWidth", "out of range")
+		s.SidebarWidth = ClampSidebarWidth(s.SidebarWidth)
+	}
+	if s.PanelWidth != 0 && ClampPanelWidth(s.PanelWidth) != s.PanelWidth {
+		reject("panelWidth", "out of range")
+		s.PanelWidth = ClampPanelWidth(s.PanelWidth)
+	}
+
 	for _, k := range knownKeys {
 		delete(raw, k)
 	}
@@ -154,7 +273,87 @@ func Load(path string) (Settings, error) {
 	if s.V == 0 {
 		s.V = Version
 	}
-	return s, nil
+	return s, rejected, nil
+}
+
+// rootsError is "" when there is at least one docs root and each is a relative folder inside the docs folder.
+func rootsError(roots []string) string {
+	if len(roots) == 0 {
+		return "must list at least one folder"
+	}
+	for _, r := range roots {
+		if !isRelativeInside(r) {
+			return fmt.Sprintf("%q must be a relative folder inside the docs folder", r)
+		}
+	}
+	return ""
+}
+
+// NetworkRootMessage is what a rejected network or device repo root says. Both backends use it.
+const NetworkRootMessage = `network and device paths (\\server\share, \\?\, \\.\) are not allowed as the repo root`
+
+// LocalRootMessage is what a repo root that is not a full local path says (Windows only).
+const LocalRootMessage = `the repo root must be a full path that starts with a drive letter, such as C:\repo`
+
+var driveRoot = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
+
+// RootShapeError is "" when p can be a repo root, and otherwise the message to show. An allow-list
+// on Windows: a full path with a drive letter, or a network folder in allowNetwork (the one picked
+// in the native dialog). A relative, root-relative (\foo) or drive-relative (C:foo) path would
+// resolve against whatever folder Folio happens to run in, and a UNC or device path is SMB.
+// Everywhere else only the network check applies. "" is fine (first run).
+func RootShapeError(p string, allowNetwork []string) string {
+	switch {
+	case p == "":
+		return ""
+	case IsNetworkPath(p):
+		if InPaths(allowNetwork, p) {
+			return ""
+		}
+		return NetworkRootMessage
+	case runtime.GOOS == "windows" && !driveRoot.MatchString(p):
+		return LocalRootMessage
+	}
+	return ""
+}
+
+// IsNetworkLinkTarget reports whether the target of a symlink is a network or device path other
+// than a local drive written as a device path (\\?\C:\...). Reading through such a link is SMB.
+func IsNetworkLinkTarget(t string) bool {
+	if !IsNetworkPath(t) {
+		return false
+	}
+	return !localDeviceTarget.MatchString(t)
+}
+
+// localDeviceTarget matches the device-path forms that are local: a drive (\\?\C:\...) and a volume
+// mount point, which Windows reads back as \\?\Volume{GUID}\ (also with the \??\ prefix).
+var localDeviceTarget = regexp.MustCompile(`(?i)^(?:[\\/]{2}[?.][\\/]|\\\?\?\\)(?:[A-Za-z]:(?:[\\/]|$)|Volume\{[0-9a-f-]+\}(?:[\\/]|$))`)
+
+// IsNetworkPath reports whether p is a UNC path (\\host\share) or a device path (\\?\, \\.\, \??\).
+// Opening one makes Windows talk SMB with the user's credentials, so it is never used as a root
+// unless the user picked it in the native folder dialog (L2). Either slash counts, as on Windows.
+func IsNetworkPath(p string) bool {
+	slash := func(c byte) bool { return c == '\\' || c == '/' }
+	if len(p) >= 2 && slash(p[0]) && slash(p[1]) {
+		return true
+	}
+	return strings.HasPrefix(p, `\??\`)
+}
+
+// InPaths reports whether p is one of list, compared as SamePath does.
+func InPaths(list []string, p string) bool {
+	for _, q := range list {
+		if SamePath(q, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// SamePath compares two paths the way Windows does: cleaned, and without regard to case.
+func SamePath(a, b string) bool {
+	return a != "" && b != "" && strings.EqualFold(filepath.Clean(a), filepath.Clean(b))
 }
 
 func quarantine(path string, cause error) error {
@@ -241,7 +440,12 @@ func (v ValidationError) Error() string {
 
 // Validate checks s. An empty RepoRoot is valid (first run). Otherwise RepoRoot must
 // be an existing directory and at least one docs root must exist beneath it.
-func Validate(s Settings) error {
+func Validate(s Settings) error { return ValidateAllowing(s, nil) }
+
+// ValidateAllowing is Validate, except that a network or device repo root equal to one of
+// allowNetwork is accepted. The caller passes the folders the user picked in the native dialog,
+// a fact only Go knows (see shell.ShellService); none allows none.
+func ValidateAllowing(s Settings, allowNetwork []string) error {
 	var errs ValidationError
 	add := func(field, msg string) { errs = append(errs, FieldError{field, msg}) }
 
@@ -259,6 +463,7 @@ func Validate(s Settings) error {
 			pathsOK = false
 		}
 	}
+	rootMsg := RootShapeError(s.RepoRoot, allowNetwork)
 	if err := validateURLTemplate(s.AdoWorkItemURL); err != nil {
 		add("adoWorkItemUrl", err.Error())
 	}
@@ -266,14 +471,17 @@ func Validate(s Settings) error {
 		add("adoPrUrl", err.Error())
 	}
 
-	if s.RepoRoot != "" {
-		if st, err := os.Stat(s.RepoRoot); err != nil || !st.IsDir() {
+	if rootMsg != "" {
+		// Checked before any file-system call: even a stat on a UNC path starts SMB.
+		add("repoRoot", rootMsg)
+	} else if s.RepoRoot != "" {
+		if !SafeIsDir(s.RepoRoot) {
 			add("repoRoot", "must be an existing folder")
 		} else if pathsOK {
 			docs := s.DocsPath()
 			found := false
 			for _, r := range s.DocsRoots {
-				if st, err := os.Stat(filepath.Join(docs, filepath.FromSlash(r))); err == nil && st.IsDir() {
+				if SafeIsDir(filepath.Join(docs, filepath.FromSlash(r))) {
 					found = true
 					break
 				}

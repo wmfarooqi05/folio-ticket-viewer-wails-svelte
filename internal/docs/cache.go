@@ -43,18 +43,26 @@ func normRoot(docs string) string {
 	return strings.ToLower(filepath.ToSlash(filepath.Clean(docs)))
 }
 
-func (s *DocsService) cachePath(r Roots) (string, error) {
-	dir := s.cacheDir
-	if dir == "" {
-		base := os.Getenv("LOCALAPPDATA")
-		if base == "" {
-			ucd, err := os.UserCacheDir()
-			if err != nil {
-				return "", err
-			}
-			base = ucd
+// cacheFolder is where cache files go: the override, or %LOCALAPPDATA%\Folio\cache.
+func (s *DocsService) cacheFolder() (string, error) {
+	if s.cacheDir != "" {
+		return s.cacheDir, nil
+	}
+	base := os.Getenv("LOCALAPPDATA")
+	if base == "" {
+		ucd, err := os.UserCacheDir()
+		if err != nil {
+			return "", err
 		}
-		dir = filepath.Join(base, "Folio", "cache")
+		base = ucd
+	}
+	return filepath.Join(base, "Folio", "cache"), nil
+}
+
+func (s *DocsService) cachePath(r Roots) (string, error) {
+	dir, err := s.cacheFolder()
+	if err != nil {
+		return "", err
 	}
 	sum := sha1.Sum([]byte(normRoot(r.Docs)))
 	return filepath.Join(dir, hex.EncodeToString(sum[:])[:12]+".json"), nil
@@ -116,7 +124,15 @@ func (s *DocsService) SaveCache(parserVersion string, index json.RawMessage) err
 	if len(index) == 0 {
 		return errors.New("empty index")
 	}
+	// One save at a time, and never concurrently with ClearCache: the whole save, write included,
+	// is under saveMu, so a save already in flight cannot re-create what Clear data just deleted.
+	s.saveMu.Lock()
+	defer s.saveMu.Unlock()
 	s.mu.Lock()
+	if s.noSave {
+		s.mu.Unlock()
+		return nil // "Clear data" ran: the cache stays gone until Folio restarts
+	}
 	path, err := s.cachePath(r)
 	if err != nil {
 		s.mu.Unlock()
@@ -138,8 +154,14 @@ func (s *DocsService) SaveCache(parserVersion string, index json.RawMessage) err
 	if err != nil {
 		return err
 	}
+	if beforeCacheWrite != nil {
+		beforeCacheWrite()
+	}
 	return writeAtomic(path, b)
 }
+
+// beforeCacheWrite is a test hook: it runs after the envelope is built and before the file is written.
+var beforeCacheWrite func()
 
 func writeAtomic(path string, b []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

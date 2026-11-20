@@ -1,3 +1,5 @@
+//go:build bench
+
 package shell
 
 import (
@@ -25,6 +27,15 @@ import (
 //
 // With FOLIO_BENCH unset the only cost is one os.Getenv at start-up and an event handler in the
 // frontend that nothing ever calls.
+
+// BenchBuilt is true in a bench build (go build -tags bench). The shipped exe is built without the
+// tag, so none of this file, its environment variable names or its poller are in it (ticket 18, L3):
+// bench_off.go stands in with empty functions.
+const BenchBuilt = true
+
+// BenchMemLog reports whether to log every RAM readout value, which lets ram-check.ps1 compare the
+// readout with its own number.
+func BenchMemLog() bool { return os.Getenv(EnvBench) == "1" }
 
 // EnvBench and EnvBenchDir switch the hook on.
 const (

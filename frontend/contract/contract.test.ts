@@ -4,12 +4,23 @@
 //
 //   npm run test:contract        (from frontend/; needs Go on PATH, and Windows for the junction case)
 import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { fixturesDocs, goDriver, nodeDriver, sandbox, type Driver, type Handle, type Sandbox } from './driver'
 
 const ROOTS = ['modules', 'handoffs', 'patterns']
+/** What both backends say about a network or device repo root (settings.NetworkRootMessage in Go). */
+const NETWORK_MESSAGE = String.raw`network and device paths (\\server\share, \\?\, \\.\) are not allowed as the repo root`
+/** What both backends say about a repo root that is not a full local path (Windows only). */
+const LOCAL_MESSAGE = String.raw`the repo root must be a full path that starts with a drive letter, such as C:\repo`
+const RELATIVE_ROOTS: [string, string][] = process.platform === 'win32' ? [['relative', 'repo'], ['rootRelative', String.raw`\repo`], ['driveRelative', 'C:repo']] : []
+const NETWORK_ROOTS: [string, string][] = [
+  ['unc', String.raw`\\folio-contract-nohost\share\repo`],
+  ['uncSlashes', '//folio-contract-nohost/share/repo'],
+  ['devicePrefix', String.raw`\\?\C:\repo`],
+  ['dotPrefix', String.raw`\\.\C:\repo`],
+]
 const drivers: Driver[] = [goDriver, nodeDriver].filter((d) => d.available())
 
 /** What each backend reported, by case, for the final comparison. */
@@ -104,11 +115,29 @@ for (const d of drivers) {
       record('checkDocs', norm([some, bad, outside], c))
     })
 
+    t('checkRoot and checkDocs refuse network and device paths without touching the network', async (c) => {
+      const out: unknown[] = []
+      for (const [key, root] of NETWORK_ROOTS) {
+        const r = await c.b.call('checkRoot', root)
+        expect(r, key).toMatchObject({ ok: false, message: NETWORK_MESSAGE })
+        const d = await c.b.call('checkDocs', root, 'docs', ROOTS)
+        expect(d, key).toMatchObject({ ok: false, message: NETWORK_MESSAGE })
+        out.push(r, d)
+      }
+      // a relative root would resolve against the working folder
+      for (const [key, root] of RELATIVE_ROOTS) {
+        const r = await c.b.call('checkRoot', root)
+        expect(r, key).toMatchObject({ ok: false, message: LOCAL_MESSAGE })
+        out.push(r)
+      }
+      record('networkChecks', norm(out, c))
+    })
+
     t('settings: defaults, a valid save, UI state and the same file bytes', async (c) => {
       const first = await c.b.call('getConfig')
-      expect(first).toMatchObject({ v: 1, repoRoot: '', docsDir: 'docs', docsRoots: ROOTS, theme: 'system', showMemory: true, sidebarWidth: 0, panelWidth: 0, sidebarCollapsed: false })
-      const saved = await c.b.call('setConfig', { repoRoot: c.repo, theme: 'dark', adoPrUrl: 'https://dev.example.com/pr/{id}', showMemory: false })
-      expect(saved).toMatchObject({ repoRoot: c.repo, theme: 'dark', showMemory: false })
+      expect(first).toMatchObject({ v: 1, repoRoot: '', docsDir: 'docs', docsRoots: ROOTS, theme: 'system', showMemory: false, sidebarWidth: 0, panelWidth: 0, sidebarCollapsed: false })
+      const saved = await c.b.call('setConfig', { repoRoot: c.repo, theme: 'dark', adoPrUrl: 'https://dev.example.com/pr/{id}', showMemory: true })
+      expect(saved).toMatchObject({ repoRoot: c.repo, theme: 'dark', showMemory: true })
       expect(await c.b.call('setSidebarWidth', 9999)).toBe(480)
       expect(await c.b.call('setSidebarWidth', 10)).toBe(200)
       expect(await c.b.call('setPanelWidth', 10)).toBe(320)
@@ -138,12 +167,18 @@ for (const d of drivers) {
       await bad('http', { adoPrUrl: 'http://x.example.com/{id}' })
       await bad('missingRepo', { repoRoot: path.join(c.sb.dir, 'nope') })
       await bad('noRoots', { repoRoot: c.sb.dir })
+      // A network or device root is refused without touching the network (L2). No such host exists:
+      // a stat would take seconds and say "not a folder" instead.
+      for (const [key, root] of NETWORK_ROOTS) await bad(key, { repoRoot: root })
+      for (const [key, root] of RELATIVE_ROOTS) await bad(key, { repoRoot: root })
       expect(msgs.theme).toBe('invalid settings: theme: must be system, light or dark')
       expect(msgs.docsRoots).toBe('invalid settings: docsRoots: ".." must be a relative folder inside the docs folder')
       expect(msgs.template).toBe('invalid settings: adoWorkItemUrl: must contain {id}')
       expect(msgs.http).toBe('invalid settings: adoPrUrl: must be an https:// URL')
       expect(msgs.missingRepo).toContain('repoRoot: must be an existing folder')
       expect(msgs.noRoots).toContain('docsRoots: none of the selected folders exist under')
+      for (const [key] of NETWORK_ROOTS) expect(msgs[key], key).toBe('invalid settings: repoRoot: ' + NETWORK_MESSAGE)
+      for (const [key] of RELATIVE_ROOTS) expect(msgs[key], key).toBe('invalid settings: repoRoot: ' + LOCAL_MESSAGE)
       // a rejected patch changes nothing
       expect((await c.b.call('getConfig')).repoRoot).toBe('')
       record('validation', norm(msgs, c))
@@ -155,7 +190,7 @@ for (const d of drivers) {
       }
       await expect(c.b.call('setConfig', [])).rejects.toThrow()
       expect(existsSync(c.sb.settingsFile)).toBe(false) // nothing written: the desktop app would quarantine a mistyped file
-      expect((await c.b.call('getConfig')).showMemory).toBe(true)
+      expect((await c.b.call('getConfig')).showMemory).toBe(false)
     })
 
     t('settings: unknown keys survive, hand edits are picked up, a corrupt file is moved aside', async (c) => {
@@ -174,6 +209,72 @@ for (const d of drivers) {
       expect(existsSync(c.sb.settingsFile + '.bad')).toBe(true)
       expect(existsSync(c.sb.settingsFile)).toBe(false)
     }, ({ sb }) => writeFileSync(sb.settingsFile, '{ not json'))
+
+    const HAND_EDITED = {
+      v: 1,
+      theme: 'blue', // not a theme
+      docsDir: '../x', // leaves the repo
+      docsRoots: ['modules', '../..'], // one root leaves the docs folder
+      adoWorkItemUrl: 'http://x.example.com/{id}', // not https
+      adoPrUrl: 'https://ok.example.com/{id}', // fine: kept
+      repoRoot: String.raw`\\folio-contract-nohost\share\repo`, // a UNC root
+      showMemory: 'yes', // wrong type
+      sidebarWidth: 5000, // out of range
+      panelWidth: 'wide', // wrong type
+      window: { width: 'big', height: 700 }, // one wrong type, one fine
+      zzz: { keep: true },
+    }
+    t('settings: a hand-edited file is validated field by field on load, and the rest is kept', async (c) => {
+      const cfg = await c.b.call('getConfig')
+      expect(cfg).toMatchObject({
+        theme: 'system',
+        docsDir: 'docs',
+        docsRoots: ROOTS,
+        adoWorkItemUrl: '',
+        adoPrUrl: 'https://ok.example.com/{id}',
+        repoRoot: '',
+        showMemory: false,
+        sidebarWidth: 480,
+        panelWidth: 0,
+        window: { width: 1440, height: 700 },
+      })
+      // not moved aside: it is a valid JSON object, only some fields were bad
+      expect(existsSync(c.sb.settingsFile)).toBe(true)
+      expect(existsSync(c.sb.settingsFile + '.bad')).toBe(false)
+      // the next save writes the corrected values and keeps what the file had that Folio does not know
+      await c.b.call('setConfig', { theme: 'dark' })
+      const onDisk = JSON.parse(readFileSync(c.sb.settingsFile, 'utf8'))
+      expect(onDisk).toMatchObject({ theme: 'dark', docsDir: 'docs', adoWorkItemUrl: '', repoRoot: '', zzz: { keep: true } })
+      record('handEdited', norm([cfg, onDisk], c))
+    }, ({ sb }) => writeFileSync(sb.settingsFile, JSON.stringify(HAND_EDITED)))
+
+    t('settings: only whole-number literals count as integers, in both backends', async (c) => {
+      const cfg = await c.b.call('getConfig')
+      expect(cfg).toMatchObject({ sidebarWidth: 0, panelWidth: 0, window: { x: 0, y: 0, width: 1440, height: 900 }, theme: 'light' })
+      record('integers', norm(cfg, c))
+    }, ({ sb }) =>
+      // written as text: JSON.stringify would turn 1e3 into 1000
+      writeFileSync(sb.settingsFile, '{"v":1,"theme":"light","sidebarWidth":3e2,"panelWidth":400.0,"window":{"x":9007199254740993,"y":1e1,"width":2e3,"height":900.5}}'))
+
+    for (const [key, root] of RELATIVE_ROOTS) {
+      t(`settings: a ${key} repoRoot in the file is dropped on load`, async (c) => {
+        expect((await c.b.call('getConfig')).repoRoot).toBe('')
+      }, ({ sb }) => writeFileSync(sb.settingsFile, JSON.stringify({ v: 1, repoRoot: root })))
+    }
+
+    for (const [key, root] of NETWORK_ROOTS) {
+      t(`settings: a ${key} repoRoot in the file is dropped on load`, async (c) => {
+        const cfg = await c.b.call('getConfig')
+        expect(cfg.repoRoot).toBe('')
+        expect(cfg.theme).toBe('light') // the rest of the file is kept
+        await expect(c.b.call('scan')).rejects.toThrow('no docs root is configured')
+      }, ({ sb }) => writeFileSync(sb.settingsFile, JSON.stringify({ v: 1, theme: 'light', repoRoot: root })))
+    }
+
+    t('settings: a file that is not a JSON object is moved aside', async (c) => {
+      expect((await c.b.call('getConfig')).theme).toBe('system')
+      expect(existsSync(c.sb.settingsFile + '.bad')).toBe(true)
+    }, ({ sb }) => writeFileSync(sb.settingsFile, '[1, 2]'))
 
     // ---- scan, read, stamps ---------------------------------------------------------
 
@@ -233,6 +334,111 @@ for (const d of drivers) {
       expect(new Set(errors)).toEqual(new Set(['rejected']))
       // one bad path fails the call before any I/O
       await expect(c.b.call('readBatch', ['modules/bom/a.md', '../x.md'])).rejects.toThrow()
+    })
+
+    // ---- the size cap (L6) ----------------------------------------------------------
+
+    const MB = 1024 * 1024
+    const prepBig = ({ docs }: { docs: string }) => {
+      const dir = path.join(docs, 'modules', 'big')
+      mkdirSync(dir, { recursive: true })
+      const fill = (name: string, bytes: number) => writeFileSync(path.join(dir, name), '# big\n' + 'a'.repeat(bytes - 6))
+      fill('five.md', 5 * MB) // exactly the cap: read
+      fill('six.md', 5 * MB + 1) // one byte over: skipped
+      fill('huge.md', 10 * MB)
+    }
+    t('a .md over 5 MB is skipped by readBatch and readFile, and reported with its size', async (c) => {
+      await use(c)
+      const s1 = await c.b.call('scan')
+      expect(list(s1.changed)).toContain('modules/big/huge.md')
+      // the scan itself says which files are over the cap: its walk already has their size
+      const big = [
+        ['modules/big/huge.md', 10 * MB],
+        ['modules/big/six.md', 5 * MB + 1],
+      ]
+      expect(list(s1.tooLarge).map((x: any) => [x.path, x.size])).toEqual(big)
+      const t0 = Date.now()
+      const batch = await c.b.call('readBatch', c.expected)
+      const ms = Date.now() - t0
+      expect(ms, 'readBatch took ' + ms + ' ms').toBeLessThan(5000)
+      const names = batch.files.map((f: any) => f.path)
+      expect(names).toContain('modules/big/five.md')
+      expect(names).not.toContain('modules/big/six.md')
+      expect(names).not.toContain('modules/big/huge.md')
+      expect(batch.files.find((f: any) => f.path === 'modules/big/five.md').text.length).toBe(5 * MB)
+      expect(list(batch.tooLarge).map((x: any) => [x.path, x.size])).toEqual(big)
+      expect(list(batch.failed)).toEqual([])
+      // they count as delivered (the frontend holds a stub for them): the next scan is quiet but still says why
+      const s2 = await c.b.call('scan')
+      expect(list(s2.changed)).toEqual([])
+      expect(list(s2.tooLarge).map((x: any) => [x.path, x.size])).toEqual(big)
+      expect(s2.count).toBe(c.expected.length)
+      await expect(c.b.call('readFile', 'modules/big/huge.md')).rejects.toThrow('file is too large (10.0 MB; the limit is 5.0 MB)')
+      await expect(c.b.call('readFile', 'modules/big/six.md')).rejects.toThrow('file is too large (5.0 MB; the limit is 5.0 MB)')
+      expect((await c.b.call('readFile', 'modules/big/five.md')).length).toBe(5 * MB)
+      // a file that shrinks under the cap is read again
+      writeFileSync(path.join(c.docs, 'modules', 'big', 'huge.md'), '# small\n')
+      const s3 = await c.b.call('scan')
+      expect(list(s3.changed)).toContain('modules/big/huge.md')
+      expect(list(s3.tooLarge).map((x: any) => x.path)).toEqual(['modules/big/six.md'])
+      const again = await c.b.call('readBatch', ['modules/big/huge.md'])
+      expect(again.files.map((f: any) => f.text)).toEqual(['# small\n'])
+      expect(list(again.tooLarge)).toEqual([])
+      // a deleted oversized file is seen as removed
+      rmSync(path.join(c.docs, 'modules', 'big', 'six.md'))
+      const s4 = await c.b.call('scan')
+      expect(list(s4.removed)).toEqual(['modules/big/six.md'])
+      expect(list(s4.tooLarge)).toEqual([])
+      record('tooLarge', { scan1: list(s1.tooLarge), batch: list(batch.tooLarge), scan2: list(s2.tooLarge), changed2: list(s2.changed), scan3: list(s3.tooLarge), removed4: list(s4.removed) })
+    }, prepBig)
+
+    t('a symlink that points at a network path is refused without being followed', async (c) => {
+      await use(c)
+      const link = path.join(c.docs, 'modules', 'big', 'evil.md')
+      mkdirSync(path.dirname(link), { recursive: true })
+      try {
+        symlinkSync(String.raw`\\folio-contract-nohost\share\x.md`, link, 'file')
+      } catch {
+        return // no right to create symlinks here (Windows needs developer mode or admin): the unit tests cover it
+      }
+      const t0 = Date.now()
+      await expect(c.b.call('readFile', 'modules/big/evil.md')).rejects.toThrow()
+      const batch = await c.b.call('readBatch', ['modules/big/evil.md']).then(() => 'ok', () => 'rejected')
+      expect(batch).toBe('rejected')
+      expect(Date.now() - t0, 'refused slowly: it probably talked to the network').toBeLessThan(2000)
+      // a link partway down a link's target: x.md -> ..\..\..\evil\y.md, with evil a link to the share
+      symlinkSync(String.raw`\\folio-contract-nohost\share`, path.join(c.repo, 'evil'), 'dir')
+      const hop = path.join(c.docs, 'modules', 'big', 'hop.md')
+      symlinkSync(String.raw`..\..\..\evil\y.md`, hop, 'file')
+      await expect(c.b.call('readFile', 'modules/big/hop.md')).rejects.toThrow()
+      // the docs root itself is a link to the share: the first scan must not start SMB
+      rmSync(path.join(c.docs, 'modules'), { recursive: true, force: true })
+      symlinkSync(String.raw`\\folio-contract-nohost\share\modules`, path.join(c.docs, 'modules'), 'dir')
+      const t1 = Date.now()
+      await expect(c.b.call('scan')).rejects.toThrow('network')
+      expect(Date.now() - t1, 'the scan was slow: it probably talked to the network').toBeLessThan(2000)
+    })
+
+    // ---- clear data (L5) --------------------------------------------------------------
+
+    t('clearData deletes the cache, keeps it gone, and only touches the cache folder', async (c) => {
+      await use(c)
+      await c.b.call('scan')
+      await c.b.call('readBatch', c.expected)
+      await c.b.call('saveCache', 'p1', { a: 1 })
+      expect(readdirSync(c.sb.cacheDir)).toHaveLength(1)
+      writeFileSync(path.join(c.sb.local, 'Folio', 'keep.txt'), 'not the cache')
+      const first = await c.b.call('clearData')
+      expect(first).toMatchObject({ cacheDeleted: true, profileScheduled: false })
+      expect(existsSync(c.sb.cacheDir)).toBe(false)
+      expect(readFileSync(path.join(c.sb.local, 'Folio', 'keep.txt'), 'utf8')).toBe('not the cache') // siblings stay
+      expect(await c.b.call('loadCache', 'p1')).toBeNull()
+      // the frontend's next save must not bring the plaintext copy back
+      await c.b.call('saveCache', 'p1', { a: 2 })
+      expect(existsSync(c.sb.cacheDir)).toBe(false)
+      const second = await c.b.call('clearData')
+      expect(second).toMatchObject({ cacheDeleted: false })
+      record('clearData', norm([first, second], c))
     })
 
     // ---- the cache ------------------------------------------------------------------
@@ -489,7 +695,7 @@ describe.skipIf(drivers.length < 2)('contract: the two backends report the same'
     expect(keys.length).toBeGreaterThan(8)
     expect(Object.keys(seen.go).sort()).toEqual(keys.sort())
   })
-  for (const key of ['checkRoot', 'checkDocs', 'getConfig', 'settings.json', 'validation', 'scan', 'cache', 'watcher', 'doc', 'vscodeUrl']) {
+  for (const key of ['integers', 'checkRoot', 'checkDocs', 'networkChecks', 'handEdited', 'tooLarge', 'clearData', 'getConfig', 'settings.json', 'validation', 'scan', 'cache', 'watcher', 'doc', 'vscodeUrl']) {
     it(key, () => {
       expect(seen.node[key], key).toBeDefined()
       expect(seen.node[key]).toEqual(seen.go[key])

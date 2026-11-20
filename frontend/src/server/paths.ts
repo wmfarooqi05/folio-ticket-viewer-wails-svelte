@@ -2,6 +2,7 @@
 // Zero dependencies: Node built-ins only. The contract tests run the same cases against
 // the Go services, so the two cannot drift.
 import { lstat, realpath } from 'node:fs/promises'
+import { pathReachesNetwork } from './settings'
 import path from 'node:path'
 
 export class PathError extends Error {}
@@ -35,6 +36,11 @@ export async function safeJoin(root: string, rel: string): Promise<string> {
   if (segs.some((s) => s === '..' || DEVICE.test(s))) throw escapes()
   const full = path.join(root, ...segs)
   if (!within(root, full)) throw escapes()
+
+  // A link anywhere on the way (in the docs folder, in a folder, in a link's target) that leads to
+  // \\host\share would make the lstat and realpath below talk SMB with the user's credentials (a
+  // hostile cloned repo). Resolve the path by hand first: lstat and readlink only, a part at a time.
+  if (pathReachesNetwork(full)) throw escapes()
 
   // lstat every segment on the way: one that cannot be inspected is refused rather than
   // trusted. A missing one ends the walk (the target does not exist yet).
