@@ -10,6 +10,7 @@ import (
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/docs"
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/localdata"
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/mem"
+	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/paths"
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/settings"
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/shell"
 )
@@ -50,9 +51,24 @@ func main() {
 		app.Event.Emit(mem.Event, b)
 	})
 
+	profile, err := paths.WebView2Dir() // %LOCALAPPDATA%\Folio\WebView2, not the roaming %APPDATA% (ticket 16, M2)
+	if err != nil {
+		log.Fatalf("folio: webview2 profile path: %v", err)
+	}
+	// Only Folio's own origin may call the Wails runtime, and the watchdog trusts only it.
+	origin := appOrigin()
+
+	// The navigation watchdog (ticket 16): Go asks the browser where the window is and resets it unless
+	// it is Folio's page. win is set below; the closures only run once the window exists.
+	var win *application.WebviewWindow
+	watchdog := shell.NewWatchdog(origin,
+		func(js string) { win.ExecJS(js) },
+		func() { win.SetURL("/") })
+
 	app = application.New(application.Options{
-		Name:        "Folio",
-		Description: "Read-only viewer of file-based tickets",
+		RawMessageHandler: shell.RawHandler(func() *shell.Watchdog { return watchdog }),
+		Name:              "Folio",
+		Description:       "Read-only viewer of file-based tickets",
 		Services: []application.Service{
 			application.NewService(docsSvc),
 			application.NewService(shellSvc),
@@ -62,13 +78,19 @@ func main() {
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 			// /doc/<path> serves images from the docs folder (ticket 10, 06 D6).
-			Middleware: shell.DocAssets(func() string { return shell.RootsOf(shellSvc).Docs }),
+			// The runtime guard is outermost, so it sees every request before Wails' own transport (ticket 16).
+			Middleware: shell.Chain(
+				shell.FrameGuard,
+				shell.RuntimeGuard(origin),
+				shell.DocAssets(func() string { return shell.RootsOf(shellSvc).Docs }),
+			),
 		},
 		// WebView2 tuning from ticket 07 (docs/assets/07-findings.md). GPU off is the real
 		// win: about -75 MB private at idle with no CPU cost. The rest is housekeeping.
 		// Extra disabled features must go in DisabledFeatures: Wails emits its own
 		// --disable-features, and a second one in AdditionalBrowserArgs would override it.
 		Windows: application.WindowsOptions{
+			WebviewUserDataPath: profile,
 			DisabledFeatures: []string{
 				"SpareRendererForSitePerProcess", "Translate", "TranslateUI",
 				"OptimizationHints", "OptimizationGuideModelDownloading", "MediaRouter",
@@ -83,14 +105,15 @@ func main() {
 		},
 	})
 
-	win := app.Window.NewWithOptions(shell.WindowOptions(shellSvc, application.WebviewWindowOptions{
+	win = app.Window.NewWithOptions(shell.Harden(shell.WindowOptions(shellSvc, application.WebviewWindowOptions{
 		Title:     "Folio",
 		Width:     1440,
 		Height:    900,
 		MinWidth:  900,
 		MinHeight: 560,
 		URL:       "/",
-	}))
+	})))
+	shell.WatchNavigation(win, watchdog)
 	shell.RememberWindow(shellSvc, win)
 	mem.Attach(memMon, win) // paused while the window is minimised or hidden
 	// RAM bench hook (ticket 15): compiled in only with -tags bench, and then off unless FOLIO_BENCH=1
