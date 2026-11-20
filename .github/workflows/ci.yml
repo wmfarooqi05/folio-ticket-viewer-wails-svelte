@@ -46,7 +46,7 @@ jobs:
       # frozen snapshot, so no Go is needed.
       - name: Restore the type-only Wails bindings
         run: node scripts/restore-bindings.mjs
-      - name: svelte-check
+      - name: svelte-check (TypeScript 6) and tsc (TypeScript 7)
         working-directory: frontend
         run: npm run check
       - name: vitest
