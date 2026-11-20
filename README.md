@@ -44,6 +44,27 @@ Window position and size, the pane widths and the collapsed tree are saved there
 
 The bottom of the tree shows one muted figure, for example `165 MB`: the private bytes of Folio plus its WebView2 processes, summed the way `scripts/ram-check.ps1` does it, so the two agree (Task Manager's Memory column is a different measure, which the tooltip says). Go measures (`internal/mem`) and only sends a number when it moved by 1 MB or more since the last one it sent. It polls every 5 s, re-reading just the known processes and listing every process on the machine once a minute to find new children, and it pauses while the window is minimised or hidden. Turn it off with **Show memory use** in Settings (`showMemory` in `settings.json`): nothing is polled then, and no goroutine or timer exists. The readout is also off while the tree is hidden or collapsed.
 
+## Web mode (no exe)
+
+The same viewer runs in a browser, from Node alone. Use it where you cannot or do not want to run an exe, for example on a company VM that has Node.
+
+```
+npx folio-viewer --docs <path>
+```
+
+`<path>` is the repo root, or its docs folder. Node 20 or newer is the only requirement. The command starts a server on `127.0.0.1`, prints a link with a one-time token, and opens it in your default browser. To install it once instead: `npm install -g folio-viewer`, then `folio --docs <path>`. `--port <n>` picks the port (default: a random free one), `--no-open` only prints the link, and without `--docs` the page asks for a path.
+
+What is the same: the tree, every view, the side panel, Mermaid, live refresh (edits, new files, deletes and renames show within a second), the index cache and `settings.json` (the same files, in the same places, as the desktop app).
+
+What is different:
+
+- The folder is a path you type (first run and Settings), or `--docs`; there is no native dialog.
+- External links open in a new browser tab (`http` and `https` only). "Open in VS Code" is a `vscode://` link; Edge asks once.
+- No window bounds, no RAM readout, no "Open settings file".
+- Only the browser that used the printed link can talk to the server: it listens on `127.0.0.1` only, accepts only `127.0.0.1:<port>` and `localhost:<port>` as the host, and wants a cookie it gets from the token in the link. Cross-site requests are refused. Images are served under `/doc/` with the same path rules as the desktop app.
+
+For development, from the repo root: `npm run web -- --docs fixtures\docs` (or `task web -- --docs fixtures\docs`) builds what is stale and runs it. `task build:web` builds `packages/folio-viewer/` (`folio-web.mjs` plus `dist/`), the folder that gets published; run `npm pack` there to check the file list. The server is TypeScript under `frontend/src/server/`, with no dependencies. `task test:contract` runs the same cases against the Go services and the Node server (`cmd/contract-server` is the Go side of that harness), so the two cannot drift.
+
 ## Stack
 
 - **Wails v3.1.0** (Go backend, WebView2 frontend, Windows only). Go stats, reads and watches files and exposes them as typed services; Wails generates the TypeScript bindings.
@@ -114,12 +135,16 @@ internal/docs/           DocsService: Scan, ReadBatch, ReadFile, the watcher, th
 internal/shell/          ShellService: config, folder picker, CheckRoot, open in VS Code, asset middleware, bench hook
 internal/settings/       settings.json: load, validate, atomic save
 internal/mem/            the RAM readout: process-tree private bytes, polling, pause
+cmd/contract-server/     test harness: the Go services behind the web-mode HTTP API (contract suite)
+packages/folio-viewer/   the npm package (web mode): package.json, LICENSE; folio-web.mjs and dist/ are built
 scripts/                 size-check.mjs (+ test) and ram-check.ps1
 build/                   Wails build files (Windows only), the NSIS installer script
 frontend/
   src/App.svelte         three-pane shell: top bar, tree, document
   src/components/        Tree, DocView
-  src/lib/api.ts         thin wrapper over the generated bindings
+  src/lib/api.ts         thin wrapper over the backend (lib/backend.ts picks Wails or HTTP)
+  src/server/            web mode: the zero-dependency Node server and CLI
+  contract/              the contract suite (Go and Node)
   src/lib/parser/        the ticket 04 contract; only a trivial buildIndex is real
   src/lib/theme/         Indigo tokens (Tailwind @theme + CSS variables), motion, theme switch
 fixtures/                a fake ticket corpus and expected.json, the parser oracle
