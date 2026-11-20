@@ -18,6 +18,33 @@ export interface ConfigPatch {
   showMemory?: boolean
 }
 
+/**
+ * Checks the types of a patch before it touches settings.json (Go gets the same from its typed
+ * decode). A wrong type in the file would make the desktop app move the whole file aside.
+ * null means "not mentioned", as for Go's pointer fields.
+ */
+export function parsePatch(p: unknown): ConfigPatch {
+  if (p === null || typeof p !== 'object' || Array.isArray(p)) throw new Error('the patch must be an object')
+  const o = p as Record<string, unknown>
+  const out: ConfigPatch = {}
+  const bad = (k: string, want: string) => new Error(`${k} must be ${want}`)
+  for (const k of ['repoRoot', 'docsDir', 'adoWorkItemUrl', 'adoPrUrl', 'theme'] as const) {
+    const v = o[k]
+    if (v === undefined || v === null) continue
+    if (typeof v !== 'string') throw bad(k, 'a string')
+    out[k] = v
+  }
+  if (o.showMemory !== undefined && o.showMemory !== null) {
+    if (typeof o.showMemory !== 'boolean') throw bad('showMemory', 'true or false')
+    out.showMemory = o.showMemory
+  }
+  if (o.docsRoots !== undefined && o.docsRoots !== null) {
+    if (!Array.isArray(o.docsRoots) || o.docsRoots.some((r) => typeof r !== 'string')) throw bad('docsRoots', 'a list of strings')
+    out.docsRoots = [...(o.docsRoots as string[])]
+  }
+  return out
+}
+
 export interface RootCheck {
   ok: boolean
   repoRoot: string
@@ -117,6 +144,11 @@ export class ShellService {
     return this.effective()
   }
 
+  /** The folder given with --docs, which wins over the saved one for this session; null without it. */
+  docsFromCommandLine(): string | null {
+    return this.override ? S.docsPath(this.effective()) : null
+  }
+
   /** Picks up hand edits to settings.json, keeping the UI state held in memory. */
   private fresh(keep: (keyof S.Settings)[]): S.Settings {
     let base = this.saved
@@ -135,7 +167,8 @@ export class ShellService {
     return base
   }
 
-  setConfig(p: ConfigPatch): S.Settings {
+  setConfig(patch: unknown): S.Settings {
+    const p = parsePatch(patch)
     const base = this.fresh(['window', 'sidebarWidth', 'panelWidth', 'sidebarCollapsed'])
     const next: S.Settings = { ...base, docsRoots: [...base.docsRoots] }
     if (p.repoRoot !== undefined) next.repoRoot = p.repoRoot

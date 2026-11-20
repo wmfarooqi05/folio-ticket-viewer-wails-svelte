@@ -32,7 +32,7 @@ function req(p: string, headers: Record<string, string> = {}, method = 'GET', bo
     r.end(body)
   })
 }
-const cookie = { cookie: `folio_token=${TOKEN}` }
+let cookie: { cookie: string } // the session cookie, once the server is up
 
 beforeAll(async () => {
   tmp = mkdtempSync(path.join(os.tmpdir(), 'folio-sec-'))
@@ -46,6 +46,7 @@ beforeAll(async () => {
   writeFileSync(path.join(docs, 'modules', 'img', 'a.png'), 'png')
   writeFileSync(path.join(docs, 'modules', 'img', 'CON.png'), 'png')
   srv = await start({ distDir: dist, docs, settingsFile: path.join(tmp, 'settings.json'), cacheDir: path.join(tmp, 'cache'), token: TOKEN })
+  cookie = { cookie: `folio_session_${srv.port}=${srv.session}` }
 })
 
 afterAll(async () => {
@@ -103,33 +104,68 @@ describe('token', () => {
     expect((await req('/')).status).toBe(401)
     expect((await req('/api/getConfig', {}, 'POST', '[]')).status).toBe(401)
     expect((await req('/api/events')).status).toBe(401)
+    expect((await req('/api/events', { ...cookie }, 'POST', '[]')).status).toBe(405) // GET only
     expect((await req('/doc/modules/img/a.png')).status).toBe(401)
     expect((await req('/assets/x.js')).status).toBe(401)
   })
 
   it('rejects a wrong or truncated cookie, and a wrong ?token=', async () => {
-    expect((await req('/', { cookie: 'folio_token=nope' })).status).toBe(401)
-    expect((await req('/', { cookie: `folio_token=${TOKEN.slice(1)}` })).status).toBe(401)
-    expect((await req('/', { cookie: `other=${TOKEN}` })).status).toBe(401)
+    const name = `folio_session_${srv.port}`
+    expect((await req('/', { cookie: `${name}=nope` })).status).toBe(401)
+    expect((await req('/', { cookie: `${name}=${srv.session.slice(1)}` })).status).toBe(401)
+    expect((await req('/', { cookie: `other=${srv.session}` })).status).toBe(401)
+    expect((await req('/', { cookie: `${name}=${TOKEN}` })).status).toBe(401) // the URL token is not the cookie
     const r = await req('/?token=wrong')
     expect(r.status).toBe(401)
     expect(r.headers['set-cookie']).toBeUndefined()
   })
 
   it('exchanges ?token= once for an HttpOnly SameSite=Strict cookie and redirects without it', async () => {
-    const r = await req(`/?token=${TOKEN}`)
-    expect(r.status).toBe(302)
-    expect(r.headers.location).toBe('/')
-    const c = String(r.headers['set-cookie'])
-    expect(c).toContain(`folio_token=${TOKEN}`)
-    expect(c).toContain('HttpOnly')
-    expect(c).toContain('SameSite=Strict')
-    expect(r.headers.location).not.toContain('token')
-    const kept = await req(`/?token=${TOKEN}&a=1`)
-    expect(kept.headers.location).toBe('/?a=1')
-    const page = await req('/', { cookie: c.split(';')[0] })
-    expect(page.status).toBe(200)
-    expect(page.body).toContain('folio')
+    const own = await start({ distDir: path.join(tmp, 'dist'), docs, settingsFile: path.join(tmp, 's2.json'), cacheDir: path.join(tmp, 'cache2'), token: 'exchange-token-0123456789' })
+    try {
+      const r = await req(`/?token=${own.token}`, {}, 'GET', undefined, own.port)
+      expect(r.status).toBe(302)
+      expect(r.headers.location).toBe('/')
+      const c = String(r.headers['set-cookie'])
+      expect(c).toContain(`folio_session_${own.port}=${own.session}`)
+      expect(c).not.toContain(own.token) // the cookie is not the URL token
+      expect(c).toContain('HttpOnly')
+      expect(c).toContain('SameSite=Strict')
+      const page = await req('/', { cookie: c.split(';')[0] }, 'GET', undefined, own.port)
+      expect(page.status).toBe(200)
+      expect(page.body).toContain('folio')
+      // the link is spent: the URL in history is not a credential any more
+      const again = await req(`/?token=${own.token}`, {}, 'GET', undefined, own.port)
+      expect(again.status).toBe(401)
+      expect(again.headers['set-cookie']).toBeUndefined()
+      expect((await req(`/?token=${own.token}`, { cookie: c.split(';')[0] }, 'GET', undefined, own.port)).status).toBe(200) // the cookie still works
+    } finally {
+      await own.close()
+    }
+  })
+
+  it('keeps the query when it drops the token', async () => {
+    const own = await start({ distDir: path.join(tmp, 'dist'), docs, settingsFile: path.join(tmp, 's3.json'), cacheDir: path.join(tmp, 'cache3'), token: 'query-token-0123456789' })
+    try {
+      expect((await req(`/?token=${own.token}&a=1`, {}, 'GET', undefined, own.port)).headers.location).toBe('/?a=1')
+    } finally {
+      await own.close()
+    }
+  })
+
+  it('names the cookie after the port, so two instances do not overwrite each other', async () => {
+    const other = await start({ distDir: path.join(tmp, 'dist'), docs, settingsFile: path.join(tmp, 's4.json'), cacheDir: path.join(tmp, 'cache4'), token: 'other-token-0123456789' })
+    try {
+      const a = String((await req(`/?token=${other.token}`, {}, 'GET', undefined, other.port)).headers['set-cookie']).split(';')[0]
+      expect(a.startsWith(`folio_session_${other.port}=`)).toBe(true)
+      expect(other.port).not.toBe(srv.port)
+      // a browser sends both cookies to both servers: each still accepts its own
+      const both = `${cookie.cookie}; ${a}`
+      expect((await req('/', { cookie: both })).status).toBe(200)
+      expect((await req('/', { cookie: both }, 'GET', undefined, other.port)).status).toBe(200)
+    } finally {
+      await other.close()
+    }
   })
 })
 
@@ -157,6 +193,29 @@ describe('cross-site requests', () => {
     expect((await req('/api/getConfig', cookie)).status).toBe(405)
     expect((await req('/api/nope', { ...cookie, 'content-type': 'application/json' }, 'POST', '[]')).status).toBe(404)
     expect((await req('/api/constructor', { ...cookie, 'content-type': 'application/json' }, 'POST', '[]')).status).toBe(404)
+  })
+})
+
+describe('event streams', () => {
+  it('closes the oldest stream when a fifth one opens', async () => {
+    const open = () =>
+      new Promise<http.IncomingMessage>((ok, fail) => {
+        const r = http.get({ host: '127.0.0.1', port: srv.port, path: '/api/events', headers: cookie }, ok)
+        r.on('error', fail)
+      })
+    const streams: http.IncomingMessage[] = []
+    const closed: boolean[] = []
+    for (let i = 0; i < 5; i++) {
+      const res = await open()
+      const k = i
+      res.on('close', () => (closed[k] = true))
+      res.resume()
+      streams.push(res)
+    }
+    await new Promise((r) => setTimeout(r, 200))
+    expect(closed[0]).toBe(true)
+    expect(closed.slice(1).some(Boolean)).toBe(false)
+    for (const r of streams) r.destroy()
   })
 })
 

@@ -415,6 +415,8 @@ class Watcher {
   private quiet: ReturnType<typeof setTimeout> | null = null
   private forced: ReturnType<typeof setTimeout> | null = null
   private done = false
+  /** directory events still being stat'ed or walked: a flush waits for them, so a rename is one event */
+  private busy = 0
 
   constructor(
     private r: Roots,
@@ -455,7 +457,10 @@ class Watcher {
   }
 
   private onEvent(base: string, name: string | Buffer | null) {
-    if (this.done || name === null) return
+    if (this.done) return
+    // A null name is what libuv reports when the OS dropped events (a buffer overflow on Windows):
+    // no 'error' event comes with it. The pending set cannot be trusted, so diff the whole tree.
+    if (name === null) return this.onError()
     const abs = path.join(base, name.toString())
     const rel = path.relative(this.r.docs, abs).split(path.sep).join('/')
     if (rel === '' || rel.startsWith('..') || !inScope(rel)) return
@@ -466,11 +471,14 @@ class Watcher {
     }
     // No .md extension: a new directory (walk it for files made before the watch saw it), or one
     // deleted or renamed away (the event names only the directory, so sweep what is known beneath it).
+    this.busy++
     stat(abs).then(
       (st) => {
-        if (st.isDirectory() && !skipDir(path.basename(abs))) void this.walkNew(abs)
+        if (st.isDirectory() && !skipDir(path.basename(abs))) void this.walkNew(abs).finally(() => this.busy--)
+        else this.busy--
       },
       (e: NodeJS.ErrnoException) => {
+        this.busy--
         if (e.code === 'ENOENT' && !this.done) {
           this.gone.push(rel)
           this.arm()
@@ -503,6 +511,11 @@ class Watcher {
     if (this.forced) clearTimeout(this.forced)
     this.quiet = this.forced = null
     if (this.done) return
+    if (this.busy > 0) {
+      // directory events are still being resolved: look again shortly (they finish in milliseconds)
+      this.quiet = setTimeout(() => void this.flush(), 20)
+      return
+    }
     for (const dir of this.gone) for (const p of this.svc.knownUnder(dir)) this.pending.add(p)
     this.gone = []
     const paths = this.pending

@@ -29,6 +29,7 @@ export const backend: Backend = {
   saveCache: (parserVersion, index) => DocsService.SaveCache(parserVersion, index),
   logTimings: (line) => DocsService.LogTimings(line),
   readBatch: (paths) => DocsService.ReadBatch(paths),
+  docsFromCommandLine: async () => null,
   onDocsChanged: (handler) => Events.On('docs:changed', (e) => handler(e.data as ChangeSet)),
 
   setMemoryEnabled: (on) => MemoryService.SetEnabled(on),

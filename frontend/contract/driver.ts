@@ -157,7 +157,7 @@ export const nodeDriver: Driver = {
       token,
       timing: { quiet: 200, max: 1000 },
     })
-    return makeHandle('node', running.port, { cookie: `folio_token=${token}` }, () => running.close())
+    return makeHandle('node', running.port, { cookie: `folio_session_${running.port}=${running.session}` }, () => running.close())
   },
 }
 

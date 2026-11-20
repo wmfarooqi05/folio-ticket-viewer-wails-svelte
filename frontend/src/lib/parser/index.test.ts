@@ -730,3 +730,22 @@ describe('performance (04 Q1: batch under 50 ms, cold build under 300 ms)', () =
 function walk(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith('.md') ? [join(dir, e.name)] : []))
 }
+
+describe('keys that are names on Object.prototype', () => {
+  it('keeps __proto__ in frontmatter as an ordinary key', () => {
+    const fm = parseFrontmatter(['---', '__proto__: "x"', 'constructor: 1', 'status: open', '---', '# t'].join('\n'))!
+    expect(Object.getPrototypeOf(fm)).toBeNull()
+    expect(fm.status).toBe('open')
+    expect(fm.constructor).toBe(1)
+    expect(Object.getPrototypeOf({})).toBe(Object.prototype)
+  })
+
+  it('numbers duplicate headings called __proto__ and constructor without touching the prototype', () => {
+    const text = ['---', 'type: build', '---', '# a', '## constructor', '## constructor', '## __proto__', '## __proto__', ''].join('\n')
+    const idx = buildIndex([{ path: 'modules/m/a.md', text, mtime: 1 }])
+    const slugs = Object.values(idx.files)[0].headings.map((h) => h.slug)
+    expect(new Set(slugs).size).toBe(slugs.length)
+    expect(slugs.filter((s) => s.startsWith('constructor'))).toEqual(['constructor', 'constructor-1'])
+    expect(({} as any).constructor).toBe(Object)
+  })
+})

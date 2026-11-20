@@ -101,6 +101,10 @@
 
   // Web mode: no native dialog, so the folder is a typed path, checked like a picked one.
   let typed = $state(untrack(() => config.repoRoot))
+  let cliFolder = $state<string | null>(null)
+  onMount(() => {
+    if (api.isWeb) void api.docsFromCommandLine().then((p) => (cliFolder = p)).catch(() => {})
+  })
   async function chooseTyped() {
     try {
       const res = await checkPath(typed)
@@ -242,6 +246,12 @@
                       />
                       <button type="submit" class="btn">Use folder</button>
                     </form>
+                    {#if cliFolder}
+                      <div class="hint" style="margin-top:6px">
+                        This session was started with <span class="mono">--docs {cliFolder}</span>. That folder is used until
+                        you restart; a folder saved here applies the next time without <span class="mono">--docs</span>.
+                      </div>
+                    {/if}
                   {:else}
                     <div class="row">
                       <div class="path" title={draft.repoRoot}>{draft.repoRoot || 'No folder chosen'}</div>

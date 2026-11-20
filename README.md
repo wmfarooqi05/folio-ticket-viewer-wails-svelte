@@ -52,7 +52,11 @@ The same viewer runs in a browser, from Node alone. Use it where you cannot or d
 npx folio-viewer --docs <path>
 ```
 
-`<path>` is the repo root, or its docs folder. Node 20 or newer is the only requirement. The command starts a server on `127.0.0.1`, prints a link with a one-time token, and opens it in your default browser. To install it once instead: `npm install -g folio-viewer`, then `folio --docs <path>`. `--port <n>` picks the port (default: a random free one), `--no-open` only prints the link, and without `--docs` the page asks for a path.
+`<path>` is the repo root, or its docs folder. Node 22 or newer is the only requirement. The command starts a server on `127.0.0.1`, prints a link whose token works once, and opens it in your default browser. To install it once instead: `npm install -g folio-viewer`, then `folio --docs <path>`. `--port <n>` picks the port (default: a random free one), `--no-open` only prints the link, and without `--docs` the page asks for a path.
+
+Stop it with Ctrl+C. Under `npx` on Windows the shell may then ask "Terminate batch job (Y/N)?": answer Y, that is fine.
+
+Memory, measured on the fixtures: the server process is about 60 MB. With Edge already open, the whole thing adds about 92 MB, against about 165 MB for the desktop app (which carries its own WebView2).
 
 What is the same: the tree, every view, the side panel, Mermaid, live refresh (edits, new files, deletes and renames show within a second), the index cache and `settings.json` (the same files, in the same places, as the desktop app).
 

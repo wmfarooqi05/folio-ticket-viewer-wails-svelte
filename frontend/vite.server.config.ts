@@ -13,7 +13,7 @@ export default defineConfig({
     ssr: 'src/server/bin.ts',
     outDir: '../packages/folio-viewer',
     emptyOutDir: false, // dist/ (the frontend) lives in the same folder
-    target: 'node20',
+    target: 'node22',
     minify: false, // readable, and it is 30 KB
     rollupOptions: {
       external: [...builtinModules, /^node:/],

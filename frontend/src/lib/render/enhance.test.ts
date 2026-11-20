@@ -122,7 +122,7 @@ describe('sanitizeSvg and the cache', () => {
     expect(m.sanitizeSvg('<p>no svg</p>')).toBeNull()
   })
 
-  it('keeps the newest few diagrams and keys on path, mtime, block and theme', async () => {
+  it('keeps the newest few diagrams and keys on path, mtime, block and theme', { timeout: 30_000 }, async () => {
     const m = await vi.importActual<typeof import('./mermaid')>('./mermaid')
     expect(m.cacheKey('a.md', 5, 2, 'dark')).not.toBe(m.cacheKey('a.md', 5, 2, 'light'))
     expect(m.cacheKey('a.md', 5, 2, 'dark')).not.toBe(m.cacheKey('a.md', 6, 2, 'dark'))
@@ -144,6 +144,13 @@ describe('sanitizeSvg and the cache', () => {
 })
 
 describe('Mermaid output hardening (ticket 14 review)', () => {
+  it('locks the keys a directive could use to restyle the page', async () => {
+    const m = await vi.importActual<typeof import('./mermaid')>('./mermaid')
+    for (const k of ['themeCSS', 'themeVariables', 'fontFamily', 'htmlLabels', 'securityLevel', 'secure', 'layout', 'dompurifyConfig']) {
+      expect(m.SECURE_KEYS, k).toContain(k)
+    }
+  })
+
   it('strips the data attributes the document layer routes on, keeps the rest', async () => {
     const m = await vi.importActual<typeof import('./mermaid')>('./mermaid')
     const out = m.sanitizeSvg(

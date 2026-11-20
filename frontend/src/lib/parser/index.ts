@@ -239,9 +239,10 @@ function readFrontmatter(text: string): FmBlock | null {
     }
   }
   if (end < 0) return null
-  const data: Frontmatter = {}
+  // no prototype: a key named __proto__ must be an ordinary key, not a way to reach Object.prototype
+  const data: Frontmatter = Object.create(null)
   const diagnostics: FmBlock['diagnostics'] = []
-  const keyLines: Record<string, number> = {}
+  const keyLines: Record<string, number> = Object.create(null)
   for (let i = 1; i < end; i++) {
     const raw = lines[i]
     if (raw.trim() === '' || /^\s*#/.test(raw)) continue
@@ -476,7 +477,7 @@ function scanDoc(text: string, lineOffset: number, legacy: boolean): Scan {
 
   // headings, slugs, anchors
   const headings: Heading[] = []
-  const slugCount: Record<string, number> = {}
+  const slugCount: Record<string, number> = Object.create(null) // a heading called __proto__ or constructor is a plain key
   const startOf: number[] = []
   const labelInfo: ({ kind: 'Q' | 'D' | 'R'; n: number; rest: string; anchor: string | null } | null)[] = []
   const seenIds = new Set<string>()

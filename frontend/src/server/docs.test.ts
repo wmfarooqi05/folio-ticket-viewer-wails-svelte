@@ -36,9 +36,20 @@ describe('watcher', () => {
     const s = await svc.scan()
     await svc.readBatch(s.changed)
     renameSync(path.join(docs, 'modules', 'fresh'), path.join(docs, 'modules', 'fresher'))
-    await until(() => events.length > 0)
-    expect(events[0].removed).toEqual(['modules/fresh/issues/01-a.md'])
-    expect(events[0].changed).toEqual(['modules/fresher/issues/01-a.md'])
+    // the removal and the walk of the new folder may land in one flush or two: look at the union
+    const all = () => ({ removed: events.flatMap((e) => e.removed), changed: events.flatMap((e) => e.changed) })
+    await until(() => all().removed.length > 0 && all().changed.length > 0)
+    expect(all().removed).toEqual(['modules/fresh/issues/01-a.md'])
+    expect(all().changed).toEqual(['modules/fresher/issues/01-a.md'])
+  })
+
+  it('treats an event with no file name (events the OS dropped) as an overflow: a full rescan with rescan:true', async () => {
+    const s = await svc.scan()
+    await svc.readBatch(s.changed)
+    writeFileSync(path.join(docs, 'modules', 'one-cash-mover', 'zz-missed.md'), '# z')
+    ;(svc as any).watcher.onEvent(path.join(docs, 'modules'), null)
+    await until(() => events.some((e) => e.rescan))
+    expect(events.find((e) => e.rescan)!.changed).toContain('modules/one-cash-mover/zz-missed.md')
   })
 
   it('does a full rescan with rescan:true after the watched folder is replaced', async () => {

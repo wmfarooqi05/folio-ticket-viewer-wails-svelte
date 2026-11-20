@@ -4,6 +4,7 @@
 import { open, realpath } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
+import { pipeline } from 'node:stream'
 import { safeJoin, within } from './paths'
 
 export const DOC_PREFIX = '/doc/'
@@ -43,7 +44,7 @@ export async function serveDocAsset(req: IncomingMessage, res: ServerResponse, r
     const realFull = await realpath(full)
     if (!within(await realpath(docsRoot), realFull)) return notFound(res)
     const fh = await open(realFull, 'r')
-    const st = await fh.stat()
+    const st = await fh.stat().catch(async (e) => (await fh.close(), Promise.reject(e)))
     if (!st.isFile()) {
       await fh.close()
       return notFound(res)
@@ -62,7 +63,8 @@ export async function serveDocAsset(req: IncomingMessage, res: ServerResponse, r
       res.end()
       return
     }
-    fh.createReadStream().pipe(res)
+    // pipeline destroys both ends on a read error or a client that goes away; the stream closes the handle
+    pipeline(fh.createReadStream(), res, () => {})
   } catch {
     if (!res.headersSent) notFound(res)
     else res.destroy()

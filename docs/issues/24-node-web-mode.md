@@ -71,7 +71,7 @@ Built on branch `worktree-agent-ab391769d24973bff`. Not merged, not published.
 **Where things are**
 
 - The server is TypeScript in `frontend/src/server/` (paths, settings, docs, assets, security, server, cli). It sits in the frontend project so it shares the one toolchain: vite builds it, vitest tests it, svelte-check types it, and there is no second `node_modules`. It imports Node built-ins only. `vite.server.config.ts` bundles it into one `folio-web.mjs` (43 KB, no imports except `node:*`).
-- The package is `packages/folio-viewer/` (name `folio-viewer`, checked free on npm with `npm view` on Nov 20, 2026): `package.json` (no dependencies, `bin` is `folio`, `engines` node 20), `LICENSE` (MIT, a choice for the owner to confirm), the built `folio-web.mjs` and `dist/` (which carries `licenses/OFL-Geist.txt`). `files` lists exactly those, plus the README. `npm pack` gives 127 files, 1.2 MB packed, 4.2 MB unpacked. Installing the tarball in an empty folder adds one package and `npx folio-viewer --docs <path>` runs.
+- The package is `packages/folio-viewer/` (name `folio-viewer`, checked free on npm with `npm view` on Nov 20, 2026): `package.json` (no dependencies, `bin` is `folio`, `engines` node 22), `LICENSE` (MIT, the same as the root LICENSE), the built `folio-web.mjs` and `dist/` (which carries `licenses/OFL-Geist.txt`). `files` lists exactly those, plus the README. `npm pack` gives 127 files, 1.2 MB packed, 4.2 MB unpacked. Installing the tarball in an empty folder adds one package and `npx folio-viewer --docs <path>` runs.
 - `api.ts` calls a backend picked in one place, `lib/backend.ts`: the Wails one by default, `backend-http.ts` in the web build (`vite.web.config.ts` swaps the module). The web output contains no Wails runtime and no bindings (checked by grepping `dist/` and `folio-web.mjs`). The desktop build is unchanged apart from moving the same calls into `backend-wails.ts`; `task build` passes the size budgets.
 - Transport: `POST /api/<name>` with the arguments as a JSON list, one name per `api.ts` call, errors as `{"error": "..."}` with the same text Go gives; `GET /api/events` is Server-Sent Events for `docs:changed`. After an SSE reconnect the client diffs with a scan, so nothing is missed.
 - `npm run web -- --docs <path>` (repo root) or `task web -- --docs <path>` builds what is stale and runs it. `--docs` is applied in memory only, like `FOLIO_ROOT`, and fails with the reason if the folder has no docs roots.
@@ -89,3 +89,31 @@ Built on branch `worktree-agent-ab391769d24973bff`. Not merged, not published.
 - Renaming a folder that Go's watcher holds open fails with EPERM on Windows, so the contract suite leaves it out; the Node watcher handles it (tested in `docs.test.ts`).
 - A bad percent-escape in a `/doc/` URL gets 404 from Node and 400 from Go's HTTP server; not a path case.
 - `logTimings` and the bench hook do nothing in web mode.
+
+**Accepted gaps**
+
+- Time of check to time of use in `/doc/`: the path is checked with `realpath` and then opened, so a link swapped in between could slip through. Go has the same gap. It needs write access to the docs folder, which already means the attacker can read it.
+- A link that stays inside the docs root is served by Node; Go refuses any junction (see above).
+- A watcher overflow cannot be provoked on the Go side of the contract suite, so it is tested on the Node side only (an event with no file name runs a full rescan).
+
+**Memory (measured on the fixtures)**
+
+| | Private memory |
+|---|---|
+| Node server process | about 60 MB |
+| Web mode in total, Edge already open | about 92 MB |
+| Desktop app (with WebView2) | about 165 MB |
+
+**Review (two Opus reviews, verdict: merge after fixes)**
+
+Security layering, the `/doc/` port, the contract suite and the package held up. Fixed after the review:
+
+1. A watcher overflow (an event with no file name, no error event) was dropped. It now runs a full rescan with `rescan: true`.
+2. The cookie was shared by every instance on 127.0.0.1 (cookies ignore the port). It is now `folio_session_<port>`.
+3. The URL token was not single-use. It now works once; the cookie holds a separate random value, so the link left in history or in the launcher's arguments is dead.
+4. A flaky watcher test: a flush now waits for directory events still being resolved, and the test reads the union of events.
+5. `setConfig` accepted wrong types (`showMemory: "x"` was written and the desktop app would then move the file aside). Every field is type-checked; the contract suite checks both backends reject the patches and write nothing.
+6. `/doc/` streams use `pipeline`, so a read error or an aborted client closes the handle and does not crash.
+7. Mermaid's `themeCSS`, `themeVariables`, `fontFamily` and `htmlLabels` are locked against directives (`SECURE_KEYS`, tested).
+Also: `__proto__` and `constructor` as frontmatter keys and heading slugs (null-prototype objects; this changes the parser version, so caches rebuild once), the launcher only receives a URL of the exact loopback shape, `/api/events` is GET only and capped at 4 streams, Node 22 or newer (recursive `fs.watch` on Linux in Node 20 is an emulation with known bugs), a note in Settings when `--docs` wins for the session, the percent-escape and trailing dot or space cases in the contract suite, and the existing Mermaid test that timed out under load now has a 30 s timeout.
+

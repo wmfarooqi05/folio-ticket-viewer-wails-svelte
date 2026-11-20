@@ -4,7 +4,8 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage } from 'node:http'
 
-export const COOKIE = 'folio_token'
+/** Cookies ignore the port, so each instance names its cookie after its own: two folios do not log each other out. */
+export const cookieName = (port: number) => `folio_session_${port}`
 
 /** The CSP of frontend/src/../index.html (a test keeps them equal), plus the one directive only a header can carry. */
 export const CSP =
@@ -26,7 +27,7 @@ export const newToken = () => randomBytes(24).toString('base64url')
 const digest = (s: string) => createHash('sha256').update(s).digest()
 export const tokenMatches = (a: string | undefined, b: string) => a !== undefined && timingSafeEqual(digest(a), digest(b))
 
-export function cookieOf(req: IncomingMessage, name = COOKIE): string | undefined {
+export function cookieOf(req: IncomingMessage, name: string): string | undefined {
   for (const part of (req.headers.cookie ?? '').split(';')) {
     const i = part.indexOf('=')
     if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim()

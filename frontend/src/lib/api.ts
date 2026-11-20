@@ -71,6 +71,9 @@ export async function readAll(paths: string[]): Promise<{ files: SourceFile[]; m
   return { files, missing }
 }
 
+/** Web mode: the folder from --docs, which wins over the saved one for this session; null otherwise. */
+export const docsFromCommandLine = (): Promise<string | null> => backend.docsFromCommandLine()
+
 /** Subscribes to the debounced `docs:changed` event. Returns an unsubscribe function. */
 export const onDocsChanged = (handler: (cs: ChangeSet) => void): (() => void) => backend.onDocsChanged(handler)
 

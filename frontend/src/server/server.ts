@@ -8,9 +8,9 @@ import path from 'node:path'
 import { DOC_PREFIX, serveDocAsset } from './assets'
 import { CHANGED_EVENT, DocsService, defaultCacheDir, type ChangeSet } from './docs'
 import { within } from './paths'
-import { COOKIE, SECURITY_HEADERS, checkOrigin, cookieOf, newToken, tokenMatches } from './security'
+import { SECURITY_HEADERS, checkOrigin, cookieName, cookieOf, newToken, tokenMatches } from './security'
 import { settingsPath } from './settings'
-import { ShellService, type ConfigPatch } from './shell'
+import { ShellService } from './shell'
 
 export interface Options {
   /** the built frontend (index.html and assets/) */
@@ -28,8 +28,11 @@ export interface Options {
 
 export interface Running {
   port: number
+  /** the link's token: it works once, to get the session cookie */
   token: string
-  /** the URL to open: it carries the token once */
+  /** the value of the session cookie (a different secret from the token); for tests */
+  session: string
+  /** the URL to open: it carries the token */
   url: string
   server: Server
   shell: ShellService
@@ -57,6 +60,11 @@ class BadRequest extends Error {}
 
 export async function start(opts: Options): Promise<Running> {
   const token = opts.token ?? newToken()
+  // What the browser holds after the exchange. It is not the URL token: the URL ends up in browser
+  // history and in the arguments of the command that opened it, and must stop working once used.
+  const session = newToken()
+  let tokenUsed = false
+  const MAX_STREAMS = 4
   const shell = new ShellService(opts.settingsFile ?? settingsPath(), opts.docs)
   const clients = new Set<ServerResponse>()
   const broadcast = (cs: ChangeSet) => {
@@ -70,7 +78,8 @@ export async function start(opts: Options): Promise<Running> {
   // One entry per call api.ts makes. Arguments arrive as a JSON array.
   const calls: Record<string, (a: any[]) => unknown> = {
     getConfig: () => shell.getConfig(),
-    setConfig: ([p]) => shell.setConfig(p as ConfigPatch),
+    setConfig: ([p]) => shell.setConfig(p),
+    docsFromCommandLine: () => shell.docsFromCommandLine(),
     setSidebarWidth: ([w]) => shell.setSidebarWidth(num(w)),
     setPanelWidth: ([w]) => shell.setPanelWidth(num(w)),
     setSidebarCollapsed: ([c]) => shell.setSidebarCollapsed(c === true),
@@ -104,6 +113,13 @@ export async function start(opts: Options): Promise<Running> {
   }
 
   function events(req: IncomingMessage, res: ServerResponse) {
+    if (req.method !== 'GET') return text(res, 405, 'GET only', { Allow: 'GET' })
+    // A few tabs are plenty. A fifth closes the oldest, so a runaway page cannot pile up connections.
+    while (clients.size >= MAX_STREAMS) {
+      const oldest = clients.values().next().value!
+      clients.delete(oldest)
+      oldest.end()
+    }
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' })
     res.write(': folio\n\n')
     clients.add(res)
@@ -154,19 +170,21 @@ export async function start(opts: Options): Promise<Running> {
 
     // The one-time exchange: the printed URL carries the token; it becomes a cookie and leaves the URL.
     if (req.method === 'GET' && query.has('token')) {
-      if (tokenMatches(query.get('token') ?? undefined, token)) {
+      // The link works once. After that only the cookie is accepted, so the URL left in history is dead.
+      if (!tokenUsed && tokenMatches(query.get('token') ?? undefined, token)) {
+        tokenUsed = true
         query.delete('token')
         const rest = query.toString()
         res.writeHead(302, {
-          'Set-Cookie': `${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/`,
+          'Set-Cookie': `${cookieName(port)}=${session}; HttpOnly; SameSite=Strict; Path=/`,
           Location: rawPath + (rest ? '?' + rest : ''),
           'Cache-Control': 'no-store',
         })
         return res.end()
       }
     }
-    if (!tokenMatches(cookieOf(req), token)) {
-      return text(res, 401, 'Unauthorized. Open the URL that folio printed when it started.')
+    if (!tokenMatches(cookieOf(req, cookieName(port)), session)) {
+      return text(res, 401, 'Unauthorized. The link that folio printed works once. Use the tab it opened, or restart folio for a new link.')
     }
 
     if (rawPath === '/api/events') return events(req, res)
@@ -190,6 +208,7 @@ export async function start(opts: Options): Promise<Running> {
   return {
     port,
     token,
+    session,
     url: `http://127.0.0.1:${port}/?token=${token}`,
     server,
     shell,

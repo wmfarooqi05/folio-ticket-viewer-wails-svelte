@@ -26,7 +26,7 @@ Options:
   --version       print the version
   --help          show this text
 
-The server listens on 127.0.0.1 only. Open the printed URL: it carries a one-time token.
+The server listens on 127.0.0.1 only. Open the printed link: it carries a token that works once.
 `
 
 export function parseArgs(argv: string[]): Args {
@@ -72,8 +72,14 @@ export function parseArgs(argv: string[]): Args {
   return a
 }
 
+/** The only URL shape that is ever handed to the OS: loopback, a port, and an optional token of safe characters. */
+export const isSafeUrl = (url: string) => /^http:\/\/127\.0\.0\.1:\d+\/(\?token=[\w-]+)?$/.test(url)
+
 /** Opens the default browser. A fixed command and an argument array: no shell string, no user input. */
 export function openBrowser(url: string): void {
+  // The URL is built here from a port and a token, but nothing that reaches a command line is trusted:
+  // only this exact shape is ever passed on, so no shell metacharacter can get through.
+  if (!isSafeUrl(url)) return
   const [cmd, args] =
     process.platform === 'win32' ? ['cmd.exe', ['/c', 'start', '', url]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]]
   try {
@@ -95,8 +101,8 @@ export async function main(argv: string[], version = ''): Promise<void> {
   }
   if (args.help) return void console.log(HELP)
   if (args.version) return void console.log(version || 'dev')
-  if (Number(process.versions.node.split('.')[0]) < 20) {
-    console.error('folio needs Node 20 or newer.')
+  if (Number(process.versions.node.split('.')[0]) < 22) {
+    console.error('folio needs Node 22 or newer.')
     process.exit(1)
   }
 
@@ -116,7 +122,7 @@ export async function main(argv: string[], version = ''): Promise<void> {
     process.exit(1)
   }
   if (running.shell.loadError) console.error(`folio: ${running.shell.loadError}`)
-  console.log(`Folio is running. Open this link (it carries a one-time token):\n\n  ${running.url}\n\nPress Ctrl+C to stop.`)
+  console.log(`Folio is running. Open this link (the token in it works once):\n\n  ${running.url}\n\nPress Ctrl+C to stop.`)
   if (args.open) openBrowser(running.url)
 
   const stop = () => {

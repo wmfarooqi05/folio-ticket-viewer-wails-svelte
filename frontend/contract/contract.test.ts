@@ -149,6 +149,15 @@ for (const d of drivers) {
       record('validation', norm(msgs, c))
     })
 
+    t('settings: a wrongly typed patch is rejected and writes nothing', async (c) => {
+      for (const patch of [{ showMemory: 'x' }, { showMemory: 1 }, { theme: 5 }, { repoRoot: true }, { docsRoots: 'modules' }, { docsRoots: [1] }, { adoPrUrl: ['a'] }, { docsDir: {} }]) {
+        await expect(c.b.call('setConfig', patch), JSON.stringify(patch)).rejects.toThrow()
+      }
+      await expect(c.b.call('setConfig', [])).rejects.toThrow()
+      expect(existsSync(c.sb.settingsFile)).toBe(false) // nothing written: the desktop app would quarantine a mistyped file
+      expect((await c.b.call('getConfig')).showMemory).toBe(true)
+    })
+
     t('settings: unknown keys survive, hand edits are picked up, a corrupt file is moved aside', async (c) => {
       writeFileSync(c.sb.settingsFile, JSON.stringify({ v: 1, theme: 'light', zzz: { keep: [1, 2] }, adoPrUrl: 'https://old.example.com/{id}' }))
       expect((await c.b.call('getConfig')).theme).toBe('light') // read at start
@@ -389,6 +398,11 @@ for (const d of drivers) {
           base + 'a.png:stream.png',
           base + 'a.png%00.png', // NUL
           '/doc/', // nothing
+          base + 'a.png.', // trailing dot and space: Windows drops them
+          base + 'a.png%20',
+          '/doc/modules/x/linked./secret.png', // the same on the junction folder
+          '/doc/modules/x/linked%20/secret.png',
+          '/doc/modules/x/linked%20./secret.png',
         ]
         for (const u of urls) {
           const r = await c.b.raw('GET', u)
@@ -396,6 +410,11 @@ for (const d of drivers) {
           expect(r.status, u).toBe(404)
           expect(r.body.equals(PNG), u).toBe(false)
         }
+        // a bad percent-escape: Go's HTTP server answers 400 itself, ours 404. Both are 4xx and send no file.
+        const bad = await c.b.raw('GET', base + '%zz.png')
+        expect(bad.status).toBeGreaterThanOrEqual(400)
+        expect(bad.status).toBeLessThan(500)
+        expect(bad.body.equals(PNG)).toBe(false)
         if (process.platform === 'win32') {
           // a junction that leaves the root: the file behind it exists, and must not be served
           const via = await c.b.raw('GET', '/doc/modules/x/linked/secret.png')

@@ -30,6 +30,8 @@ export interface Backend {
   saveCache(parserVersion: string, index: unknown): Promise<void>
   logTimings(line: string): Promise<void>
   readBatch(paths: string[]): Promise<BatchResult>
+  /** Web mode: the folder given with --docs (it wins over the saved one this session), or null. */
+  docsFromCommandLine(): Promise<string | null>
   onDocsChanged(handler: (cs: ChangeSet) => void): () => void
 
   setMemoryEnabled(on: boolean): Promise<void>

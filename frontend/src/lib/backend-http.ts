@@ -57,6 +57,7 @@ export const backend: Backend = {
   saveCache: (parserVersion, index) => call('saveCache', parserVersion, index),
   logTimings: async () => {}, // the desktop app logs these for the benchmarks; the browser has the console
   readBatch: (paths) => call('readBatch', paths),
+  docsFromCommandLine: () => call('docsFromCommandLine'),
   onDocsChanged: (handler) => {
     const es = new EventSource('/api/events')
     let opened = false
