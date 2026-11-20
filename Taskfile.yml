@@ -10,11 +10,22 @@ vars:
   # `task build PRODUCTION=true` is the default; `task build DEV=true` makes a debug build.
   DEV: '{{.DEV | default "false"}}'
 
+# Reproducible builds (ticket 17): modules are never changed by a build. (Go already defaults to
+# -mod=readonly without a vendor folder; an OS-level GOFLAGS wins over this line, Task never
+# overrides a variable that is already set, so keep -mod=readonly in it if you set one.)
+env:
+  GOFLAGS: '-mod=readonly'
+
 includes:
   common: ./build/Taskfile.yml
   windows: ./build/windows/Taskfile.yml
 
 tasks:
+  tools:install:
+    summary: Installs the pinned wails3 CLI (v3.1.0, the version in go.mod)
+    cmds:
+      - go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+
   dev:
     summary: Runs the app in development mode (Vite hot reload, Go rebuild on change)
     cmds:
@@ -80,7 +91,7 @@ tasks:
   build:web:
     summary: Builds packages/folio-viewer (folio-web.mjs and dist/), the folder `npm publish` ships
     dir: frontend
-    deps: [common:install:frontend:deps]
+    deps: [common:node:check, common:install:frontend:deps]
     cmds:
       - npm run build:web
 
@@ -94,6 +105,9 @@ tasks:
   check:
     summary: go vet plus svelte-check (regenerates the TS bindings first)
     deps: [dist:stub, common:install:frontend:deps]
+    preconditions:
+      - sh: '[ "$(wails3 version 2>&1)" = "v3.1.0" ]'
+        msg: "wails3 must be v3.1.0. Install it with: task tools:install"
     cmds:
       - go vet ./...
       - wails3 generate bindings -clean=true -ts -i

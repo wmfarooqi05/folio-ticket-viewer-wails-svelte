@@ -1,14 +1,21 @@
 version: '3'
 
 tasks:
-  go:mod:tidy:
-    summary: Runs `go mod tidy`
+  go:mod:verify:
+    summary: Checks the downloaded modules against go.sum. Replaces the template's `go mod tidy` (ticket 17), which could rewrite go.mod and go.sum during a build.
     internal: true
-    # Universal/multi-arch builds invoke this concurrently from parallel deps;
-    # two `go mod tidy` processes racing on go.mod can corrupt it (#4637).
     run: once
     cmds:
-      - go mod tidy
+      - go mod verify
+
+  node:check:
+    summary: Release builds only (build, build:web) need Node 26; tests and checks run on any supported Node
+    internal: true
+    run: once
+    preconditions:
+      # CI builds with Node 26.13.1. The check is major-only, so a matching hash also needs the same patch.
+      - sh: 'case "$(node -v)" in v26.*) true;; *) false;; esac'
+        msg: "Release builds need Node 26 (CI uses 26.13.1); found a different major. See the README on reproducible builds."
 
   install:frontend:deps:
     summary: Install frontend dependencies
@@ -27,7 +34,11 @@ tasks:
       - sh: npm version
         msg: "Looks like npm isn't installed. Npm is part of the Node installer: https://nodejs.org/en/download/"
     cmds:
-      - npm install
+      # npm ci installs exactly package-lock.json and fails if it disagrees with package.json.
+      # --ignore-scripts: no dependency install scripts run (the only one in the lock is
+      # fsevents, macOS). The native optional deps of vite, rolldown and tailwind are plain
+      # packages and still install.
+      - npm ci --ignore-scripts
 
   install:frontend:deps:bun:
     dir: frontend
@@ -85,6 +96,7 @@ tasks:
     generates:
       - dist/**/*
     deps:
+      - task: node:check
       - task: install:frontend:deps
       - task: generate:bindings
         vars:
@@ -177,7 +189,10 @@ tasks:
     summary: Generates bindings for the frontend
     run: once
     deps:
-      - task: go:mod:tidy
+      - task: go:mod:verify
+    preconditions:
+      - sh: '[ "$(wails3 version 2>&1)" = "v3.1.0" ]'
+        msg: "wails3 must be v3.1.0. Install it with: task tools:install"
     sources:
       - "**/*.[jt]s"
       - exclude: frontend/**/*
