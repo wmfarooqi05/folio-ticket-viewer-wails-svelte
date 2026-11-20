@@ -1,8 +1,8 @@
 ---
 type: build
-status: blocked
-status_note: "renamed to folio-issues-kanban-viewer and v0.1.0 re-tagged (Nov 21, 2026); waiting on the owner: npm login and the real publish (step 5)"
-waiting_on: owner
+status: done
+status_note: "folio-issues-kanban-viewer 0.1.0 published Nov 21, 2026 and checked with npx"
+waiting_on: null
 blocked_by: []
 blocked_note: null
 related: ["17", "19", "22", "23", "24", "26"]
@@ -85,3 +85,7 @@ All three blockers and the optional items are done. Nothing was published, tagge
 - **Owner:** turn on private vulnerability reporting before making the repo public.
 
 **Renamed (owner, Nov 21, 2026).** Before anything was published, the npm package became `folio-issues-kanban-viewer` (was `folio-viewer`). The folder is now `packages/folio-issues-kanban-viewer`, and the second command takes the same name; `folio` stays. The README, SECURITY.md, docs/releasing.md, the workflows and the build scripts use the new name. This ticket's earlier text and older tickets keep the old one as history. The first `v0.1.0` tag and Release, built as `folio-viewer`, were deleted and made again from the renamed commit.
+
+**Published (Nov 21, 2026).** The owner published `folio-issues-kanban-viewer@0.1.0` by hand at 23:45 UTC (Nov 20). It went through npm's staged publishing: for about three minutes the only live version was a placeholder, `0.0.0-stage` (a `package.json` and a README, no code), and the package page kept showing it for a while after 0.1.0 went live. `latest` is now 0.1.0. The registry's tarball has the same SHA-1 (`a3403f89…`) and SHA-256 (`3a7a9007…150ee2`) as the attested CI tarball. Checked with a clean npm cache: `npx folio-issues-kanban-viewer@0.1.0 --version` and `npx folio-issues-kanban-viewer --version` print 0.1.0, `--help` works, and `--docs` on this repo opens the tree, a ticket, the map and its Board, with no console errors and only 127.0.0.1 requests. 0.1.0 has no npm provenance (a hand publish); the GitHub attestation covers it. `0.0.0-stage` stays in the version list.
+
+Still to do before 0.1.1 (owner): owner step 7, the `npm-publish` environment and the trusted publisher with "npm publish" ticked ([releasing.md](../releasing.md)).

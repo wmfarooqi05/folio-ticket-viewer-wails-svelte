@@ -72,7 +72,7 @@ Reached when:
 | 24 | [Web mode: a zero-dependency Node server, published to npm](issues/24-node-web-mode.md) | build | — | — | blocked — merged, waiting on owner (try tarball, publish) | — |
 | 25 | [Any docs layout, and choosing the docs roots in Settings](issues/25-generic-docs-layout.md) | build | — | owner | blocked — merged, waiting on owner (open this repo by hand) | — |
 | 26 | [Retire the Go desktop app, keep the code](issues/26-retire-the-desktop-app.md) | build | — | owner | blocked — merged, waiting on owner (try --app) | — |
-| 27 | [Get the npm package ready for its first publish](issues/27-npm-publish-prep.md) | build | — | owner | blocked — tarball verified, waiting on owner (npm login, publish) | — |
+| 27 | [Get the npm package ready for its first publish](issues/27-npm-publish-prep.md) | build | — | — | done — 0.1.0 published, checked with npx | — |
 <!-- tickets:end -->
 
 ## Decisions so far
