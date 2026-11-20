@@ -22,6 +22,7 @@ Reached when:
 ## Notes
 
 - **Repo (owner, Nov 20, 2026):** [wmfarooqi05/folio-ticket-viewer-wails-svelte](https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte), private. Go module path: `github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte`.
+- **Releasing (Nov 21, 2026):** every npm update after 0.1.0 follows [releasing.md](releasing.md): version bump and checks in the PR, then tag, then the `publish-npm` workflow.
 - **Source of truth for conventions:** [conventions.md](handoff/conventions.md) (CONVENTIONS) and [handoff.md](handoff/handoff.md) §1–3 (what it parses), §7 (what it shows).
 - **The real ticket repo is not on this PC.** The viewer owns its parser, written from the conventions and the legacy-fallback table. Keep it one self-contained module so it can move into the other repo as `scripts/tickets/lib.mjs` later.
 - **Stack (owner, decided Nov 19, 2026):** Wails **v3.1.0** (stable; pins are in [01](issues/01-wails-shell.md)). Go backend (file walk, `fsnotify`, config) exposed as typed Wails services, so v3 generates TypeScript bindings into `frontend/bindings/`. WebView2 frontend. Very low RAM is the priority. Electron was ruled out. A Node/Vite build step is fine, because it costs nothing at runtime.
