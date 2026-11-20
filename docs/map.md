@@ -60,15 +60,16 @@ Reached when:
 | 13 | [Settings dialog and first-run flow](issues/13-settings-dialog.md) | build | — | — | blocked — merged, waiting on owner UI check | — |
 | 14 | [Dependency graph, Mermaid and syntax highlighting](issues/14-graph-mermaid-highlight.md) | build | [10](issues/10-document-view.md), [12](issues/12-cross-space-views.md) | — | blocked — merged, waiting on owner Graph check | — |
 | 15 | [Budgets enforced, installer, v1 release](issues/15-budgets-and-packaging.md) | build | [09](issues/09-cache-and-live-refresh.md), [11](issues/11-side-panel.md), [13](issues/13-settings-dialog.md), [14](issues/14-graph-mermaid-highlight.md) | — | blocked — merged, waiting on owner (installer, VM run) | — |
-| 16 | [Harden the WebView2 host](issues/16-webview2-host-hardening.md) | build | — | — | open | — |
-| 17 | [Reproducible build and CI release](issues/17-reproducible-ci-release.md) | build | — | — | open | — |
-| 18 | [Input and data hardening](issues/18-input-and-data-hardening.md) | build | — | — | open | — |
+| 16 | [Harden the WebView2 host](issues/16-webview2-host-hardening.md) | build | — | — | in-progress | — |
+| 17 | [Reproducible build and CI release](issues/17-reproducible-ci-release.md) | build | — | — | in-progress | — |
+| 18 | [Input and data hardening](issues/18-input-and-data-hardening.md) | build | — | — | in-progress | — |
 | 19 | [Focused security review](issues/19-security-review.md) | verify | [16](issues/16-webview2-host-hardening.md), [17](issues/17-reproducible-ci-release.md), [18](issues/18-input-and-data-hardening.md), [24](issues/24-node-web-mode.md) | — | blocked | — |
 | 20 | [Find out what company IT allows](issues/20-company-it-requirements.md) | task | — | — | dropped — npm route needs nothing from IT | — |
 | 21 | [Code signing: whether and how](issues/21-code-signing.md) | decision | — | — | dropped — no exe goes to the VM | — |
 | 22 | [How Folio reaches the company VM](issues/22-distribution-channel.md) | decision | — | — | done — public npm package, run with npx (owner) | — |
 | 23 | [First run on the company VM](issues/23-first-company-vm-install.md) | verify | [24](issues/24-node-web-mode.md) | — | blocked | — |
 | 24 | [Web mode: a zero-dependency Node server, published to npm](issues/24-node-web-mode.md) | build | — | — | blocked — merged, waiting on owner (try tarball, publish) | — |
+| 25 | [Any docs layout, and choosing the docs roots in Settings](issues/25-generic-docs-layout.md) | build | [18](issues/18-input-and-data-hardening.md) | — | blocked — starts after 18 | — |
 <!-- tickets:end -->
 
 ## Decisions so far

@@ -1,6 +1,6 @@
 ---
 type: build
-status: open
+status: in-progress
 status_note: null
 waiting_on: null
 blocked_by: []
