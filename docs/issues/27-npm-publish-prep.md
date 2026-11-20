@@ -1,8 +1,8 @@
 ---
 type: build
-status: in-progress
-status_note: null
-waiting_on: null
+status: blocked
+status_note: "merged Nov 20, 2026; waiting on the owner: the first publish (owner steps below)"
+waiting_on: owner
 blocked_by: []
 blocked_note: null
 related: ["17", "19", "22", "23", "24", "26"]
