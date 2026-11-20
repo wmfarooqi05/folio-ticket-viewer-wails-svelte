@@ -1,8 +1,8 @@
 ---
 type: build
-status: in-progress
-status_note: null
-waiting_on: null
+status: blocked
+status_note: "merged Nov 20, 2026; waiting on the owner: AC2 by eye (right-click, F12, copy button), NSIS install/uninstall, file the upstream Wails issue"
+waiting_on: owner
 blocked_by: []
 blocked_note: null
 related: ["10", "17", "19"]
