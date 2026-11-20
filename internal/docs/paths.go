@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/settings"
 )
 
 // ErrEscapesRoot is returned for any path that is absolute or leaves the docs root.
@@ -55,6 +57,11 @@ func SafeJoin(root, rel string) (string, error) {
 		if fi.Mode()&os.ModeIrregular != 0 {
 			return "", ErrEscapesRoot
 		}
+		// A link inside a local repo that points at \\host\share would make EvalSymlinks below talk
+		// SMB with the user's credentials (a hostile cloned repo). Read the link, never follow it.
+		if fi.Mode()&os.ModeSymlink != 0 && linkLeadsToNetwork(cur, os.Lstat, os.Readlink) {
+			return "", ErrEscapesRoot
+		}
 	}
 	// Symlink check. A target that does not exist yet is fine; any other
 	// failure to resolve it is refused, so an unreadable link never passes as inside.
@@ -74,6 +81,31 @@ func SafeJoin(root, rel string) (string, error) {
 		return "", ErrEscapesRoot
 	}
 	return full, nil
+}
+
+// linkLeadsToNetwork follows a chain of symlinks with Lstat and Readlink only (never Stat, which
+// would contact the target) and reports whether any hop names a network or device path. A chain
+// that is too long counts as yes.
+func linkLeadsToNetwork(p string, lstat func(string) (os.FileInfo, error), readlink func(string) (string, error)) bool {
+	cur := p
+	for range 16 {
+		fi, err := lstat(cur)
+		if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+			return false
+		}
+		t, err := readlink(cur)
+		if err != nil {
+			return true
+		}
+		if settings.IsNetworkLinkTarget(t) {
+			return true
+		}
+		if !filepath.IsAbs(t) {
+			t = filepath.Join(filepath.Dir(cur), t)
+		}
+		cur = t
+	}
+	return true
 }
 
 // ResolveMarkdown is SafeJoin plus the .md-only rule for reads.

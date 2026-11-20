@@ -135,24 +135,44 @@ Section
     !insertmacro wails.writeUninstaller
 SectionEnd
 
-Section "uninstall" 
+# RMDir /r on a folder, but not when that folder is a symlink or junction (a reparse point, 0x400): a
+# link planted in %LOCALAPPDATA% or %APPDATA% must not send the delete somewhere else. A folder that
+# does not exist reads as -1, which has that bit set too, so it is skipped as well. $0 and $1 are scratch.
+!macro folioSafeRmDir path
+    System::Call 'kernel32::GetFileAttributesW(w "${path}") i .r0'
+    IntOp $1 $0 & 0x400
+    ${If} $1 == 0
+        RMDir /r "${path}"
+    ${EndIf}
+!macroend
+
+Section "uninstall"
     !insertmacro wails.setShellContext
+
+    # Folio's data of the person uninstalling is in %APPDATA% and %LOCALAPPDATA%. A machine-scope
+    # install made wails.setShellContext say "all users", which turns both into C:\ProgramData, so
+    # switch to the current user for the data lines and back afterwards. Other users' data on the
+    # machine is not touched. (A "Folio is running" check already ran in un.onInit.)
+    SetShellVarContext current
 
     # The WebView2 profile: the folder Wails uses by default (%APPDATA%\folio.exe) and the one Folio
     # moves it to (%LOCALAPPDATA%\Folio\WebView2, ticket 16). Nothing in it is worth keeping.
-    RMDir /r "$AppData\${PRODUCT_EXECUTABLE}"
-    RMDir /r "$LOCALAPPDATA\Folio\WebView2"
+    !insertmacro folioSafeRmDir "$AppData\${PRODUCT_EXECUTABLE}"
+    !insertmacro folioSafeRmDir "$LOCALAPPDATA\Folio\WebView2"
     Delete "$LOCALAPPDATA\Folio\purge-profile.pending" # a pending "Clear data" request, now moot
+
+    # Clear data (ticket 18, L5). The index cache holds a plaintext copy of the ticket text, so the
+    # uninstaller offers to delete it, and the settings file with it, for this user only. A silent
+    # uninstall keeps both (/SD IDNO); Settings > Data > Clear data, or deleting the folders, does it by hand.
+    MessageBox MB_YESNO|MB_ICONQUESTION "Also delete Folio's index cache (a copy of your ticket text) and its settings, for your user account only?$\r$\n$\r$\n$LOCALAPPDATA\Folio$\r$\n$APPDATA\Folio" /SD IDNO IDNO keepFolioData
+        !insertmacro folioSafeRmDir "$LOCALAPPDATA\Folio"
+        !insertmacro folioSafeRmDir "$APPDATA\Folio"
+    keepFolioData:
+
+    !insertmacro wails.setShellContext
 
     RMDir /r $INSTDIR
 
-    # Clear data (ticket 18, L5). The index cache holds a plaintext copy of the ticket text, so the
-    # uninstaller offers to delete it, and the settings file with it. A silent uninstall keeps both
-    # (/SD IDNO); Settings > Data > Clear data, or deleting the folders, does it by hand.
-    MessageBox MB_YESNO|MB_ICONQUESTION "Also delete Folio's index cache (a copy of your ticket text) and its settings?$\r$\n$\r$\n$LOCALAPPDATA\Folio$\r$\n$APPDATA\Folio" /SD IDNO IDNO keepFolioData
-        RMDir /r "$LOCALAPPDATA\Folio"
-        RMDir /r "$APPDATA\Folio"
-    keepFolioData:
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
 
     !insertmacro wails.unassociateFiles

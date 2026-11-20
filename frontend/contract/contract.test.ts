@@ -4,7 +4,7 @@
 //
 //   npm run test:contract        (from frontend/; needs Go on PATH, and Windows for the junction case)
 import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { fixturesDocs, goDriver, nodeDriver, sandbox, type Driver, type Handle, type Sandbox } from './driver'
@@ -12,6 +12,9 @@ import { fixturesDocs, goDriver, nodeDriver, sandbox, type Driver, type Handle, 
 const ROOTS = ['modules', 'handoffs', 'patterns']
 /** What both backends say about a network or device repo root (settings.NetworkRootMessage in Go). */
 const NETWORK_MESSAGE = String.raw`network and device paths (\\server\share, \\?\, \\.\) are not allowed as the repo root`
+/** What both backends say about a repo root that is not a full local path (Windows only). */
+const LOCAL_MESSAGE = String.raw`the repo root must be a full path that starts with a drive letter, such as C:\repo`
+const RELATIVE_ROOTS: [string, string][] = process.platform === 'win32' ? [['relative', 'repo'], ['rootRelative', String.raw`\repo`], ['driveRelative', 'C:repo']] : []
 const NETWORK_ROOTS: [string, string][] = [
   ['unc', String.raw`\\folio-contract-nohost\share\repo`],
   ['uncSlashes', '//folio-contract-nohost/share/repo'],
@@ -121,6 +124,12 @@ for (const d of drivers) {
         expect(d, key).toMatchObject({ ok: false, message: NETWORK_MESSAGE })
         out.push(r, d)
       }
+      // a relative root would resolve against the working folder
+      for (const [key, root] of RELATIVE_ROOTS) {
+        const r = await c.b.call('checkRoot', root)
+        expect(r, key).toMatchObject({ ok: false, message: LOCAL_MESSAGE })
+        out.push(r)
+      }
       record('networkChecks', norm(out, c))
     })
 
@@ -161,6 +170,7 @@ for (const d of drivers) {
       // A network or device root is refused without touching the network (L2). No such host exists:
       // a stat would take seconds and say "not a folder" instead.
       for (const [key, root] of NETWORK_ROOTS) await bad(key, { repoRoot: root })
+      for (const [key, root] of RELATIVE_ROOTS) await bad(key, { repoRoot: root })
       expect(msgs.theme).toBe('invalid settings: theme: must be system, light or dark')
       expect(msgs.docsRoots).toBe('invalid settings: docsRoots: ".." must be a relative folder inside the docs folder')
       expect(msgs.template).toBe('invalid settings: adoWorkItemUrl: must contain {id}')
@@ -168,6 +178,7 @@ for (const d of drivers) {
       expect(msgs.missingRepo).toContain('repoRoot: must be an existing folder')
       expect(msgs.noRoots).toContain('docsRoots: none of the selected folders exist under')
       for (const [key] of NETWORK_ROOTS) expect(msgs[key], key).toBe('invalid settings: repoRoot: ' + NETWORK_MESSAGE)
+      for (const [key] of RELATIVE_ROOTS) expect(msgs[key], key).toBe('invalid settings: repoRoot: ' + LOCAL_MESSAGE)
       // a rejected patch changes nothing
       expect((await c.b.call('getConfig')).repoRoot).toBe('')
       record('validation', norm(msgs, c))
@@ -236,6 +247,20 @@ for (const d of drivers) {
       expect(onDisk).toMatchObject({ theme: 'dark', docsDir: 'docs', adoWorkItemUrl: '', repoRoot: '', zzz: { keep: true } })
       record('handEdited', norm([cfg, onDisk], c))
     }, ({ sb }) => writeFileSync(sb.settingsFile, JSON.stringify(HAND_EDITED)))
+
+    t('settings: only whole-number literals count as integers, in both backends', async (c) => {
+      const cfg = await c.b.call('getConfig')
+      expect(cfg).toMatchObject({ sidebarWidth: 0, panelWidth: 0, window: { x: 0, y: 0, width: 1440, height: 900 }, theme: 'light' })
+      record('integers', norm(cfg, c))
+    }, ({ sb }) =>
+      // written as text: JSON.stringify would turn 1e3 into 1000
+      writeFileSync(sb.settingsFile, '{"v":1,"theme":"light","sidebarWidth":3e2,"panelWidth":400.0,"window":{"x":9007199254740993,"y":1e1,"width":2e3,"height":900.5}}'))
+
+    for (const [key, root] of RELATIVE_ROOTS) {
+      t(`settings: a ${key} repoRoot in the file is dropped on load`, async (c) => {
+        expect((await c.b.call('getConfig')).repoRoot).toBe('')
+      }, ({ sb }) => writeFileSync(sb.settingsFile, JSON.stringify({ v: 1, repoRoot: root })))
+    }
 
     for (const [key, root] of NETWORK_ROOTS) {
       t(`settings: a ${key} repoRoot in the file is dropped on load`, async (c) => {
@@ -366,6 +391,22 @@ for (const d of drivers) {
       expect(list(s4.tooLarge)).toEqual([])
       record('tooLarge', { scan1: list(s1.tooLarge), batch: list(batch.tooLarge), scan2: list(s2.tooLarge), changed2: list(s2.changed), scan3: list(s3.tooLarge), removed4: list(s4.removed) })
     }, prepBig)
+
+    t('a symlink that points at a network path is refused without being followed', async (c) => {
+      await use(c)
+      const link = path.join(c.docs, 'modules', 'big', 'evil.md')
+      mkdirSync(path.dirname(link), { recursive: true })
+      try {
+        symlinkSync(String.raw`\\folio-contract-nohost\share\x.md`, link, 'file')
+      } catch {
+        return // no right to create symlinks here (Windows needs developer mode or admin): the unit tests cover it
+      }
+      const t0 = Date.now()
+      await expect(c.b.call('readFile', 'modules/big/evil.md')).rejects.toThrow()
+      const batch = await c.b.call('readBatch', ['modules/big/evil.md']).then(() => 'ok', () => 'rejected')
+      expect(batch).toBe('rejected')
+      expect(Date.now() - t0, 'refused slowly: it probably talked to the network').toBeLessThan(2000)
+    })
 
     // ---- clear data (L5) --------------------------------------------------------------
 
@@ -643,7 +684,7 @@ describe.skipIf(drivers.length < 2)('contract: the two backends report the same'
     expect(keys.length).toBeGreaterThan(8)
     expect(Object.keys(seen.go).sort()).toEqual(keys.sort())
   })
-  for (const key of ['checkRoot', 'checkDocs', 'networkChecks', 'handEdited', 'tooLarge', 'clearData', 'getConfig', 'settings.json', 'validation', 'scan', 'cache', 'watcher', 'doc', 'vscodeUrl']) {
+  for (const key of ['integers', 'checkRoot', 'checkDocs', 'networkChecks', 'handEdited', 'tooLarge', 'clearData', 'getConfig', 'settings.json', 'validation', 'scan', 'cache', 'watcher', 'doc', 'vscodeUrl']) {
     it(key, () => {
       expect(seen.node[key], key).toBeDefined()
       expect(seen.node[key]).toEqual(seen.go[key])

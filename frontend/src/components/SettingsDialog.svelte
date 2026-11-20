@@ -109,7 +109,7 @@
   })
   async function chooseTyped() {
     try {
-      const res = await checkPath(typed)
+      const res = await checkPath(typed, undefined, true)
       if (res.kind === 'ok') {
         draft.repoRoot = res.repoRoot
         draft.docsDir = res.docsDir

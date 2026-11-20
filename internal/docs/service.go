@@ -61,6 +61,9 @@ type BatchResult struct {
 // megabytes formats a size the way both backends print it: "10.0 MB".
 func megabytes(n int64) string { return fmt.Sprintf("%.1f MB", float64(n)/(1<<20)) }
 
+// errNotRegular is the error for a path that is not a plain file.
+var errNotRegular = errors.New("not a regular file")
+
 // errTooLarge is the ReadFile error for a file over MaxFileBytes.
 func errTooLarge(size int64) error {
 	return fmt.Errorf("file is too large (%s; the limit is %s)", megabytes(size), megabytes(MaxFileBytes))
@@ -98,9 +101,10 @@ type DocsService struct {
 	announced map[string]stamp
 	watch     *watcher
 	closed    bool
-	gen       uint64 // bumped by every startWatcher; a scan from an older one is discarded
-	cacheDir  string // empty means %LOCALAPPDATA%\Folio\cache
-	noSave    bool   // set by ClearCache: nothing is written to the cache again until restart
+	gen       uint64     // bumped by every startWatcher; a scan from an older one is discarded
+	cacheDir  string     // empty means %LOCALAPPDATA%\Folio\cache
+	saveMu    sync.Mutex // held for a whole SaveCache and a whole ClearCache; always taken before mu
+	noSave    bool       // set by ClearCache: nothing is written to the cache again until restart
 }
 
 // NewService builds the service. roots is called on every request. emit sends
@@ -263,6 +267,11 @@ func (s *DocsService) ReadBatch(paths []string) (BatchResult, error) {
 				out[i].err = err
 				return
 			}
+			if !st.Mode().IsRegular() {
+				// A FIFO, a device or a folder named *.md: opening it could block. Not a document.
+				out[i].err = errNotRegular
+				return
+			}
 			out[i].stamp = stamp{Mtime: st.ModTime().UnixMilli(), Size: st.Size()}
 			if st.Size() > MaxFileBytes {
 				// Over the cap: reported from the stat alone, so a huge file costs no read.
@@ -275,7 +284,7 @@ func (s *DocsService) ReadBatch(paths []string) (BatchResult, error) {
 				return
 			}
 			if errors.Is(err, errFileGrew) {
-				out[i].tooBig, out[i].size = true, MaxFileBytes+1
+				out[i].tooBig, out[i].size = true, grownSize(fulls[i])
 				return
 			}
 			if err != nil {
@@ -321,12 +330,17 @@ func (s *DocsService) ReadFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if st, err := os.Stat(full); err == nil && st.Size() > MaxFileBytes {
-		return "", errTooLarge(st.Size())
+	if st, err := os.Stat(full); err == nil {
+		if !st.Mode().IsRegular() {
+			return "", errNotRegular
+		}
+		if st.Size() > MaxFileBytes {
+			return "", errTooLarge(st.Size())
+		}
 	}
 	text, err := readText(full)
 	if errors.Is(err, errFileGrew) {
-		return "", errTooLarge(MaxFileBytes + 1)
+		return "", errTooLarge(grownSize(full))
 	}
 	return text, err
 }
@@ -360,6 +374,9 @@ func walkMarkdown(r Roots) (map[string]stamp, error) {
 			if err != nil {
 				return nil
 			}
+			if t := info.Mode().Type(); t != 0 && t != fs.ModeSymlink {
+				return nil // a FIFO or a device named *.md: not a document, and opening it could block
+			}
 			rel, err := filepath.Rel(r.Docs, p)
 			if err != nil {
 				return nil
@@ -372,6 +389,15 @@ func walkMarkdown(r Roots) (map[string]stamp, error) {
 		}
 	}
 	return found, nil
+}
+
+// grownSize is the size of a file that passed the size check and was over the cap when it was
+// read: a fresh stat, never less than one byte over the cap.
+func grownSize(full string) int64 {
+	if st, err := os.Stat(full); err == nil && st.Size() > MaxFileBytes {
+		return st.Size()
+	}
+	return MaxFileBytes + 1
 }
 
 // skipDir is the scope rule shared by the walk and the watcher: node_modules, dot

@@ -19,12 +19,16 @@ export interface PickApi {
   checkRoot: typeof api.checkRoot
 }
 
-/** Checks a folder path (from the native picker, or typed in web mode, which has no dialog). Empty means cancelled. */
-export async function checkPath(picked: string, deps: Pick<PickApi, 'checkRoot'> = api): Promise<PickResult> {
+/**
+ * Checks a folder path (from the native picker, or typed in web mode, which has no dialog). Empty means cancelled.
+ * `typed` is web mode's box: there a network path is turned away for what it is (`refused`). A network folder
+ * picked in the desktop dialog that merely lacks the docs roots gets the ordinary no-roots message.
+ */
+export async function checkPath(picked: string, deps: Pick<PickApi, 'checkRoot'> = api, typed = false): Promise<PickResult> {
   picked = picked.trim()
   if (!picked) return { kind: 'cancelled' }
   const check = await deps.checkRoot(picked)
-  if (!check.ok) return { kind: 'no-roots', picked, message: check.message, ...(isNetworkPath(picked) ? { refused: true } : {}) }
+  if (!check.ok) return { kind: 'no-roots', picked, message: check.message, ...(typed && isNetworkPath(picked) ? { refused: true } : {}) }
   return { kind: 'ok', repoRoot: check.repoRoot, docsDir: check.docsDir }
 }
 

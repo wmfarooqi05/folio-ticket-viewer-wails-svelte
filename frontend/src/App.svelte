@@ -190,7 +190,7 @@
   async function choose() {
     problem = null
     try {
-      const res = api.isWeb ? await checkPath(typedRoot) : await pickRoot()
+      const res = api.isWeb ? await checkPath(typedRoot, undefined, true) : await pickRoot()
       if (res.kind === 'cancelled') return
       if (res.kind === 'no-roots') {
         problem = res.message

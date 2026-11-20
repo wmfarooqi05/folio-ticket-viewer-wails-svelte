@@ -3,7 +3,7 @@
 // never keeps file text.
 import { createHash, randomBytes } from 'node:crypto'
 import { closeSync, fsyncSync, mkdirSync, openSync, renameSync, unlinkSync, writeFileSync, watch, type FSWatcher } from 'node:fs'
-import { lstat, readFile, readdir, rm, stat, unlink } from 'node:fs/promises'
+import { lstat, open, readFile, readdir, rm, stat, unlink } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { inScope, resolveMarkdown, skipDir } from './paths'
@@ -18,10 +18,38 @@ export const MAX_FILE_BYTES = 5 << 20
 const megabytes = (n: number) => `${(n / (1 << 20)).toFixed(1)} MB`
 const tooLargeMessage = (size: number) => `file is too large (${megabytes(size)}; the limit is ${megabytes(MAX_FILE_BYTES)})`
 
-/** The file's text, or 'grew' if it passed the stat check and was over the cap by the time it was read. */
+/**
+ * The file's text, or 'grew' if it passed the stat check and was over the cap by the time it was read.
+ * Reads through a handle and stops one byte past the cap, so a file that grew costs at most the cap.
+ */
 async function readCapped(full: string): Promise<string | 'grew'> {
-  const b = await readFile(full)
-  return b.length > MAX_FILE_BYTES ? 'grew' : stripBom(b.toString('utf8'))
+  const fh = await open(full, 'r')
+  try {
+    const chunks: Buffer[] = []
+    let n = 0
+    for (;;) {
+      const buf = Buffer.allocUnsafe(Math.min(256 * 1024, MAX_FILE_BYTES + 1 - n))
+      const { bytesRead } = await fh.read(buf, 0, buf.length, null)
+      if (bytesRead === 0) break
+      chunks.push(bytesRead === buf.length ? buf : buf.subarray(0, bytesRead))
+      n += bytesRead
+      if (n > MAX_FILE_BYTES) return 'grew'
+    }
+    return stripBom(Buffer.concat(chunks, n).toString('utf8'))
+  } finally {
+    await fh.close()
+  }
+}
+
+/** The size of a file that passed the size check and was over the cap when read: a fresh stat. */
+async function grownSize(full: string): Promise<number> {
+  try {
+    const st = await stat(full)
+    if (st.size > MAX_FILE_BYTES) return st.size
+  } catch {
+    /* gone: report the minimum */
+  }
+  return MAX_FILE_BYTES + 1
 }
 
 export interface SourceFile {
@@ -185,6 +213,8 @@ export class DocsService {
       for (let i = next++; i < paths.length; i = next++) {
         try {
           const st = await stat(fulls[i])
+          // A FIFO or a device named *.md: opening it could block. Not a document.
+          if (!st.isFile()) throw new Error('not a regular file')
           const stamp = stampOf(st)
           if (st.size > MAX_FILE_BYTES) {
             // Over the cap: reported from the stat alone, so a huge file costs no read.
@@ -193,7 +223,7 @@ export class DocsService {
           }
           const text = await readCapped(fulls[i])
           if (text === 'grew') {
-            out[i] = { tooBig: MAX_FILE_BYTES + 1, stamp }
+            out[i] = { tooBig: await grownSize(fulls[i]), stamp }
             continue
           }
           out[i] = { stamp, file: { path: paths[i], text, mtime: stamp.mtime } }
@@ -231,9 +261,10 @@ export class DocsService {
   async readFile(p: string): Promise<string> {
     const full = await resolveMarkdown(this.roots().docs, p)
     const st = await stat(full)
+    if (!st.isFile()) throw new Error('not a regular file')
     if (st.size > MAX_FILE_BYTES) throw new Error(tooLargeMessage(st.size))
     const text = await readCapped(full)
-    if (text === 'grew') throw new Error(tooLargeMessage(MAX_FILE_BYTES + 1))
+    if (text === 'grew') throw new Error(tooLargeMessage(await grownSize(full)))
     return text
   }
 
@@ -241,23 +272,43 @@ export class DocsService {
    * "Clear data" (L5): deletes the cache folder and stops writing it until restart. Only a folder named
    * <something>/Folio/cache is ever deleted, and never through a link.
    */
-  async clearCache(): Promise<ClearResult> {
-    const dir = this.cacheDir
-    const res: ClearResult = { cacheDir: dir, cacheDeleted: false, profileScheduled: false, profileDirs: [] }
-    if (!isFolioCacheDir(dir)) throw new Error(`refusing to delete ${dir}: it is not a Folio cache folder`)
-    this.noSave = true
-    let st
-    try {
-      st = await lstat(dir)
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return res
-      throw e
-    }
-    if (st.isSymbolicLink() || !st.isDirectory()) throw new Error(`refusing to delete ${dir}: it is a link or not a folder`)
-    await rm(dir, { recursive: true, force: true })
-    res.cacheDeleted = true
-    return res
+  clearCache(): Promise<ClearResult> {
+    return this.serial(async () => {
+      const dir = this.cacheDir
+      const res: ClearResult = { cacheDir: dir, cacheDeleted: false, profileScheduled: false, profileDirs: [] }
+      if (!isFolioCacheDir(dir)) throw new Error(`refusing to delete ${dir}: it is not a Folio cache folder`)
+      this.noSave = true
+      // No link anywhere from the folder that holds Folio/ down to the cache: a junction in the
+      // middle would make the delete land somewhere else.
+      const base = path.dirname(path.dirname(path.resolve(dir)))
+      let cur = base
+      for (const part of path.relative(base, path.resolve(dir)).split(path.sep)) {
+        cur = path.join(cur, part)
+        let st
+        try {
+          st = await lstat(cur)
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code === 'ENOENT') return res
+          throw e
+        }
+        if (st.isSymbolicLink()) throw new Error(`refusing to delete ${dir}: ${cur} is a link`)
+        if (cur === path.resolve(dir) && !st.isDirectory()) throw new Error(`refusing to delete ${dir}: it is not a folder`)
+      }
+      await rm(dir, { recursive: true, force: true })
+      res.cacheDeleted = true
+      return res
+    })
   }
+
+  /** One cache save or clear at a time, so a save in flight cannot re-create what Clear data just deleted. */
+  private chain: Promise<unknown> = Promise.resolve()
+  private serial<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.chain.then(fn)
+    this.chain = run.catch(() => undefined)
+    return run
+  }
+  /** @internal for tests: runs after the envelope is built and before the file is written */
+  testHooks: { beforeCacheWrite?: () => Promise<void> } = {}
 
   // ---- cache (cache.go) --------------------------------------------------------
 
@@ -301,17 +352,24 @@ export class DocsService {
   }
 
   /** Writes {envelope, stamps, index} atomically. */
-  async saveCache(parserVersion: string, index: unknown): Promise<void> {
+  saveCache(parserVersion: string, index: unknown): Promise<void> {
     const r = this.roots()
-    if (r.docs === '') throw new Error('no docs root is configured')
-    if (index === undefined || index === null) throw new Error('empty index')
-    if (this.noSave) return // "Clear data" ran: the cache stays gone until restart
+    if (r.docs === '') return Promise.reject(new Error('no docs root is configured'))
+    if (index === undefined || index === null) return Promise.reject(new Error('empty index'))
+    return this.serial(async () => {
+      if (this.noSave) return // "Clear data" ran: the cache stays gone until restart
+      await this.writeCache(r, parserVersion, index)
+    })
+  }
+
+  private async writeCache(r: Roots, parserVersion: string, index: unknown): Promise<void> {
     const stamps: Record<string, [number, number]> = {}
     for (const p of [...this.stamps.keys()].sort()) {
       const s = this.stamps.get(p)!
       stamps[p] = [s.mtime, s.size]
     }
     const env = { v: CACHE_VERSION, parserVersion, docsRoot: normRoot(r.docs), roots: r.roots, stamps, index }
+    await this.testHooks.beforeCacheWrite?.()
     await writeAtomic(this.cachePath(r), JSON.stringify(env))
   }
 

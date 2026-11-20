@@ -91,7 +91,7 @@ func (p Paths) RunPending() (removed []string, err error) {
 	}
 	var firstErr error
 	for _, dir := range p.ProfileDirs() {
-		ok, err := removeGuarded(dir, p.ProfileDirs())
+		ok, err := p.removeProfile(dir)
 		if err != nil {
 			log.Printf("localdata: could not delete %s: %v", dir, err)
 			if firstErr == nil {
@@ -112,9 +112,59 @@ func (p Paths) RunPending() (removed []string, err error) {
 	return removed, firstErr
 }
 
+// trashName is where a profile folder is renamed to before it is deleted.
+func trashName(dir string) string { return dir + ".folio-trash" }
+
+// allowed lists every folder RunPending may delete: the profile folders and their trash names.
+func (p Paths) allowed() []string {
+	var out []string
+	for _, d := range p.ProfileDirs() {
+		out = append(out, d, trashName(d))
+	}
+	return out
+}
+
+// removeProfile deletes one profile folder the safe way. It first renames the folder to a sibling
+// trash name: on Windows a rename fails while a process (a WebView2 of another running Folio, say)
+// has files open inside, and then nothing has been deleted and the caller keeps the marker. Only
+// the renamed folder is deleted. A trash folder left by an interrupted run goes first. No link may
+// be on the way down from %LOCALAPPDATA% or %APPDATA%.
+func (p Paths) removeProfile(dir string) (bool, error) {
+	allowed := p.allowed()
+	trash := trashName(dir)
+	if _, err := removeGuarded(trash, allowed, p.base(dir)); err != nil {
+		return false, err
+	}
+	if _, err := os.Lstat(dir); err != nil {
+		return false, nil // nothing there
+	}
+	if err := checkNoLinks(p.base(dir), dir); err != nil {
+		return false, err
+	}
+	if err := os.Rename(dir, trash); err != nil {
+		return false, fmt.Errorf("%s is in use (is another Folio running?): %w", dir, err)
+	}
+	return removeGuarded(trash, allowed, p.base(dir))
+}
+
+// base is the environment folder dir lives under (%LOCALAPPDATA% or %APPDATA%).
+func (p Paths) base(dir string) string {
+	if p.LocalAppData != "" && strings.HasPrefix(strings.ToLower(filepath.Clean(dir)), strings.ToLower(filepath.Clean(p.LocalAppData))+`\`) {
+		return p.LocalAppData
+	}
+	return p.AppData
+}
+
+func checkNoLinks(base, dir string) error {
+	if err := docs.NoLinksBelow(base, dir); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("refusing to delete %s: %w", dir, err)
+	}
+	return nil
+}
+
 // removeGuarded deletes dir only if it is one of the allowed folders, exactly, is absolute, is not
 // a drive root or a link, and is a folder. It reports whether something was deleted.
-func removeGuarded(dir string, allowed []string) (bool, error) {
+func removeGuarded(dir string, allowed []string, base string) (bool, error) {
 	clean := filepath.Clean(dir)
 	if !filepath.IsAbs(clean) || filepath.Dir(clean) == clean {
 		return false, fmt.Errorf("refusing to delete %q: not a folder path", dir)
@@ -128,15 +178,13 @@ func removeGuarded(dir string, allowed []string) (bool, error) {
 	if !listed {
 		return false, fmt.Errorf("refusing to delete %q: not one of Folio's folders", dir)
 	}
-	st, err := os.Lstat(clean)
-	if errors.Is(err, fs.ErrNotExist) {
+	if _, err := os.Lstat(clean); errors.Is(err, fs.ErrNotExist) {
 		return false, nil
 	}
-	if err != nil {
-		return false, err
-	}
-	if st.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 || !st.IsDir() {
-		return false, fmt.Errorf("refusing to delete %q: it is a link or not a folder", dir)
+	if base != "" {
+		if err := checkNoLinks(base, clean); err != nil {
+			return false, err
+		}
 	}
 	if err := os.RemoveAll(clean); err != nil {
 		return false, err

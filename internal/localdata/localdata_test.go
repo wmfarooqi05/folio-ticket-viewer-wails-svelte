@@ -96,7 +96,7 @@ func TestRemoveGuardedRefusesEverythingElse(t *testing.T) {
 	victim := filepath.Join(p.AppData, "Documents")
 	mkfile(t, filepath.Join(victim, "a.txt"))
 	for _, dir := range []string{victim, p.AppData, filepath.Dir(p.AppData), `C:\`, "relative", "", filepath.Join(allowed[0], "..")} {
-		if ok, err := removeGuarded(dir, allowed); ok || err == nil {
+		if ok, err := removeGuarded(dir, allowed, p.AppData); ok || err == nil {
 			t.Errorf("removeGuarded(%q) = %v, %v", dir, ok, err)
 		}
 	}
@@ -104,7 +104,7 @@ func TestRemoveGuardedRefusesEverythingElse(t *testing.T) {
 		t.Fatal("a folder outside the allowed list was deleted")
 	}
 	// an allowed folder that does not exist is not an error
-	if ok, err := removeGuarded(allowed[0], allowed); ok || err != nil {
+	if ok, err := removeGuarded(allowed[0], allowed, p.AppData); ok || err != nil {
 		t.Errorf("missing allowed folder: %v %v", ok, err)
 	}
 }

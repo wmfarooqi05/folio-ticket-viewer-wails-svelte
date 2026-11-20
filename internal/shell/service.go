@@ -284,8 +284,8 @@ func InspectRootAllowing(abs string, roots []string, allowNetwork []string) Root
 	}
 	fail := RootCheck{Found: []string{}, Missing: slices.Clone(roots),
 		Message: "expects " + joinRoots(roots) + " inside the folder"}
-	if settings.IsNetworkPath(abs) && !settings.InPaths(allowNetwork, abs) {
-		fail.Message = settings.NetworkRootMessage
+	if msg := settings.RootShapeError(abs, allowNetwork); msg != "" {
+		fail.Message = msg
 		return fail
 	}
 	if st, err := os.Stat(abs); err != nil || !st.IsDir() {
@@ -396,8 +396,8 @@ func InspectDocsAllowing(repoRoot, docsDir string, roots []string, allowNetwork 
 		roots = settings.DefaultDocsRoots
 	}
 	rc := RootCheck{Found: []string{}, Missing: slices.Clone(roots), RepoRoot: repoRoot, DocsDir: docsDir}
-	if settings.IsNetworkPath(repoRoot) && !settings.InPaths(allowNetwork, repoRoot) {
-		rc.Message = settings.NetworkRootMessage
+	if msg := settings.RootShapeError(repoRoot, allowNetwork); msg != "" {
+		rc.Message = msg
 		return rc
 	}
 	if st, err := os.Stat(repoRoot); err != nil || !st.IsDir() {

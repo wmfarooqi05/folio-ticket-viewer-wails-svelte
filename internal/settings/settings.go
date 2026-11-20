@@ -15,6 +15,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 )
@@ -181,11 +183,18 @@ func LoadReport(path string) (Settings, []FieldError, error) {
 		}
 	}
 	var n int
+	// Whole numbers only, and only those a JavaScript number holds exactly (the Node backend's rule):
+	// 1e3 and 1.0 already fail to decode into an int; this adds the range.
+	const maxSafe = 1<<53 - 1
 	for _, f := range []struct {
 		key string
 		dst *int
 	}{{"v", &s.V}, {"sidebarWidth", &s.SidebarWidth}, {"panelWidth", &s.PanelWidth}} {
 		if get(raw, f.key, f.key, &n) {
+			if n > maxSafe || n < -maxSafe {
+				reject(f.key, "wrong type")
+				continue
+			}
 			*f.dst = n
 		}
 	}
@@ -207,6 +216,10 @@ func LoadReport(path string) (Settings, []FieldError, error) {
 			dst *int
 		}{{"x", &s.Window.X}, {"y", &s.Window.Y}, {"width", &s.Window.Width}, {"height", &s.Window.Height}} {
 			if get(win, "window."+f.key, f.key, &n) {
+				if n > maxSafe || n < -maxSafe {
+					reject("window."+f.key, "wrong type")
+					continue
+				}
 				*f.dst = n
 			}
 		}
@@ -238,8 +251,8 @@ func LoadReport(path string) (Settings, []FieldError, error) {
 		reject("adoPrUrl", err.Error())
 		s.AdoPRURL = ""
 	}
-	if IsNetworkPath(s.RepoRoot) {
-		reject("repoRoot", NetworkRootMessage)
+	if msg := RootShapeError(s.RepoRoot, nil); msg != "" {
+		reject("repoRoot", msg)
 		s.RepoRoot = ""
 	}
 	if s.SidebarWidth != 0 && ClampSidebarWidth(s.SidebarWidth) != s.SidebarWidth {
@@ -278,6 +291,40 @@ func rootsError(roots []string) string {
 
 // NetworkRootMessage is what a rejected network or device repo root says. Both backends use it.
 const NetworkRootMessage = `network and device paths (\\server\share, \\?\, \\.\) are not allowed as the repo root`
+
+// LocalRootMessage is what a repo root that is not a full local path says (Windows only).
+const LocalRootMessage = `the repo root must be a full path that starts with a drive letter, such as C:\repo`
+
+var driveRoot = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
+
+// RootShapeError is "" when p can be a repo root, and otherwise the message to show. An allow-list
+// on Windows: a full path with a drive letter, or a network folder in allowNetwork (the one picked
+// in the native dialog). A relative, root-relative (\foo) or drive-relative (C:foo) path would
+// resolve against whatever folder Folio happens to run in, and a UNC or device path is SMB.
+// Everywhere else only the network check applies. "" is fine (first run).
+func RootShapeError(p string, allowNetwork []string) string {
+	switch {
+	case p == "":
+		return ""
+	case IsNetworkPath(p):
+		if InPaths(allowNetwork, p) {
+			return ""
+		}
+		return NetworkRootMessage
+	case runtime.GOOS == "windows" && !driveRoot.MatchString(p):
+		return LocalRootMessage
+	}
+	return ""
+}
+
+// IsNetworkLinkTarget reports whether the target of a symlink is a network or device path other
+// than a local drive written as a device path (\\?\C:\...). Reading through such a link is SMB.
+func IsNetworkLinkTarget(t string) bool {
+	if !IsNetworkPath(t) {
+		return false
+	}
+	return !regexp.MustCompile(`^[\\/]{2}[?.][\\/][A-Za-z]:([\\/]|$)`).MatchString(t)
+}
 
 // IsNetworkPath reports whether p is a UNC path (\\host\share) or a device path (\\?\, \\.\, \??\).
 // Opening one makes Windows talk SMB with the user's credentials, so it is never used as a root
@@ -412,7 +459,7 @@ func ValidateAllowing(s Settings, allowNetwork []string) error {
 			pathsOK = false
 		}
 	}
-	netRoot := IsNetworkPath(s.RepoRoot) && !InPaths(allowNetwork, s.RepoRoot)
+	rootMsg := RootShapeError(s.RepoRoot, allowNetwork)
 	if err := validateURLTemplate(s.AdoWorkItemURL); err != nil {
 		add("adoWorkItemUrl", err.Error())
 	}
@@ -420,9 +467,9 @@ func ValidateAllowing(s Settings, allowNetwork []string) error {
 		add("adoPrUrl", err.Error())
 	}
 
-	if netRoot {
+	if rootMsg != "" {
 		// Checked before any file-system call: even a stat on a UNC path starts SMB.
-		add("repoRoot", NetworkRootMessage)
+		add("repoRoot", rootMsg)
 	} else if s.RepoRoot != "" {
 		if st, err := os.Stat(s.RepoRoot); err != nil || !st.IsDir() {
 			add("repoRoot", "must be an existing folder")

@@ -27,6 +27,8 @@ func IsFolioCacheDir(dir string) bool {
 // until Folio restarts, so the frontend's next save cannot bring the plaintext copy back. It
 // deletes only a folder that IsFolioCacheDir accepts and never follows a link.
 func (s *DocsService) ClearCache() (ClearResult, error) {
+	s.saveMu.Lock() // waits for a save in flight, and keeps the next one out
+	defer s.saveMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	dir, err := s.cacheFolder()
@@ -38,15 +40,13 @@ func (s *DocsService) ClearCache() (ClearResult, error) {
 		return res, fmt.Errorf("refusing to delete %s: it is not a Folio cache folder", dir)
 	}
 	s.noSave = true
-	st, err := os.Lstat(dir)
-	if errors.Is(err, fs.ErrNotExist) {
-		return res, nil
-	}
-	if err != nil {
-		return res, err
-	}
-	if st.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 || !st.IsDir() {
-		return res, fmt.Errorf("refusing to delete %s: it is a link or not a folder", dir)
+	// No link anywhere from the folder that holds Folio\ down to the cache: a junction in the middle
+	// would make RemoveAll delete somewhere else.
+	if err := NoLinksBelow(filepath.Dir(filepath.Dir(dir)), dir); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return res, nil
+		}
+		return res, fmt.Errorf("refusing to delete %s: %w", dir, err)
 	}
 	if err := os.RemoveAll(dir); err != nil {
 		return res, err
