@@ -1,11 +1,11 @@
 // The app-level calls, ported from internal/shell/service.go: config, the folder checks and the
 // vscode:// link. The native dialog, "open external" and "open settings file" have no
 // server side: the browser does those itself.
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { vscodeUrl } from '../lib/external'
 import type { Roots } from './docs'
-import { resolveMarkdown } from './paths'
+import { resolveMarkdown, skipDir } from './paths'
 import * as S from './settings'
 
 export interface ConfigPatch {
@@ -52,6 +52,10 @@ export interface RootCheck {
   found: string[]
   missing: string[]
   message: string
+  /** none of the asked-for roots exist but the docs folder is itself a space: the roots to save instead (ticket 25) */
+  suggested: string[]
+  /** the docs folder's top-level folders that hold any .md, sorted: the Settings chips */
+  folders: string[]
 }
 
 const isDir = (p: string) => {
@@ -69,54 +73,122 @@ const clean = (p: string) => {
   return n.length > path.parse(n).root.length ? n.replace(/[\\/]+$/, '') : n
 }
 
+/** How many entries one markdown search looks at (a folder that runs out counts as having none), as in Go. */
+const SCAN_BUDGET = 20000
+
+/** True when dir holds a .md anywhere in scope (not under node_modules, dot folders or "_" folders). */
+function hasMarkdown(dir: string): boolean {
+  if (!isDir(dir)) return false
+  let seen = 0
+  const walk = (d: string): boolean => {
+    let entries
+    try {
+      entries = readdirSync(d, { withFileTypes: true })
+    } catch {
+      return false
+    }
+    for (const e of entries) {
+      if (++seen > SCAN_BUDGET) return false
+      if (e.isDirectory()) {
+        if (!skipDir(e.name) && walk(path.join(d, e.name))) return true
+      } else if (e.name.toLowerCase().endsWith('.md')) return true
+    }
+    return false
+  }
+  return walk(dir)
+}
+
+/** True when dir holds a map.md or an issues/ folder. */
+function isSpaceDir(dir: string): boolean {
+  if (!isDir(dir)) return false
+  try {
+    if (statSync(path.join(dir, 'map.md')).isFile()) return true
+  } catch {
+    /* no map.md */
+  }
+  return isDir(path.join(dir, 'issues'))
+}
+
+/** The docs folder's top-level folders that hold any .md, sorted (the same order as Go's byte sort for names in ASCII). */
+function topFolders(dir: string): string[] {
+  if (!isDir(dir)) return []
+  let entries
+  try {
+    entries = readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  return entries
+    .filter((e) => e.isDirectory() && !skipDir(e.name) && hasMarkdown(path.join(dir, e.name)))
+    .map((e) => e.name)
+    .sort()
+}
+
+/** Splits roots into those that exist under dir and those that do not. "." exists when the docs folder holds any .md. */
 const probe = (dir: string, roots: string[]) => {
   const found: string[] = []
   const missing: string[] = []
-  for (const r of roots) (isDir(path.join(dir, r)) ? found : missing).push(r)
+  for (const r of roots) ((S.isWholeRoot(r) ? hasMarkdown(dir) : isDir(path.join(dir, r))) ? found : missing).push(r)
   return { found, missing }
 }
 
-const joinRoots = (roots: string[]) => roots.map((r) => r + '/').join(' · ')
+const rootLabel = (r: string) => (S.isWholeRoot(r) ? 'the docs folder itself' : r + '/')
+const joinRoots = (roots: string[]) => roots.map(rootLabel).join(' · ')
 
-/** The pure part of CheckRoot: a repo root that contains docs/<root>, or the docs folder itself. */
+/** What a folder with none of the roots (and no map.md or issues/ folder) is told. The same sentence as Go's ExpectsMessage. */
+export const expectsMessage = (roots: string[]) => 'expects ' + joinRoots(roots) + ', or a map.md or issues/ folder, inside the folder'
+
+/**
+ * The pure part of CheckRoot: a repo root that contains docs/<root>, or the docs folder itself. A docs folder with
+ * none of the roots but a map.md or an issues/ folder is accepted whole, and "." is suggested (ticket 25).
+ */
 export function inspectRoot(abs: string, roots: string[]): RootCheck {
   if (roots.length === 0) roots = S.DEFAULT_DOCS_ROOTS
-  const fail: RootCheck = { ok: false, repoRoot: '', docsDir: '', found: [], missing: [...roots], message: 'expects ' + joinRoots(roots) + ' inside the folder' }
+  const fail: RootCheck = { ok: false, repoRoot: '', docsDir: '', found: [], missing: [...roots], message: expectsMessage(roots), suggested: [], folders: [] }
   // Web mode has no native folder dialog, so no network folder is ever "picked": always refused,
   // and before any file-system call (a stat on a UNC path starts SMB with the user's credentials).
   const shape = S.rootShapeError(abs)
   if (shape) return { ...fail, message: shape }
   if (!isDir(abs)) return { ...fail, message: 'that is not a folder' }
   abs = clean(abs)
-  let p = probe(path.join(abs, S.DEFAULT_DOCS_DIR), roots)
-  if (p.found.length > 0) return { ok: true, repoRoot: abs, docsDir: S.DEFAULT_DOCS_DIR, ...p, message: '' }
-  p = probe(abs, roots)
-  if (p.found.length > 0) return { ok: true, repoRoot: path.dirname(abs), docsDir: path.basename(abs), ...p, message: '' }
+  const candidates = [
+    { docs: path.join(abs, S.DEFAULT_DOCS_DIR), repoRoot: abs, docsDir: S.DEFAULT_DOCS_DIR },
+    { docs: abs, repoRoot: path.dirname(abs), docsDir: path.basename(abs) },
+  ]
+  for (const c of candidates) {
+    const p = probe(c.docs, roots)
+    if (p.found.length > 0) return { ok: true, repoRoot: c.repoRoot, docsDir: c.docsDir, ...p, message: '', suggested: [], folders: topFolders(c.docs) }
+    if (isSpaceDir(c.docs)) {
+      return { ok: true, repoRoot: c.repoRoot, docsDir: c.docsDir, found: [S.WHOLE_DOCS_ROOT], missing: [...roots], message: '', suggested: [S.WHOLE_DOCS_ROOT], folders: topFolders(c.docs) }
+    }
+  }
   return fail
 }
 
 /** The pure part of CheckDocs: which roots exist under repoRoot/docsDir. OK means at least one. */
 export function inspectDocs(repoRoot: string, docsDir: string, roots: string[]): RootCheck {
   if (roots.length === 0) roots = S.DEFAULT_DOCS_ROOTS
-  const rc: RootCheck = { ok: false, repoRoot, docsDir, found: [], missing: [...roots], message: '' }
+  const rc: RootCheck = { ok: false, repoRoot, docsDir, found: [], missing: [...roots], message: '', suggested: [], folders: [] }
   const shape = S.rootShapeError(repoRoot)
   if (shape) return { ...rc, message: shape }
   if (!isDir(repoRoot)) return { ...rc, message: 'that is not a folder' }
   if (docsDir === '') docsDir = S.DEFAULT_DOCS_DIR
   if (!S.isRelativeInside(docsDir)) return { ...rc, message: 'the docs folder must be inside the repo root' }
-  if (roots.some((r) => !S.isRelativeInside(r))) return { ...rc, message: 'the docs roots must be folders inside the docs folder' }
-  const p = probe(path.join(repoRoot, docsDir), roots)
+  if (roots.some((r) => !S.isRootInside(r))) return { ...rc, message: 'the docs roots must be folders inside the docs folder' }
+  const docsPath = path.join(repoRoot, docsDir)
+  const p = probe(docsPath, roots)
   rc.found = p.found
   rc.missing = p.missing
+  rc.folders = topFolders(docsPath)
   rc.ok = p.found.length > 0
-  if (!rc.ok) rc.message = 'expects ' + joinRoots(roots) + ' inside the folder'
+  if (!rc.ok) rc.message = expectsMessage(roots)
   return rc
 }
 
 export class ShellService {
   private saved: S.Settings
   private extra: S.Extra = {}
-  private override: { repoRoot: string; docsDir: string } | null = null
+  private override: { repoRoot: string; docsDir: string; docsRoots?: string[] } | null = null
   /** Set when settings.json was corrupt and moved aside (the first-run screen follows). */
   loadError: string | null = null
   /** One line per settings.json field that was rejected on load and replaced by its default (L2). */
@@ -134,7 +206,7 @@ export class ShellService {
     if (docsOverride) {
       const rc = inspectRoot(docsOverride, this.saved.docsRoots)
       if (!rc.ok) throw new Error(`--docs ${docsOverride}: ${rc.message}`)
-      this.override = { repoRoot: rc.repoRoot, docsDir: rc.docsDir }
+      this.override = { repoRoot: rc.repoRoot, docsDir: rc.docsDir, ...(rc.suggested.length > 0 ? { docsRoots: [...rc.suggested] } : {}) }
     }
   }
 

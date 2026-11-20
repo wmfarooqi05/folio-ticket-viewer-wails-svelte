@@ -8,6 +8,9 @@ import {
   saveDisabled,
   SECTIONS,
   templateExample,
+  parseTypedRoot,
+  rootCandidates,
+  rootLabel,
   toggleRoot,
   validateDocsDir,
   validateTemplate,
@@ -121,6 +124,23 @@ describe('roots and previews', () => {
   it('toggles a root and keeps the candidate order', () => {
     expect(toggleRoot(['modules', 'handoffs', 'patterns'], 'handoffs')).toEqual(['modules', 'patterns'])
     expect(toggleRoot(['modules', 'patterns'], 'handoffs')).toEqual(['modules', 'handoffs', 'patterns'])
+  })
+  it('offers the whole docs folder, the found folders and typed ones, and toggles among them', () => {
+    expect(rootCandidates(['.'], ['guides', 'modules'], ['specs'])).toEqual(['.', 'modules', 'handoffs', 'patterns', 'guides', 'specs'])
+    const all = rootCandidates([], ['guides'])
+    expect(toggleRoot(['modules'], 'guides', all)).toEqual(['modules', 'guides'])
+    expect(toggleRoot(['.', 'guides'], '.', all)).toEqual(['guides'])
+    expect(rootLabel('.')).toBe('Whole docs folder (.)')
+    expect(rootLabel('guides')).toBe('guides/')
+  })
+  it('checks a typed root', () => {
+    expect(parseTypedRoot(' specs/api/ ')).toEqual({ root: 'specs/api' })
+    expect(parseTypedRoot('')).toHaveProperty('error')
+    expect(parseTypedRoot('..')).toHaveProperty('error')
+    expect(parseTypedRoot('a/../..')).toHaveProperty('error')
+    expect(parseTypedRoot('C:/x')).toHaveProperty('error')
+    expect(parseTypedRoot('/etc')).toHaveProperty('error')
+    expect(parseTypedRoot('.')).toHaveProperty('error')
   })
   it('previews the last two path segments', () => {
     expect(templateExample(ADO, '72633')).toBe('…/edit/72633')

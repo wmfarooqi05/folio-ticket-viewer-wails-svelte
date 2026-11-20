@@ -77,7 +77,11 @@ export async function resolveMarkdown(root: string, rel: string): Promise<string
 /** The scope rule shared by the walk and the watcher: node_modules, dot folders and "_" folders. */
 export const skipDir = (name: string) => name === 'node_modules' || name.startsWith('.') || name.startsWith('_')
 
-/** True when rel (docs-relative, POSIX) passes through no skipped folder below its configured root. */
-export function inScope(rel: string): boolean {
-  return !rel.split('/').slice(1).some(skipDir)
+/**
+ * True when rel (docs-relative, POSIX) passes through no skipped folder below its configured root. With the whole
+ * docs folder as a root ("."), the first part is an ordinary folder too, so it is checked as well.
+ */
+export function inScope(rel: string, whole = false): boolean {
+  const parts = rel.split('/')
+  return !(whole ? parts : parts.slice(1)).some(skipDir)
 }

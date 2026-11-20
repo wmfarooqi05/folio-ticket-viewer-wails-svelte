@@ -3,7 +3,7 @@ import { checkPath, isNetworkPath, pickRoot, rootsLabel, type PickApi } from './
 
 const fake = (picked: string, check: Partial<Awaited<ReturnType<PickApi['checkRoot']>>>): PickApi => ({
   pickFolder: async () => picked,
-  checkRoot: async () => ({ ok: false, message: '', repoRoot: '', docsDir: '', found: [], missing: [], ...check }) as never,
+  checkRoot: async () => ({ ok: false, message: '', repoRoot: '', docsDir: '', found: [], missing: [], suggested: [], folders: [], ...check }) as never,
 })
 
 describe('pickRoot', () => {
@@ -56,8 +56,12 @@ describe('checkPath (the typed path of web mode)', () => {
   })
   it('trims the path and returns the resolved root', async () => {
     let asked = ''
-    const deps = { checkRoot: async (p: string) => ((asked = p), { ok: true, repoRoot: 'E:/repo', docsDir: 'docs', found: [], missing: [], message: '' }) }
+    const deps = { checkRoot: async (p: string) => ((asked = p), { ok: true, repoRoot: 'E:/repo', docsDir: 'docs', found: [], missing: [], message: '', suggested: [], folders: [] }) }
     expect(await checkPath('  E:/repo ', deps)).toEqual({ kind: 'ok', repoRoot: 'E:/repo', docsDir: 'docs' })
     expect(asked).toBe('E:/repo')
+  })
+  it('passes on the roots CheckRoot suggested for a map.md or issues/ layout', async () => {
+    const r = await pickRoot(fake('E:\repo', { ok: true, repoRoot: 'E:\repo', docsDir: 'docs', suggested: ['.'] }))
+    expect(r).toEqual({ kind: 'ok', repoRoot: 'E:\repo', docsDir: 'docs', docsRoots: ['.'] })
   })
 })

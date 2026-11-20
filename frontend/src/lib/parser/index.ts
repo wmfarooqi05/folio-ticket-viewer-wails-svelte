@@ -36,6 +36,8 @@ export interface Index {
   files: Record<string, DocRecord>
   /** sorted; used by scanText and the tree */
   spaces: string[]
+  /** the name of the space at the docs folder itself (the repo folder's name); '' when the caller gave none */
+  rootName: string
   /** "<space> <num padded to 2>" -> path */
   tickets: Record<string, string>
   edges: Edge[]
@@ -202,6 +204,21 @@ function dirname(p: string): string {
 
 const TICKET_PATH = /^modules\/([^/]+)\/(?:.+\/)?issues\/(\d{2,})-[^/]+\.md$/
 const SPACE_PATH = /^modules\/([^/]+)\//
+/** A ticket outside modules/: the space is the folder that holds the nearest issues/ folder ('' is the docs folder itself). */
+const GENERIC_TICKET_PATH = /^(?:(.*)\/)?issues\/(\d{2,})-[^/]+\.md$/
+/** These two top-level folders are cross-cutting: they never belong to a space. */
+const CROSS_CUTTING = /^(?:handoffs|patterns)\//
+
+/** The space a ticket path belongs to: modules/<x>/ gives x, otherwise the folder holding issues/. null when it has none. */
+function ticketSpace(path: string, rootName: string): { space: string; num: string } | null {
+  const m = TICKET_PATH.exec(path)
+  if (m) return { space: m[1], num: m[2] }
+  const g = GENERIC_TICKET_PATH.exec(path)
+  if (!g || CROSS_CUTTING.test(path) || path.startsWith('modules/')) return null
+  const dir = g[1] ?? ''
+  const space = dir === '' ? rootName : dir.slice(dir.lastIndexOf('/') + 1)
+  return space === '' ? null : { space, num: g[2] }
+}
 
 function isHidden(path: string): boolean {
   return path.split('/').some((seg) => seg.startsWith('_'))
@@ -810,14 +827,19 @@ function fmMapMeta(fm: Frontmatter, diag: FmDiag): MapMeta {
   return { status, ado: ado ?? null, superseded_by: strOrNull(fm.superseded_by) }
 }
 
-export function parseFile(file: SourceFile): DocRecord {
+/**
+ * `rootName` names the space at the docs folder itself (the repo folder's name); the parser has no
+ * file system, so the caller says it. Without it, a ticket straight under the docs folder is not a ticket.
+ * A space that is not under modules/ is settled for non-ticket files in the cross-file pass.
+ */
+export function parseFile(file: SourceFile, rootName = ''): DocRecord {
   const { path, text } = file
-  const tm = TICKET_PATH.exec(path)
-  const space = SPACE_PATH.exec(path)?.[1] ?? null
+  const ts = ticketSpace(path, rootName)
+  const space = ts?.space ?? SPACE_PATH.exec(path)?.[1] ?? null
   const base = path.split('/').pop()!
-  const kind: DocRecord['kind'] = tm ? 'ticket' : base === 'map.md' ? 'map' : 'doc'
-  const num = tm ? tm[2] : null
-  const key = tm && num ? `${tm[1]} ${pad2(num)}` : null
+  const kind: DocRecord['kind'] = ts ? 'ticket' : base === 'map.md' ? 'map' : 'doc'
+  const num = ts ? ts.num : null
+  const key = ts && num ? `${ts.space} ${pad2(num)}` : null
 
   const fm = readFrontmatter(text)
   const legacy = fm === null
@@ -873,7 +895,7 @@ export function parseFile(file: SourceFile): DocRecord {
     headings: scan.headings,
     items: scan.items,
     links: scan.links,
-    map: kind === 'map' ? { kanban: /<!--\s*tickets:begin\b[^>]*\bview=kanban\b/.test(text), issuesDir: `${dirname(path)}/issues` } : null,
+    map: kind === 'map' ? { kanban: /<!--\s*tickets:begin\b[^>]*\bview=kanban\b/.test(text), issuesDir: dirname(path) === '' ? 'issues' : `${dirname(path)}/issues` } : null,
     hasMermaid: scan.hasMermaid,
     diagnostics,
     fmLines,
@@ -905,6 +927,17 @@ function spaceOf(path: string, index: Index): string | null {
   return index.files[path]?.space ?? SPACE_PATH.exec(path)?.[1] ?? null
 }
 
+/** The map of a space: modules/<space>/map.md, else the shortest map.md path of that space. */
+function mapOfSpace(space: string, index: Index): string | null {
+  const modular = `modules/${space}/map.md`
+  if (index.files[modular]) return modular
+  let best: string | null = null
+  for (const rec of Object.values(index.files)) {
+    if (rec.kind === 'map' && rec.space === space && (best === null || rec.path.length < best.length)) best = rec.path
+  }
+  return best
+}
+
 export function resolveRef(ref: string, fromPath: string, index: Index): Resolved {
   const bad: Resolved = { kind: 'internal', path: null, fragment: null, itemId: null, ok: false, problem: 'bad-ref' }
   const noFile = (frag: string | null): Resolved => ({ kind: 'internal', path: null, fragment: frag, itemId: null, ok: false, problem: 'no-file' })
@@ -916,15 +949,15 @@ export function resolveRef(ref: string, fromPath: string, index: Index): Resolve
     const path = index.tickets[`${space} ${pad2(m[1])}`]
     return path ? resolveInFile(path, m[2] ?? null, index) : noFile(m[2] ?? null)
   }
-  m = /^([a-z0-9-]+) (\d+)(?:#([a-z]+\d+))?$/.exec(ref)
+  m = /^([^\s#][^#]*?) (\d+)(?:#([a-z]+\d+))?$/.exec(ref)
   if (m) {
     const path = index.tickets[`${m[1]} ${pad2(m[2])}`]
     return path ? resolveInFile(path, m[3] ?? null, index) : noFile(m[3] ?? null)
   }
-  m = /^([a-z0-9-]+)#([a-z]+\d+)$/.exec(ref)
+  m = /^([^\s#][^#]*)#([a-z]+\d+)$/.exec(ref)
   if (m) {
-    const path = `modules/${m[1]}/map.md`
-    return index.files[path] ? resolveInFile(path, m[2], index) : noFile(m[2])
+    const path = mapOfSpace(m[1], index)
+    return path ? resolveInFile(path, m[2], index) : noFile(m[2])
   }
   return bad
 }
@@ -1053,10 +1086,11 @@ export function scanText(text: string, fromPath: string, index: Index): TextRef[
 
 // ---- the index (build, update, cross-file pass) --------------------------------
 
-const EMPTY_INDEX: Index = { version: 1, files: {}, spaces: [], tickets: {}, edges: [], diagnostics: [] }
+const EMPTY_INDEX: Index = { version: 1, files: {}, spaces: [], rootName: '', tickets: {}, edges: [], diagnostics: [] }
 
-export function buildIndex(files: Iterable<SourceFile>): Index {
-  return updateIndex(EMPTY_INDEX, [...files], [])
+/** `rootName` is the repo folder's name: the space of tickets and maps at the docs folder itself. */
+export function buildIndex(files: Iterable<SourceFile>, rootName = ''): Index {
+  return updateIndex({ ...EMPTY_INDEX, rootName }, [...files], [])
 }
 
 /** Re-parses only `changed`, drops `removed`, then reruns the cross-file pass in full. */
@@ -1065,13 +1099,44 @@ export function updateIndex(index: Index, changed: SourceFile[], removed: string
   for (const p of removed) delete parsed[p]
   for (const f of changed) {
     if (isHidden(f.path)) delete parsed[f.path]
-    else parsed[f.path] = parseFile(f)
+    else parsed[f.path] = parseFile(f, index.rootName)
   }
-  return crossFile(parsed)
+  return crossFile(parsed, index.rootName ?? '')
 }
 
-function crossFile(parsed: Record<string, DocRecord>): Index {
+/**
+ * The folders that count as a space outside modules/: one that holds a map.md or an issues/ folder.
+ * '' is the docs folder itself. Only files that modules/ does not already place are looked at.
+ */
+function spaceDirs(parsed: Record<string, DocRecord>): Set<string> {
+  const dirs = new Set<string>()
+  for (const p of Object.keys(parsed)) {
+    if (SPACE_PATH.test(p) || CROSS_CUTTING.test(p)) continue
+    const segs = p.split('/')
+    segs.pop()
+    if (p.endsWith('/map.md') || p === 'map.md') dirs.add(segs.join('/'))
+    segs.forEach((seg, i) => {
+      if (seg === 'issues') dirs.add(segs.slice(0, i).join('/'))
+    })
+  }
+  return dirs
+}
+
+function crossFile(parsed: Record<string, DocRecord>, rootName: string): Index {
   const paths = Object.keys(parsed).sort()
+  // A file outside modules/ that is not a ticket belongs to the nearest folder above it that is a space.
+  const dirs = spaceDirs(parsed)
+  for (const p of paths) {
+    const rec = parsed[p]
+    if (rec.kind === 'ticket' || SPACE_PATH.test(p) || CROSS_CUTTING.test(p)) continue
+    const segs = p.split('/')
+    segs.pop()
+    let space: string | null = null
+    for (let n = segs.length; n >= 0 && space === null; n--) {
+      if (dirs.has(segs.slice(0, n).join('/'))) space = n === 0 ? rootName || null : segs[n - 1]
+    }
+    if (space !== rec.space) parsed[p] = { ...rec, space }
+  }
   const spaces = new Set<string>()
   const tickets: Record<string, string> = {}
   const diagnostics: Diagnostic[] = []
@@ -1087,7 +1152,7 @@ function crossFile(parsed: Record<string, DocRecord>): Index {
       } else tickets[rec.key] = p
     }
   }
-  const index: Index = { version: 1, files: {}, spaces: [...spaces].sort(), tickets, edges: [], diagnostics }
+  const index: Index = { version: 1, files: {}, spaces: [...spaces].sort(), rootName, tickets, edges: [], diagnostics }
 
   // The records are shared with the previous index, so work on copies of the parts we fill in.
   for (const p of paths) index.files[p] = { ...parsed[p] }

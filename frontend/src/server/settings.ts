@@ -8,6 +8,8 @@ import { randomBytes } from 'node:crypto'
 export const VERSION = 1
 export const DEFAULT_DOCS_DIR = 'docs'
 export const DEFAULT_DOCS_ROOTS = ['modules', 'handoffs', 'patterns']
+/** The docs root that means "the whole docs folder" (ticket 25). The scope skips still apply under it. */
+export const WHOLE_DOCS_ROOT = '.'
 export const MIN_SIDEBAR = 200
 export const MAX_SIDEBAR = 480
 export const MIN_PANEL = 320
@@ -188,7 +190,7 @@ function apply(s: Settings, o: Record<string, unknown>): Rejected[] {
 /** "" when there is at least one docs root and each is a relative folder inside the docs folder. */
 function rootsError(roots: string[]): string {
   if (roots.length === 0) return 'must list at least one folder'
-  for (const r of roots) if (!isRelativeInside(r)) return `"${r}" must be a relative folder inside the docs folder`
+  for (const r of roots) if (!isRootInside(r)) return `${JSON.stringify(r)} must be a relative folder inside the docs folder`
   return ''
 }
 
@@ -286,6 +288,15 @@ export function isRelativeInside(p: string): boolean {
   if (p === '' || p.startsWith('/') || p.startsWith('\\') || /^[A-Za-z]:/.test(p) || path.win32.isAbsolute(p)) return false
   const clean = path.posix.normalize(p.replaceAll('\\', '/')).replace(/\/+$/, '')
   return clean !== '' && clean !== '.' && clean !== '..' && !clean.startsWith('../')
+}
+
+/** isRelativeInside for a docs root: "." (the whole docs folder) is allowed too. */
+export const isRootInside = (p: string) => isWholeRoot(p) || isRelativeInside(p)
+
+/** A relative path that names the base folder itself: ".", "./", "a/..". */
+export function isWholeRoot(p: string): boolean {
+  if (p === '' || p.startsWith('/') || p.startsWith('\\') || /^[A-Za-z]:/.test(p) || path.win32.isAbsolute(p)) return false
+  return path.posix.normalize(p.replaceAll('\\', '/')).replace(/\/+$/, '') === '.'
 }
 
 /** "" or an https:// URL that contains {id}. */
@@ -390,8 +401,8 @@ export function validate(s: Settings): void {
     pathsOK = false
   }
   for (const r of s.docsRoots ?? []) {
-    if (!isRelativeInside(r)) {
-      add('docsRoots', `"${r}" must be a relative folder inside the docs folder`)
+    if (!isRootInside(r)) {
+      add('docsRoots', `${JSON.stringify(r)} must be a relative folder inside the docs folder`)
       pathsOK = false
     }
   }

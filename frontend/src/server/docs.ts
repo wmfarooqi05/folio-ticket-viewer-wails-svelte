@@ -7,6 +7,7 @@ import { lstat, open, readFile, readdir, rm, stat, unlink } from 'node:fs/promis
 import os from 'node:os'
 import path from 'node:path'
 import { inScope, resolveMarkdown, skipDir } from './paths'
+import { isWholeRoot } from './settings'
 import { pathReachesNetwork } from './settings'
 
 export const CHANGED_EVENT = 'docs:changed'
@@ -566,12 +567,15 @@ class Watcher {
   private done = false
   /** directory events still being stat'ed or walked: a flush waits for them, so a rename is one event */
   private busy = 0
+  /** a "." root: the whole docs folder is watched, so the first path part is an ordinary folder */
+  private whole: boolean
 
   constructor(
     private r: Roots,
     private svc: DocsService,
     private timing: { quiet: number; max: number },
   ) {
+    this.whole = r.roots.some(isWholeRoot)
     for (const root of r.roots) {
       const base = path.join(r.docs, root)
       try {
@@ -612,7 +616,7 @@ class Watcher {
     if (name === null) return this.onError()
     const abs = path.join(base, name.toString())
     const rel = path.relative(this.r.docs, abs).split(path.sep).join('/')
-    if (rel === '' || rel.startsWith('..') || !inScope(rel)) return
+    if (rel === '' || rel.startsWith('..') || !inScope(rel, this.whole)) return
     if (rel.toLowerCase().endsWith('.md')) {
       this.pending.add(rel)
       this.arm()

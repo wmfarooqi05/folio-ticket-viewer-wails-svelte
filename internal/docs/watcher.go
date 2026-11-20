@@ -38,6 +38,7 @@ var watchBufferSize = 256 << 10
 type watcher struct {
 	w     *fsnotify.Watcher
 	docs  string
+	whole bool // a "." root: the whole docs folder is watched, so the first path part is an ordinary folder
 	svc   *DocsService
 	emit  func(ChangeSet)
 	quiet time.Duration // trailing debounce
@@ -86,7 +87,7 @@ func newWatcher(r Roots, svc *DocsService) (*watcher, error) {
 	if err != nil {
 		return nil, err
 	}
-	w := &watcher{w: fw, docs: r.Docs, svc: svc, emit: svc.send,
+	w := &watcher{w: fw, docs: r.Docs, whole: slices.ContainsFunc(r.Roots, settings.IsWholeRoot), svc: svc, emit: svc.send,
 		quiet: debounceQuiet, max: debounceMax, done: make(chan struct{}),
 		found: make(chan []string, 16)}
 	// The loop runs first so it drains Events while AddWith registers directories.
@@ -168,10 +169,14 @@ func (w *watcher) rel(abs string) (string, bool) {
 	return filepath.ToSlash(r), true
 }
 
-// inScope reports whether rel passes through a skipped folder below its root.
-func inScope(rel string) bool {
+// inScope reports whether rel passes through a skipped folder below its root. With the whole
+// docs folder as a root (".") the first part is an ordinary folder too, so it is checked as well.
+func inScope(rel string, whole bool) bool {
 	parts := strings.Split(rel, "/")
-	for _, seg := range parts[1:] { // parts[0] is a configured root
+	if !whole {
+		parts = parts[1:] // parts[0] is a configured root
+	}
+	for _, seg := range parts {
 		if skipDir(seg) {
 			return false
 		}
@@ -244,7 +249,7 @@ func (w *watcher) loop() {
 				return
 			}
 			rel, inRoot := w.rel(ev.Name)
-			if !inRoot || !inScope(rel) {
+			if !inRoot || !inScope(rel, w.whole) {
 				continue
 			}
 			if ev.Has(fsnotify.Create) {

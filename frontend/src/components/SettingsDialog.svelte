@@ -10,8 +10,10 @@
     THEMES,
     draftFrom,
     needsRescan,
+    parseTypedRoot,
     patchFrom,
     rootCandidates,
+    rootLabel,
     saveDisabled,
     templateExample,
     toggleRoot,
@@ -45,7 +47,24 @@
   const errors = $derived(validateDraft(draft))
   const disabled = $derived(busy || saveDisabled(draft, saved))
   const hasRepo = $derived(draft.repoRoot !== '')
-  const candidates = $derived(rootCandidates(draft.docsRoots))
+  // Folders typed in the box this session stay as chips when unticked. The check asks about these only: the
+  // folders it finds come back in check.folders and are added to the chips, so they never feed the check again.
+  let added = $state<string[]>([])
+  const askRoots = $derived(rootCandidates(draft.docsRoots, [], added))
+  const candidates = $derived(rootCandidates(draft.docsRoots, check?.folders ?? [], added))
+  let typedRoot = $state('')
+  let typedRootError = $state<string | null>(null)
+  function addRoot() {
+    const r = parseTypedRoot(typedRoot)
+    if ('error' in r) {
+      typedRootError = r.error
+      return
+    }
+    typedRootError = null
+    typedRoot = ''
+    if (!candidates.includes(r.root)) added = [...added, r.root]
+    if (!draft.docsRoots.includes(r.root)) draft.docsRoots = toggleRoot(draft.docsRoots, r.root, rootCandidates(draft.docsRoots, check?.folders ?? [], [...added, r.root]))
+  }
   // The selected roots decide it, not the found candidates: a found but unticked root does not count.
   const noRoots = $derived(
     hasRepo && check !== null && draft.docsRoots.length > 0 && !draft.docsRoots.some((r) => (check?.found ?? []).includes(r)),
@@ -60,7 +79,7 @@
   // Which roots exist on disk, re-checked when the folder, docs name or roots change.
   let seq = 0
   $effect(() => {
-    const [repo, dir, roots] = [draft.repoRoot, draft.docsDir, candidates]
+    const [repo, dir, roots] = [draft.repoRoot, draft.docsDir, askRoots]
     if (!repo) {
       check = null
       return
@@ -92,6 +111,7 @@
       if (res.kind === 'ok') {
         draft.repoRoot = res.repoRoot
         draft.docsDir = res.docsDir
+        if (res.docsRoots) draft.docsRoots = res.docsRoots // a map.md or issues/ folder: the whole docs folder
       } else if (res.kind === 'no-roots') {
         if (res.refused) saveError = res.message
         else draft.repoRoot = res.picked // shows the "No roots" warning
@@ -113,6 +133,7 @@
       if (res.kind === 'ok') {
         draft.repoRoot = res.repoRoot
         draft.docsDir = res.docsDir
+        if (res.docsRoots) draft.docsRoots = res.docsRoots
         typed = res.repoRoot
       } else if (res.kind === 'no-roots') {
         if (res.refused) saveError = res.message // a network or device path: web mode has no dialog to pick it in
@@ -189,7 +210,8 @@
     }
   }
 
-  const found = (root: string) => (check?.found ?? []).includes(root)
+  // A folder the check listed holds .md files, so it counts as found even when it was not one of the roots asked about.
+  const found = (root: string) => (check?.found ?? []).includes(root) || (check?.folders ?? []).includes(root)
   // Web mode has no RAM readout to switch, so that toggle is not offered.
   const section = $derived.by(() => {
     const s = SECTIONS.find((x) => x.id === sec)!
@@ -292,6 +314,7 @@
                       <span class="dot" style="width:7px;height:7px;background:var(--s-rev)"></span>
                       <span style="flex:1;min-width:0">
                         This folder has none of <span class="mono" style="font-size:11.5px">{rootsLabel(draft.docsRoots)}</span>
+                        {#if (check?.folders ?? []).length > 0}. Tick a folder below, or the whole docs folder.{/if}
                       </span>
                       {#if !api.isWeb}<button type="button" class="link" onclick={choose}>Choose again</button>{/if}
                     </div>
@@ -327,10 +350,10 @@
                         class="chip"
                         class:on
                         aria-pressed={on}
-                        onclick={() => (draft.docsRoots = toggleRoot(draft.docsRoots, r))}
+                        onclick={() => (draft.docsRoots = toggleRoot(draft.docsRoots, r, candidates))}
                       >
                         <span class="box">{on ? '✓' : ''}</span>
-                        <span>{r}/</span>
+                        <span>{rootLabel(r)}</span>
                         <span class="found">
                           {#if check === null}
                             <span class="fdot unknown"></span>{hasRepo ? 'checking…' : ''}
@@ -341,6 +364,33 @@
                       </button>
                     {/each}
                   </div>
+                  <form
+                    class="row"
+                    style="margin-top:8px"
+                    onsubmit={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      addRoot()
+                    }}
+                  >
+                    <input
+                      id="addRoot"
+                      class="inp mono"
+                      class:bad={!!typedRootError}
+                      style="width:230px"
+                      spellcheck="false"
+                      placeholder="another folder, e.g. specs"
+                      aria-label="Add another folder, relative to the docs folder"
+                      aria-invalid={!!typedRootError}
+                      bind:value={typedRoot}
+                      oninput={() => (typedRootError = null)}
+                      onkeydown={(e) => e.stopPropagation()}
+                    />
+                    <button type="submit" class="btn">Add</button>
+                  </form>
+                  {#if typedRootError}
+                    <div class="err"><span class="dot" style="background:var(--s-block)"></span>{typedRootError}</div>
+                  {/if}
                   {#if errors.docsRoots}
                     <div class="err"><span class="dot" style="background:var(--s-block)"></span>{errors.docsRoots}</div>
                   {/if}
