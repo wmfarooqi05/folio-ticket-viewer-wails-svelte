@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { existsSync, renameSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { build, defineConfig, type Rollup } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
@@ -26,6 +27,8 @@ export default defineConfig(async () => ({
     port: Number(process.env.WAILS_VITE_PORT) || 9245,
     strictPort: true,
   },
+  // The manifest feeds scripts/size-check.mjs. It goes outside dist/ so it is not embedded in the exe.
+  build: { manifest: true },
   define: { __PARSER_VERSION__: JSON.stringify(await parserVersion()) },
   plugins: [
     {
@@ -38,6 +41,19 @@ export default defineConfig(async () => ({
         id === '\0folio-elk-stub'
           ? "export default class ELK { constructor() { throw new Error('the ELK layout is not bundled') } }"
           : null,
+    },
+    {
+      // Vite writes the manifest into dist/.vite, which main.go would embed in the exe. Move it to
+      // frontend/.vite (gitignored) once the bundle is written; size-check.mjs reads it there.
+      name: 'folio-manifest-out',
+      apply: 'build',
+      closeBundle() {
+        const from = fileURLToPath(new URL('./dist/.vite', import.meta.url))
+        const to = fileURLToPath(new URL('./.vite', import.meta.url))
+        if (!existsSync(from)) return
+        rmSync(to, { recursive: true, force: true })
+        renameSync(from, to)
+      },
     },
     tailwindcss(),
     svelte(),

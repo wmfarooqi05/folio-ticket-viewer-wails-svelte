@@ -27,3 +27,6 @@ Thumbs.db
 # Throwaway prototypes (findings live in docs/assets)
 prototypes/
 .task/
+
+# Vite manifest for scripts/size-check.mjs
+frontend/.vite/
