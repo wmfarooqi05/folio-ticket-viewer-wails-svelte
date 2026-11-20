@@ -74,6 +74,8 @@ func main() {
 		URL:       "/",
 	}))
 	shell.RememberWindow(shellSvc, win)
+	// Dev-only RAM bench hook (ticket 15): off unless FOLIO_BENCH=1 and FOLIO_BENCH_DIR are set.
+	shell.StartBench(func(event, path string) { app.Event.Emit(event, path) })
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

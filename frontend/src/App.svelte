@@ -100,6 +100,15 @@
   // the engine says "412 files"; the mockup's footer says "Watching 412 files"
   const footerText = $derived(/^\d+ files?$/.test(status) ? `Watching ${status}` : status)
 
+  // Bench hook (ticket 15): opens an indexed file when the exe runs with FOLIO_BENCH=1; inert otherwise.
+  onMount(() =>
+    api.onBench((kind, path) => {
+      if (!indexStore.index?.files[path]) return
+      if (kind === 'open') void select(path).then(() => void api.logTimings(`bench: opened ${path}`))
+      else openInPanel(path, null)
+    }),
+  )
+
   onMount(async () => {
     try {
       config = initial ?? (await api.getConfig())
