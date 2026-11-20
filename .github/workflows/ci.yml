@@ -111,7 +111,10 @@ jobs:
         run: |
           npm pack --ignore-scripts
           sha256sum folio-viewer-*.tgz | tee SHA256SUMS-npm
-          tar -tzf folio-viewer-*.tgz | head -40
+          # list to a file first: `tar | head` makes tar exit with SIGPIPE (141) under pipefail
+          tar -tzf folio-viewer-*.tgz > "$RUNNER_TEMP/tarball-files.txt"
+          head -40 "$RUNNER_TEMP/tarball-files.txt"
+          echo "($(wc -l < "$RUNNER_TEMP/tarball-files.txt") files)"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: folio-viewer-npm

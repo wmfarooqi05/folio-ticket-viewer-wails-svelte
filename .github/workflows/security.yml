@@ -153,4 +153,6 @@ jobs:
           persist-credentials: false
       - name: Lint the workflows
         shell: sh # the image has no bash
-        run: actionlint -color
+        # checkout in a container without git downloads the files with no .git folder, and actionlint
+        # then finds no project, so name the files
+        run: actionlint -color .github/workflows/*.yml
