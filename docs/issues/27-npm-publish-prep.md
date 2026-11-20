@@ -73,4 +73,13 @@ A wrong 0.1.0 can be unpublished within 72 hours, but the version number can nev
 
 ## Outcome
 
-*(empty)*
+All three blockers and the optional items are done. Nothing was published, tagged or pushed.
+
+- **Third-party notices (AC1).** `frontend/vite.shared.ts` has a `thirdPartyNotices` plugin. At `generateBundle` it maps every module the web build rendered (renderedLength > 0) to its `node_modules` package folder, then writes `dist/licenses/THIRD-PARTY-NOTICES.txt` (name, version, licence from package.json, full LICENSE/LICENCE/COPYING/NOTICE text) and `bundled-packages.json` (moved to `frontend/.vite-web/` with the manifest). It covers 53 packages; the file is 142 KB. khroma has no `license` field, so its entry says MIT from its licence file. No new dependency. `scripts/size-check.mjs` has a "third-party notices" row that fails when a listed package has no block or an empty one; `scripts/size-check.test.mjs` tests it (pure function and `run`). The server bundle `folio-web.mjs` holds no third-party code: a `noThirdPartyInServer` plugin fails the server build if it ever does. `OFL-Geist.txt` is kept.
+- **Publishing docs (AC2).** `publish-npm.yml` header and the README "Publishing the npm package" paragraph: 0.1.0 by hand, trusted publishing from 0.1.1, tick "npm publish", publish within 2 days. Rules re-checked on docs.npmjs.com (npm-trust: package must exist; trusted-publishers: stage-only default after Sep 03, 2026, 2-day expiry; npm-publish: relative path needs `./`) and cited in comments. The workflow runs `npm publish ./folio-viewer-*.tgz`.
+- **AC3.** `npm publish <packed 0.1.0 tgz> --dry-run` succeeds: `+ folio-viewer@0.1.0`, 128 files, 1.3 MB packed, 4.4 MB unpacked, THIRD-PARTY-NOTICES.txt listed.
+- **package.json:** `homepage`, `bugs`, six keywords, and a second bin `folio-viewer` (same file). In a scratch install, `npx folio-viewer --version` and `npx folio --version` both print 0.1.0.
+- **Node message:** now "folio needs Node 22 or newer (this is v...)".
+- **Package README:** `--version`, `folio-viewer` command, settings and cache paths for Windows, macOS and Linux, "tested on Windows", uninstall, links to SECURITY.md and Releases (absolute URLs), notices mention, no desktop-app wording.
+- **SECURITY.md:** GitHub private vulnerability reporting, scope (npm package and web mode), desktop app retired and unsupported, no email.
+- **Owner:** turn on private vulnerability reporting before making the repo public.

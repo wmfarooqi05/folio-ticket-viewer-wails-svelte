@@ -2,12 +2,21 @@
 # It publishes the tarball that ci.yml built and checksummed for that exact commit, using npm
 # trusted publishing (OIDC, no token anywhere; provenance is added automatically).
 #
-# One-time setup by the owner (all of it is required, see README):
-#   1. The repo is public (npm provenance needs that).
-#   2. npmjs.com > folio-viewer > Settings > Trusted publisher > GitHub Actions: this repo,
-#      workflow filename `publish-npm.yml`, environment `npm-publish`.
-#   3. Repo Settings > Environments > `npm-publish`: add yourself as a required reviewer, and
-#      restrict deployment branches and tags to `v*` tags.
+# Setup order (ticket 27; checked against docs.npmjs.com on Nov 20, 2026):
+#   - Version 0.1.0 is published BY HAND (`npm publish ./folio-viewer-0.1.0.tgz` after `npm login`), not by
+#     this workflow. npm only lets you add a trusted publisher to a package that already exists
+#     (https://docs.npmjs.com/cli/v11/commands/npm-trust: "The package you're configuring must already exist
+#     on the npm registry"). This workflow is for 0.1.1 and later.
+#   - Before 0.1.1, in this order:
+#       1. The repo is public (npm provenance needs that).
+#       2. Repo Settings > Environments > `npm-publish`: add yourself as a required reviewer, and
+#          restrict deployment branches and tags to `v*` tags.
+#       3. npmjs.com > folio-viewer > Settings > Trusted publisher > GitHub Actions: this repo, workflow
+#          filename `publish-npm.yml`, environment `npm-publish`, and TICK "npm publish". Trusted publishers
+#          created after Sep 03, 2026 allow only `npm stage publish` by default, and this workflow runs
+#          `npm publish` (https://docs.npmjs.com/trusted-publishers).
+#       4. Run this workflow from the v0.1.1 tag within 2 days: a trusted publisher whose first publish
+#          has not completed in 2 days expires (same page). So add it right before the release.
 name: publish-npm
 
 on:
@@ -80,4 +89,5 @@ jobs:
         working-directory: npm-files
         run: |
           npm --version
-          npm publish folio-viewer-*.tgz
+          # a relative path needs the ./ prefix (https://docs.npmjs.com/cli/v11/commands/npm-publish)
+          npm publish ./folio-viewer-*.tgz
