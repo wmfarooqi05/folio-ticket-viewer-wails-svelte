@@ -1,10 +1,10 @@
 ---
 type: build
-status: blocked
+status: in-progress
 status_note: null
 waiting_on: null
-blocked_by: ["26"]
-blocked_note: "26 rewrites the README, the Taskfile build and CI; this edits the same files"
+blocked_by: []
+blocked_note: null
 related: ["17", "19", "22", "23", "24", "26"]
 superseded_by: null
 pr: []

@@ -1,8 +1,8 @@
 ---
 type: build
-status: in-progress
-status_note: null
-waiting_on: null
+status: blocked
+status_note: "merged Nov 20, 2026; waiting on the owner: AC3 by eye (folio --app --docs E:\projects\ticket_ui)"
+waiting_on: owner
 blocked_by: []
 blocked_note: null
 related: ["15", "16", "17", "18", "24", "25"]

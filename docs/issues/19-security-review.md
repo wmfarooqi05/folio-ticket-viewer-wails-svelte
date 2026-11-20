@@ -1,10 +1,10 @@
 ---
 type: verify
-status: blocked
+status: open
 status_note: null
 waiting_on: null
-blocked_by: ["26"]
-blocked_note: "16, 17, 18 and 24 are merged; runs after 26 retires the desktop app, so it reviews only what ships (the Node server and the frontend) (owner, Nov 20, 2026)"
+blocked_by: []
+blocked_note: null
 related: []
 superseded_by: null
 pr: []
