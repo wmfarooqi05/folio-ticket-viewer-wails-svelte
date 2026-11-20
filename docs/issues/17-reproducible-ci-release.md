@@ -1,7 +1,7 @@
 ---
 type: build
 status: done
-status_note: "v0.1.0 tagged Nov 21, 2026; CI and local builds give the same tarball hash"
+status_note: "v0.1.0 tagged at 88f480e (Nov 21, 2026); CI and local builds give the same tarball hash"
 waiting_on: null
 blocked_by: []
 blocked_note: null
@@ -68,3 +68,5 @@ Built Nov 20, 2026 on branch `worktree-agent-a8a22d9164d4a33b7`, then revised af
 - **Left for the owner:** push, tag `v0.1.0` (must match `packages/folio-viewer/package.json`), compare the CI exe and tarball hashes with the local ones above (closes AC1); make the repo public for attestations and trusted publishing, then do the setup in the README, or publish the tarball by hand.
 
 **Release check (Nov 21, 2026).** Tag `v0.1.0` at `858dc7c`: the tag's `ci` run passed every job, including `attest build provenance` and `GitHub Release`. The Release tarball's SHA-256 is `1123a4158ed892f438004c4c57a289a28a6b0580eee8c872270524b4a6b88250`. It matches `SHA256SUMS-npm`, and `gh attestation verify` (signer workflow `ci.yml`, source ref `refs/tags/v0.1.0`) passes. A local rebuild from the tag (clean worktree, `npm ci`, `npm run build:web`, `npm pack`) gives the same hash, so the build is reproducible (AC1).
+
+**Re-tagged after the rename (Nov 21, 2026).** The package became `folio-issues-kanban-viewer` before any publish, so the first `v0.1.0` tag and Release were deleted and `v0.1.0` now points at `88f480e`. Its `ci` run passed every job. The Release tarball `folio-issues-kanban-viewer-0.1.0.tgz` has SHA-256 `3a7a900788d899a94a56934c5d16bd31138c37e445a7ff4911a97b1b24150ee2`, it passes `gh attestation verify`, and the local build of the same commit gives the same hash.
