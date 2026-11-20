@@ -4,10 +4,12 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/docs"
+	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/mem"
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/settings"
 	"github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/shell"
 )
@@ -34,12 +36,22 @@ func main() {
 		func(cs docs.ChangeSet) { app.Event.Emit(docs.ChangedEvent, cs) },
 	)
 
+	// The RAM readout (ticket 16): idle until the frontend turns it on from the showMemory setting.
+	benchLog := os.Getenv("FOLIO_BENCH") == "1" // lets ram-check.ps1 compare the readout with its own number
+	memMon := mem.NewMonitor(func(b uint64) {
+		if benchLog {
+			log.Printf("folio.mem: bytes=%d", b)
+		}
+		app.Event.Emit(mem.Event, b)
+	})
+
 	app = application.New(application.Options{
 		Name:        "Folio",
 		Description: "Read-only viewer of file-based tickets",
 		Services: []application.Service{
 			application.NewService(docsSvc),
 			application.NewService(shellSvc),
+			application.NewService(mem.NewMemoryService(memMon)),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -74,6 +86,7 @@ func main() {
 		URL:       "/",
 	}))
 	shell.RememberWindow(shellSvc, win)
+	mem.Attach(memMon, win) // paused while the window is minimised or hidden
 	// Dev-only RAM bench hook (ticket 15): off unless FOLIO_BENCH=1 and FOLIO_BENCH_DIR are set.
 	shell.StartBench(func(event, path string) { app.Event.Emit(event, path) })
 

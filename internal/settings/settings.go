@@ -71,7 +71,9 @@ type Settings struct {
 	AdoWorkItemURL string   `json:"adoWorkItemUrl"`
 	AdoPRURL       string   `json:"adoPrUrl"`
 	Theme          string   `json:"theme"`
-	Window         Window   `json:"window"`
+	// ShowMemory shows the RAM readout in the sidebar footer. Off stops the polling.
+	ShowMemory bool   `json:"showMemory"`
+	Window     Window `json:"window"`
 
 	// SidebarWidth is the tree's width in px. UI state, not a user setting: it sits
 	// beside Window, is not in the Settings dialog and is not patchable through
@@ -90,11 +92,12 @@ type Settings struct {
 // Defaults returns the settings used when no file exists.
 func Defaults() Settings {
 	return Settings{
-		V:         Version,
-		DocsDir:   DefaultDocsDir,
-		DocsRoots: slices.Clone(DefaultDocsRoots),
-		Theme:     ThemeSystem,
-		Window:    Window{Width: 1440, Height: 900},
+		V:          Version,
+		DocsDir:    DefaultDocsDir,
+		DocsRoots:  slices.Clone(DefaultDocsRoots),
+		Theme:      ThemeSystem,
+		ShowMemory: true,
+		Window:     Window{Width: 1440, Height: 900},
 	}
 }
 
@@ -119,7 +122,7 @@ func Path() (string, error) {
 // The bad file has been renamed to settings.json.bad and defaults are returned.
 var ErrCorrupt = errors.New("settings file is corrupt")
 
-var knownKeys = []string{"v", "repoRoot", "docsDir", "docsRoots", "adoWorkItemUrl", "adoPrUrl", "theme", "window", "sidebarWidth", "panelWidth", "sidebarCollapsed"}
+var knownKeys = []string{"v", "repoRoot", "docsDir", "docsRoots", "adoWorkItemUrl", "adoPrUrl", "theme", "showMemory", "window", "sidebarWidth", "panelWidth", "sidebarCollapsed"}
 
 // Load reads path. A missing file yields Defaults and no error. A corrupt file is
 // renamed to <path>.bad, and Load returns Defaults with an error wrapping ErrCorrupt.

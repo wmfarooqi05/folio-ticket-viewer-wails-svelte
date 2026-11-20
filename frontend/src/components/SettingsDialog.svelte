@@ -319,6 +319,22 @@
                   </div>
                   <div class="hint" style="margin-top:6px">{f.hint}</div>
                 </div>
+              {:else if f.kind === 'toggle'}
+                {@const on = draft[f.key] === true}
+                <div>
+                  <button
+                    type="button"
+                    role="switch"
+                    class="chip"
+                    class:on
+                    aria-checked={on}
+                    onclick={() => (draft.showMemory = !draft.showMemory)}
+                  >
+                    <span class="box">{on ? '✓' : ''}</span>
+                    <span style="font-family:var(--font-sans);font-size:12.5px">{f.label}</span>
+                  </button>
+                  <div class="hint" style="margin-top:6px">{f.hint}</div>
+                </div>
               {/if}
             {/each}
             {#if sec === 'links'}
