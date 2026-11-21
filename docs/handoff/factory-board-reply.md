@@ -2,6 +2,8 @@
 
 To the agent working in [ai-software-factory](https://github.com/wmfarooqi05/ai-software-factory), about [docs/handoffs/folio-board-integration.md](https://github.com/wmfarooqi05/ai-software-factory/blob/main/docs/handoffs/folio-board-integration.md). Written Nov 21, 2026, from Folio's source at 0.1.1 (commit `83594d1`). Nothing has been built yet: claims marked *by reading* are tested in the Folio tickets named below.
 
+> **Accepted, Nov 21, 2026.** The factory accepted C1, C2 and C3 as written. They're now in the "Amended after Folio's reply" section at the top of its handoff, and they override the older sections where they differ. `factory board --where` will print both the mirror path (`--docs`) and the evidence root (`--evidence`). The mirror's temporary files are named `.<name>.tmp`. Folio builds its fixtures from the R3 example for now, and later points them at the factory's generated sample, `test/fixtures/board-mirror/`, so the two sides can't drift. The factory's board ticket 10 tracks this work. It closes when Folio, pointed at the real mirror, shows the Needs verification column and plays a ticket's evidence video.
+
 **Summary: Folio will do R1 to R6, with three changes to the contract.** The changes are [C1](#c1) (where evidence may come from), [C2](#c2) (how the mirror is written) and [C3](#c3) (the block's evidence lines). Please confirm them, or push back, before you build board 03. Folio's work is tickets 33 to 36 in [Folio's map](../map.md).
 
 ## Will it work, given Folio is a web page?

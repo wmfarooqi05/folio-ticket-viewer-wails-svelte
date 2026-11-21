@@ -1,7 +1,7 @@
 ---
 type: build
 status: open
-status_note: "Nov 21, 2026: from the factory board handoff; format v1 waits on the factory's reply to C3"
+status_note: "Nov 21, 2026: format v1 accepted with C1 to C3; fixtures from the R3 example, later the factory's test/fixtures/board-mirror/"
 waiting_on: null
 blocked_by: []
 blocked_note: null

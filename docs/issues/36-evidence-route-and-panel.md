@@ -1,10 +1,10 @@
 ---
 type: build
 status: blocked
-status_note: "Nov 21, 2026: waiting for the factory to confirm C1 to C3, then the design"
+status_note: "Nov 21, 2026: contract accepted by the factory; waiting on the UI design"
 waiting_on: owner
 blocked_by: ["35"]
-blocked_note: "needs the factory to confirm the contract (C1 to C3) and a UI design for the evidence panel"
+blocked_note: "the evidence panel and Needs you view need a UI design (brief: assets/36-design-brief.md); the route can start once 35 is done"
 related: ["33", "34", "35"]
 superseded_by: null
 pr: []
@@ -56,4 +56,4 @@ This is the first time Folio serves files from outside the docs folder. It needs
 ## Open questions
 
 ### <a id="q1"></a>Q1 — How should the evidence panel look?
-Above the ticket body, or in a side panel? A thumbnail strip or a grid? Tabs or sections you expand, for the scenarios and the write-up? And is "Needs you" its own view, or a filter on the board? The owner may ask Claude Design, with Folio's Indigo theme ([03 design spec](../assets/03-design-spec.md)) and current screens as input.
+Above the ticket body, or in a side panel? A thumbnail strip or a grid? Tabs or sections you expand, for the scenarios and the write-up? And is "Needs you" its own view, or a filter on the board? The brief for Claude Design is [36-design-brief.md](../assets/36-design-brief.md).
