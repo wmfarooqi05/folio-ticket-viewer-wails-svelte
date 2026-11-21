@@ -23,8 +23,9 @@
   const superseded = $derived(
     index.edges.filter((e) => e.from === rec.path && e.field === 'superseded_by').map((e) => chipFor(e, index, rec.space)),
   )
-  /** the pill already shows the raw text of an unknown status */
-  const note = $derived(meta.status === 'unknown' ? null : meta.status_note)
+  /** an unknown status: the pill shows the status as written, or for a legacy ticket its raw text (status_note) */
+  const pillNote = $derived(meta.status === 'unknown' ? (rec.statusRaw ?? meta.status_note) : meta.status_note)
+  const note = $derived(meta.status === 'unknown' && rec.statusRaw === null ? null : meta.status_note)
 </script>
 
 <section class="rounded-xl border border-line bg-card px-20 pt-16 pb-14 shadow-hair" aria-label="Ticket">
@@ -55,7 +56,7 @@
   <h1 class="mt-8 mb-12 text-xl leading-[1.25] font-semibold tracking-[-0.02em] [text-wrap:pretty]">{rec.title}</h1>
 
   <div class="flex flex-wrap items-center gap-6">
-    <StatusPill status={meta.status} note={meta.status_note} pulse />
+    <StatusPill status={meta.status} note={pillNote} pulse />
     {#if rec.legacy}<span class="text-xs text-fg3 italic">inferred</span>{/if}
     {#each meta.type as ty (ty)}
       <span class="inline-flex h-22 items-center rounded-sm bg-chip px-8 text-xs text-fg2">{ty}</span>

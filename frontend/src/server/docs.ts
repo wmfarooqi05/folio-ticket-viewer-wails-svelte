@@ -14,6 +14,9 @@ export const CHANGED_EVENT = 'docs:changed'
 const READ_WORKERS = 4
 const DEBOUNCE_QUIET = 200 // ms, trailing
 const DEBOUNCE_MAX = 1000 // ms, a flush is forced after this long
+// The format is shared with the frozen Go app (the contract suite checks it), so it stays 1. Since ticket
+// 34 a stamp is [mtime, size, ino]: Go reads the first two and drops the rest. A stamp from an older
+// cache has no ino, so that file reads as changed once.
 const CACHE_VERSION = 1
 /** The per-file cap (L6), the same as Go's docs.MaxFileBytes: a .md over this is not read. */
 export const MAX_FILE_BYTES = 5 << 20
@@ -96,12 +99,18 @@ export interface Roots {
   roots: string[]
 }
 
+/**
+ * What says a file changed. The file ID (ino) is in it because a writer that renames a new file over the
+ * old one (the factory's mirror, ticket 34) can leave the same mtime to the millisecond and the same size;
+ * the new file still has a new ID. A file system that reports no ID gives 0, and then mtime and size decide.
+ */
 interface Stamp {
   mtime: number
   size: number
+  ino: number
 }
-const same = (a: Stamp, b: Stamp) => a.mtime === b.mtime && a.size === b.size
-const stampOf = (st: { mtimeMs: number; size: number }): Stamp => ({ mtime: Math.floor(st.mtimeMs), size: st.size })
+const same = (a: Stamp, b: Stamp) => a.mtime === b.mtime && a.size === b.size && a.ino === b.ino
+const stampOf = (st: { mtimeMs: number; size: number; ino: number | bigint }): Stamp => ({ mtime: Math.floor(st.mtimeMs), size: st.size, ino: Number(st.ino) })
 const sameRoots = (a: Roots, b: Roots) => a.docs === b.docs && a.roots.length === b.roots.length && a.roots.every((r, i) => r === b.roots[i])
 
 class Superseded extends Error {}
@@ -352,7 +361,7 @@ export class DocsService {
       if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null
       throw e
     }
-    let env: { v?: number; parserVersion?: string; docsRoot?: string; roots?: string[]; stamps?: Record<string, [number, number]>; index?: unknown }
+    let env: { v?: number; parserVersion?: string; docsRoot?: string; roots?: string[]; stamps?: Record<string, [number, number, number]>; index?: unknown }
     try {
       env = JSON.parse(text)
       if (env.v !== CACHE_VERSION || env.index === undefined || env.index === null) throw new Error('bad envelope')
@@ -361,7 +370,7 @@ export class DocsService {
       return null
     }
     if (env.parserVersion !== parserVersion || env.docsRoot !== normRoot(r.docs) || !sameList(env.roots ?? [], r.roots)) return null
-    this.stamps = new Map(Object.entries(env.stamps ?? {}).map(([p, v]) => [p, { mtime: v[0], size: v[1] }]))
+    this.stamps = new Map(Object.entries(env.stamps ?? {}).map(([p, v]) => [p, { mtime: v[0], size: v[1], ino: v[2] ?? -1 }]))
     this.announced = new Map()
     return env.index
   }
@@ -378,10 +387,10 @@ export class DocsService {
   }
 
   private async writeCache(r: Roots, parserVersion: string, index: unknown): Promise<void> {
-    const stamps: Record<string, [number, number]> = {}
+    const stamps: Record<string, [number, number, number]> = {}
     for (const p of [...this.stamps.keys()].sort()) {
       const s = this.stamps.get(p)!
-      stamps[p] = [s.mtime, s.size]
+      stamps[p] = [s.mtime, s.size, s.ino]
     }
     const env = { v: CACHE_VERSION, parserVersion, docsRoot: normRoot(r.docs), roots: r.roots, stamps, index }
     await this.testHooks.beforeCacheWrite?.()

@@ -77,8 +77,17 @@ Reached when:
 | 28 | [GitHub recognises the licence, the About box is filled in, both READMEs show badges](issues/28-repo-basics-and-badges.md) | build | — | — | done — licence is MIT on GitHub, badges, About box | — |
 | 29 | [OpenSSF Scorecard: a workflow, a published score and a badge](issues/29-openssf-scorecard.md) | build | — | — | done — Scorecard 6.8 | — |
 | 30 | [Protect main with a ruleset](issues/30-protect-main.md) | task | — | — | done — ruleset "protect main" | — |
-| 31 | [Release 0.1.1 through the workflow, with npm provenance](issues/31-first-provenance-release.md) | build | — | owner | blocked — waiting for something to release; trusted publisher on the day | — |
+| 31 | [Release 0.1.1 through the workflow, with npm provenance](issues/31-first-provenance-release.md) | build | — | owner | blocked — 0.1.1 published with provenance; paused: owner sets "disallow tokens" | — |
 | 32 | [OpenSSF Best Practices badge ("passing" level)](issues/32-best-practices-badge.md) | task | — | — | done — passing, project 16975 | — |
+| 33 | [The `needs-verification` status and column, and the branch badge](issues/33-needs-verification-status-and-branch-badge.md) | build | — | — | in-review — built | — |
+| 34 | [A docs root under `.git`, and a mirror rewritten by renames](issues/34-mirror-docs-root-under-git.md) | task | — | — | in-review — tested; same-ms rename gap fixed | — |
+| 35 | [Parse the factory's board block (v1)](issues/35-factory-board-block-parser.md) | build | — | — | in-review — built | — |
+| 36 | [Serve the evidence, and show it in the ticket view](issues/36-evidence-route-and-panel.md) | build | 38, 39, 40, 41 | — | blocked — split into 38 to 41 | — |
+| 37 | [Close the gaps in the factory board design before building it](issues/37-factory-board-design-gaps.md) | decision | — | — | done — all ten answered as proposed | — |
+| 38 | [The board: verify tokens, folding columns, and the card additions](issues/38-board-verify-styling-rails-and-card.md) | build | — | — | in-review — built; copy success path to check in a normal browser | — |
+| 39 | [The evidence route and the evidence root](issues/39-evidence-route-and-evidence-root.md) | build | 35 | — | open | — |
+| 40 | [The evidence panel in the ticket view](issues/40-evidence-panel-in-the-ticket-view.md) | build | 38, 39 | — | open | — |
+| 41 | [Needs you, the "to verify" count, and the mirror's live status](issues/41-needs-you-and-mirror-status.md) | build | 38 | — | open | — |
 <!-- tickets:end -->
 
 ## Decisions so far

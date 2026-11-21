@@ -28,8 +28,57 @@ defaults:
     shell: bash
 
 jobs:
+  # Which kind of change this is. Docs only (everything under docs/, or a .md at the repo root) skips the
+  # jobs below: a job skipped by its `if` counts as passed for a required check, so the PR can still
+  # merge, and no test runs for a typo. A tag, the schedule, a manual run, an API error or a list too
+  # long to read runs everything.
+  changes:
+    name: what changed
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.files.outputs.code }}
+    steps:
+      - id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          all() { echo "code=true" >> "$GITHUB_OUTPUT"; echo "running everything: $1"; exit 0; }
+          case "$EVENT" in
+            pull_request) files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate -q '.[].filename') || all "the file list failed" ;;
+            push)
+              if [ "$REF_TYPE" = tag ] || [ -z "$BEFORE" ] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ]; then all "a tag or a new branch"; fi
+              n=$(gh api "repos/$REPO/compare/$BEFORE...$AFTER" -q '.files | length') || all "the compare failed"
+              [ "$n" -ge 300 ] && all "$n files, the compare list may be cut"
+              files=$(gh api "repos/$REPO/compare/$BEFORE...$AFTER" -q '.files[].filename') || all "the compare failed" ;;
+            *) all "event $EVENT" ;;
+          esac
+          [ -z "$files" ] && all "no file list"
+          code=false
+          while IFS= read -r f; do
+            case "$f" in
+              docs/*) ;;
+              */*) code=true ;;
+              *.md) ;;
+              *) code=true ;;
+            esac
+          done <<< "$files"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "$(wc -l <<< "$files") files changed; code=$code"
+          head -50 <<< "$files"
+
   checks:
     name: tests and static checks
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -61,6 +110,8 @@ jobs:
 
   audit:
     name: npm audit
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

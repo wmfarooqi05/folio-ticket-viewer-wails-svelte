@@ -10,6 +10,7 @@
 // ---- input -----------------------------------------------------------------
 
 /** One file as Go sends it. Paths are POSIX and relative to the docs root. */
+
 export interface SourceFile {
   path: string
   text: string
@@ -23,6 +24,7 @@ export type Status =
   | 'open'
   | 'in-progress'
   | 'blocked'
+  | 'needs-verification'
   | 'in-review'
   | 'done'
   | 'dropped'
@@ -70,6 +72,10 @@ export interface DocRecord {
   links: Link[]
   map: { kanban: boolean; issuesDir: string } | null
   hasMermaid: boolean
+  /** the status as written, when the frontmatter's status is not one Folio knows (it then reads `unknown`) */
+  statusRaw: string | null
+  /** the factory's generated board block (ticket 35); tickets only */
+  board: Board | null
   diagnostics: Diagnostic[]
   /** 1-based line of each frontmatter key (or legacy label) that can carry a diagnostic */
   fmLines: Record<string, number>
@@ -183,7 +189,7 @@ export interface Diagnostic {
 
 const PERSONS: readonly Person[] = ['owner', 'client', 'dba', 'infra', 'ops']
 const STATUSES: readonly Status[] = [
-  'open', 'in-progress', 'blocked', 'in-review', 'done', 'dropped', 'superseded', 'unknown',
+  'open', 'in-progress', 'blocked', 'needs-verification', 'in-review', 'done', 'dropped', 'superseded', 'unknown',
 ]
 const MAP_STATUSES = ['charted', 'active', 'closed', 'superseded'] as const
 const TYPES = ['build', 'decision', 'grilling', 'task', 'bug', 'spike', 'verify']
@@ -865,6 +871,8 @@ export function parseFile(file: SourceFile, rootName = ''): DocRecord {
   }
   for (const d of fm?.diagnostics ?? []) push(d.line, d.code, 'error', d.message)
   for (const d of scan.diagnostics) push(d.line, d.code, d.level, d.message)
+  const boardScan = kind === 'ticket' ? scanBoard(body, bodyLine - 1) : { board: null, problem: null }
+  if (boardScan.problem) push(boardScan.problem.line, 'BOARD', 'warning', boardScan.problem.message)
 
   let meta: DocRecord['meta'] = null
   let legacyRule: DocRecord['legacyRule'] = null
@@ -907,6 +915,8 @@ export function parseFile(file: SourceFile, rootName = ''): DocRecord {
     links: scan.links,
     map: kind === 'map' ? { kanban: /<!--\s*tickets:begin\b[^>]*\bview=kanban\b/.test(text), issuesDir: dirname(path) === '' ? 'issues' : `${dirname(path)}/issues` } : null,
     hasMermaid: scan.hasMermaid,
+    statusRaw: fm && meta && 'type' in meta && meta.status === 'unknown' ? strOrNull(fm.data.status) : null,
+    board: boardScan.board,
     diagnostics,
     fmLines,
   }
@@ -1232,4 +1242,130 @@ function crossFile(parsed: Record<string, DocRecord>, rootName: string): Index {
     }
   }
   return index
+}
+
+// ---- the factory's board block (ticket 35) -------------------------------------
+// One generated block at the end of a ticket in the factory's
+// mirror, between `<!-- factory:board begin v1 -->` and `<!-- factory:board end -->`. The format is the
+// contract in ai-software-factory's docs/handoffs/folio-board-integration.md (R3, amended by C1 to C3).
+// Pure: no file system and no DOM. The evidence paths are only read here; whether a file may be
+// served (the declared root, the extension list) is the server's call (ticket 36).
+
+export type EvidenceKind = 'image' | 'video' | 'scenarios' | 'write-up' | 'file'
+
+export interface EvidenceFile {
+  name: string
+  /** the local path from the file:/// URL, forward slashes, percent-decoded */
+  path: string
+  kind: EvidenceKind
+}
+
+export interface Board {
+  /** the branch name (the first `code` span of the Branch line, else the whole value) */
+  branch: string | null
+  /** the Branch line's value without backticks, e.g. "feature/refunds (worktree C:/work/x), uncommitted" */
+  branchNote: string | null
+  claim: string | null
+  verdict: string | null
+  evidence: { folder: string; reachable: boolean; files: EvidenceFile[] } | null
+  /** 1-based file line of the begin marker */
+  line: number
+}
+
+export interface BoardScan {
+  board: Board | null
+  /** a block Folio could not use: another version, or no end marker */
+  problem: { line: number; message: string } | null
+}
+
+const BOARD_BEGIN = /^<!--\s*factory:board\s+begin\s+v(\d+)\s*-->$/
+const BOARD_END = /^<!--\s*factory:board\s+end\s*-->$/
+const BOARD_FENCE = /^ {0,3}(`{3,}|~{3,})/
+const BOARD_KEY = /^[-*]\s+(Branch|Claimed by|Verdict)\s*:\s*(.*)$/
+const BOARD_FOLDER = /^Folder\s*:\s*(.*)$/
+const BOARD_FILE = /^[-*]\s+\[([^\]]+)\]\(\s*<?(file:\/\/[^)\s>]+)>?\s*\)\s*(?:[—–]|-{1,2})\s*([a-z-]+)\s*$/i
+const EVIDENCE_KINDS: readonly EvidenceKind[] = ['image', 'video', 'scenarios', 'write-up', 'file']
+const NOT_REACHABLE = /\(not reachable\)\s*$/i
+
+const unquote = (s: string) => s.replace(/`/g, '').trim()
+
+/** file:///U:/a%20b/c.png -> U:/a b/c.png; file:///home/x -> /home/x. Null when it can't be read. */
+export function fileUrlToPath(url: string): string | null {
+  const m = /^file:\/\/(?:localhost)?\/(.*)$/i.exec(url)
+  if (!m) return null
+  let p: string
+  try {
+    p = decodeURIComponent(m[1])
+  } catch {
+    return null
+  }
+  if (p.includes('\0')) return null
+  p = p.replace(/\\/g, '/')
+  return /^[a-zA-Z]:\//.test(p) ? p : '/' + p
+}
+
+/**
+ * Finds the first v1 block outside fenced code. `lineOffset` is the 0-based file line of `body`'s
+ * first line. A block of another version, or one that never ends, gives no board and a problem.
+ */
+export function scanBoard(body: string, lineOffset = 0): BoardScan {
+  const lines = body.split(/\r?\n/)
+  let fence: string | null = null
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim()
+    const f = BOARD_FENCE.exec(lines[i])
+    if (f) {
+      if (fence === null) fence = f[1][0]
+      else if (f[1][0] === fence) fence = null
+      continue
+    }
+    if (fence !== null) continue
+    const b = BOARD_BEGIN.exec(t)
+    if (!b) continue
+    const line = lineOffset + i + 1
+    if (b[1] !== '1') return { board: null, problem: { line, message: `Board block v${b[1]} is not a version Folio reads (v1); shown as plain text` } }
+    let end = -1
+    for (let j = i + 1; j < lines.length; j++) {
+      if (BOARD_END.test(lines[j].trim())) {
+        end = j
+        break
+      }
+    }
+    if (end < 0) return { board: null, problem: { line, message: 'Board block has no end marker; shown as plain text' } }
+    return { board: readBlock(lines.slice(i + 1, end), line), problem: null }
+  }
+  return { board: null, problem: null }
+}
+
+function readBlock(lines: string[], line: number): Board {
+  const board: Board = { branch: null, branchNote: null, claim: null, verdict: null, evidence: null, line }
+  for (const raw of lines) {
+    const t = raw.trim()
+    const k = BOARD_KEY.exec(t)
+    if (k && board.evidence === null) {
+      const value = k[2].trim()
+      if (value === '') continue
+      if (k[1] === 'Branch') {
+        board.branch = /`([^`]+)`/.exec(value)?.[1].trim() ?? unquote(value)
+        board.branchNote = unquote(value)
+      } else if (k[1] === 'Claimed by') board.claim = unquote(value)
+      else board.verdict = value.replace(/`/g, '').trim()
+      continue
+    }
+    const f = BOARD_FOLDER.exec(t)
+    if (f) {
+      const v = f[1].trim()
+      const reachable = !NOT_REACHABLE.test(v)
+      board.evidence = { folder: unquote(v.replace(NOT_REACHABLE, '')), reachable, files: [] }
+      continue
+    }
+    const e = board.evidence && board.evidence.reachable ? BOARD_FILE.exec(t) : null
+    if (e && board.evidence) {
+      const path = fileUrlToPath(e[2])
+      if (path === null) continue
+      const kind = e[3].toLowerCase() as EvidenceKind
+      board.evidence.files.push({ name: e[1].trim(), path, kind: EVIDENCE_KINDS.includes(kind) ? kind : 'file' })
+    }
+  }
+  return board
 }

@@ -98,19 +98,20 @@ describe('Board', () => {
   const nums = (b: ReturnType<typeof boardFor>, id: string) =>
     b.columns.find((c) => c.id === id)!.cards.map((t) => t.num)
 
-  it('has five columns in order', () => {
+  it('has six columns in order, Needs verification before In review', () => {
     expect(boardFor(index, RSA + 'map.md').columns.map((c) => c.label)).toEqual([
       'Open',
       'In progress',
       'Blocked',
+      'Needs verification',
       'In review',
       'Done',
     ])
   })
 
-  it('remove-service-account: 1/1/4/1/2 and a strip of 08 and 09', () => {
+  it('remove-service-account: 1/1/4/0/1/2 and a strip of 08 and 09', () => {
     const b = boardFor(index, RSA + 'map.md')
-    expect(ids(b)).toEqual([1, 1, 4, 1, 2])
+    expect(ids(b)).toEqual([1, 1, 4, 0, 1, 2])
     expect(nums(b, 'open')).toEqual(['05'])
     expect(nums(b, 'in-progress')).toEqual(['04'])
     expect(nums(b, 'blocked')).toEqual(['06', '07', '10', '11'])
@@ -123,7 +124,7 @@ describe('Board', () => {
   it('cash-handling-workflow: unknown tickets sit in Open, 100 sorts last, strip holds 4 dropped and 2 superseded', () => {
     const b = boardFor(index, CHW + 'map.md')
     // Open 6 (02 07 09 25 26 37) + unknown 6 (15 32 33 34 35 36)
-    expect(ids(b)).toEqual([12, 3, 2, 5, 12])
+    expect(ids(b)).toEqual([12, 3, 2, 0, 5, 12])
     expect(nums(b, 'open')).toEqual(['02', '07', '09', '15', '25', '26', '32', '33', '34', '35', '36', '37'])
     expect(nums(b, 'in-progress')).toEqual(['08', '27', '30'])
     expect(nums(b, 'blocked')).toEqual(['13', '21'])
@@ -135,15 +136,15 @@ describe('Board', () => {
 
   it('the nested map owns only its own folder, not the parent tickets', () => {
     const b = boardFor(index, CHW + 'step2b-payment-identification/map.md')
-    expect(ids(b)).toEqual([2, 1, 0, 1, 3])
+    expect(ids(b)).toEqual([2, 1, 0, 0, 1, 3])
     expect(nums(b, 'open')).toEqual(['43', '46'])
     expect(b.strip).toEqual([])
     expect(b.total).toBe(7)
   })
 
-  it('cloud-migration 1 blocked + 1 done, one-cash-mover 1/1/0/0/1', () => {
-    expect(ids(boardFor(index, CM + 'map.md'))).toEqual([0, 0, 1, 0, 1])
-    expect(ids(boardFor(index, OCM + 'map.md'))).toEqual([1, 1, 0, 0, 1])
+  it('cloud-migration 1 blocked + 1 done, one-cash-mover 1/1/0/0/0/1', () => {
+    expect(ids(boardFor(index, CM + 'map.md'))).toEqual([0, 0, 1, 0, 0, 1])
+    expect(ids(boardFor(index, OCM + 'map.md'))).toEqual([1, 1, 0, 0, 0, 1])
   })
 
   it('a path that is not a map gives an empty board', () => {
