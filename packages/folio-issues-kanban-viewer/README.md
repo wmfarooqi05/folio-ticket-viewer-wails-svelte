@@ -26,6 +26,7 @@ two global installs would clash.)
 | Option | |
 |---|---|
 | `--docs <path>` | the repo root or docs folder. Without it, the page asks for a path. |
+| `--evidence <folder>` | the folder agents stage evidence in (screenshots, videos). A ticket's evidence is shown only from inside it. For this run only; Settings can save one. |
 | `--port <n>` | listen on this port. Default: a random free port. |
 | `--app` | open an Edge app window (no tabs or address bar) instead of a browser tab. Windows only; falls back to the normal browser if Edge is not found. |
 | `--no-open` | print the link but do not open the browser |

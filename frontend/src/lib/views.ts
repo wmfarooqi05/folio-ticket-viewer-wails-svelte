@@ -66,29 +66,91 @@ export function ageFill(days: number): number {
 export interface WaitingGroup {
   person: Person
   label: string
-  /** oldest edit first */
+  /**
+   * Owner only (ticket 41, ticket 37 D4): the Needs verification tickets, lifted above the rest of the
+   * group, oldest first. Empty for everyone else.
+   */
+  verify: TicketRec[]
+  /** the rest, oldest first */
   rows: TicketRec[]
 }
 
-/** Tickets with `waiting_on` set and not closed, grouped by person, Owner first. Empty groups are left out. */
+/**
+ * When a ticket started waiting, for its age (unix ms), or null for no age (ticket 41, Q3). A ticket in the
+ * factory's mirror is rewritten on every factory write, so its mtime means nothing: it has an age only
+ * when its board block says `Waiting since`. Any other ticket keeps its mtime (03 D4).
+ */
+export function waitingSince(rec: DocRecord): number | null {
+  if (!rec.board) return rec.mtime
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/.exec(rec.board.waitingSince ?? '')
+  if (!m) return null
+  const t = new Date(+m[1], +m[2] - 1, +m[3], m[4] ? +m[4] : 0, m[5] ? +m[5] : 0).getTime()
+  return Number.isNaN(t) ? null : t
+}
+
+/** Oldest wait first; tickets with no known age last, by path. */
+function byWaiting(a: DocRecord, b: DocRecord): number {
+  const x = waitingSince(a)
+  const y = waitingSince(b)
+  if (x === null || y === null) return x === y ? a.path.localeCompare(b.path) : x === null ? 1 : -1
+  return x - y || a.path.localeCompare(b.path)
+}
+
+/** "2h", "1d", "12d": a short age for the Needs verification rows (the mockup's). */
+export function shortAge(since: number, now: number): string {
+  const mins = Math.max(0, Math.floor((now - since) / 60_000))
+  if (mins < 60) return mins <= 1 ? 'now' : `${mins}m`
+  const hours = Math.floor(mins / 60)
+  return hours < 24 ? `${hours}h` : `${Math.floor(hours / 24)}d`
+}
+
+/**
+ * Tickets with `waiting_on` set and not closed, grouped by person, Owner first. Empty groups are left
+ * out. The owner's Needs verification tickets come first in their group, in `verify`.
+ */
 export function waitingOn(index: Index): WaitingGroup[] {
   const rows = Object.values(index.files).filter(
     (r): r is TicketRec => isTicket(r) && r.meta.waiting_on !== null && !isClosed(r.meta.status),
   )
-  return PEOPLE.map((person) => ({
-    person,
-    label: PERSON_LABEL[person],
-    rows: rows.filter((r) => r.meta.waiting_on === person).sort(byOldest),
-  })).filter((g) => g.rows.length > 0)
+  return PEOPLE.map((person) => {
+    const mine = rows.filter((r) => r.meta.waiting_on === person)
+    const verify = person === 'owner' ? mine.filter((r) => r.meta.status === 'needs-verification').sort(byWaiting) : []
+    return {
+      person,
+      label: PERSON_LABEL[person],
+      verify,
+      rows: mine.filter((r) => !verify.includes(r)).sort(byWaiting),
+    }
+  }).filter((g) => g.verify.length + g.rows.length > 0)
 }
 
 export function waitingCount(index: Index): number {
-  return waitingOn(index).reduce((n, g) => n + g.rows.length, 0)
+  return waitingOn(index).reduce((n, g) => n + g.verify.length + g.rows.length, 0)
+}
+
+/** Needs verification tickets waiting on the owner: the tree's "N to verify" (ticket 41). */
+export function verifyCount(index: Index): number {
+  return waitingOn(index).find((g) => g.person === 'owner')?.verify.length ?? 0
 }
 
 /** Distinct spaces among the waiting tickets (the header summary). */
 export function waitingSpaces(groups: WaitingGroup[]): number {
-  return new Set(groups.flatMap((g) => g.rows.map((r) => r.space))).size
+  return new Set(groups.flatMap((g) => [...g.verify, ...g.rows].map((r) => r.space))).size
+}
+
+/** The docs folder is the factory's mirror when any ticket in it has a board block (ticket 41, Q2). */
+export const isMirror = (index: Index): boolean => Object.values(index.files).some((r) => r.board !== null && r.board !== undefined)
+
+/** "1 video · 3 images", from the board block itself (no server call): the Needs you rows' evidence summary. */
+export function evidenceCounts(rec: DocRecord): string {
+  const files = rec.board?.evidence?.reachable ? rec.board.evidence.files : []
+  const n = (k: string) => files.filter((f) => f.kind === k).length
+  const parts: string[] = []
+  const v = n('video')
+  const i = n('image')
+  if (v) parts.push(`${v} ${v === 1 ? 'video' : 'videos'}`)
+  if (i) parts.push(`${i} ${i === 1 ? 'image' : 'images'}`)
+  return parts.join(' · ')
 }
 
 // ---- Open questions ------------------------------------------------------------
@@ -255,11 +317,13 @@ export const STATUS_VAR: Record<Status, string> = {
 
 export interface PinnedCounts {
   waiting: number
+  /** Needs verification tickets waiting on the owner (ticket 41) */
+  verify: number
   /** with closed tickets hidden, the default (04 D6) */
   questions: number
 }
 
 /** Counts for the tree's pinned rows. Same functions as the views. */
 export function pinnedCounts(index: Index): PinnedCounts {
-  return { waiting: waitingCount(index), questions: openQuestions(index).length }
+  return { waiting: waitingCount(index), verify: verifyCount(index), questions: openQuestions(index).length }
 }

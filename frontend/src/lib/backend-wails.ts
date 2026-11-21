@@ -31,7 +31,16 @@ export const backend: Backend = {
   logTimings: (line) => DocsService.LogTimings(line),
   readBatch: (paths) => DocsService.ReadBatch(paths),
   docsFromCommandLine: async () => null,
-  onDocsChanged: (handler) => Events.On('docs:changed', (e) => handler(e.data as ChangeSet)),
+  // the desktop app is retired and frozen (RETIRED.md): no evidence route
+  getEvidence: async () => ({ root: '', fromCommandLine: false, reachable: false }),
+  setEvidence: async () => {
+    throw new Error('the evidence folder needs web mode')
+  },
+  evidenceFiles: async () => ({ root: '', folder: null, reachable: true, files: [] }),
+  onDocsChanged: (handler, onState) => {
+    onState?.(true) // Wails events need no connection
+    return Events.On('docs:changed', (e) => handler(e.data as ChangeSet))
+  },
 
   clearData: async () => {
     const r = await LocalDataService.ClearData()

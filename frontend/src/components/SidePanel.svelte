@@ -201,6 +201,7 @@
           {range}
           onpanel={onpush}
           {onnavigate}
+          {onpromote}
         />
       {/if}
     </div>

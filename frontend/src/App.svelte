@@ -14,7 +14,8 @@
   import OpenQuestions from './components/views/OpenQuestions.svelte'
   import MapModes from './components/views/MapModes.svelte'
   import { pinnedItems } from './lib/pinned'
-  import { pinnedCounts, type ViewId } from './lib/views'
+  import { isMirror, pinnedCounts, type ViewId } from './lib/views'
+  import { live } from './lib/live.svelte'
   import * as panelStack from './lib/panel'
   import { Layout } from './lib/layout.svelte'
   import { checkPath, isNetworkPath, noRootsText, pickRoot } from './lib/folder'
@@ -101,6 +102,9 @@
   const docsPathParts = $derived(splitPath(docsPath))
   // the engine says "412 files"; the mockup's footer says "Watching 412 files"
   const footerText = $derived(/^\d+ files?$/.test(status) ? `Watching ${status}` : status)
+  // Q2: the factory's mirror is followed live; say so, or that the stream is reconnecting
+  const mirror = $derived(!!index && isMirror(index))
+  const mirrorText = $derived(mirror ? (live.connected ? 'mirror live' : 'mirror reconnecting') : '')
 
   // The RAM readout (ticket 16). Go measures and emits `mem:changed` only when the total moves by
   // 1 MB; this sets one text node. Polling runs only while the footer is on screen and the setting
@@ -503,8 +507,8 @@
           </form>
         {/if}
         <footer class="flex items-center gap-8 border-t border-line px-14 py-8 text-[11px] text-fg3">
-          <span class="size-6 shrink-0 rounded-full bg-s-done"></span>
-          <span class="min-w-0 flex-1 truncate">{footerText}</span>
+          <span class="size-6 shrink-0 rounded-full {mirror && !live.connected ? 'bg-s-rev' : 'bg-s-done'}"></span>
+          <span class="min-w-0 flex-1 truncate">{footerText}{mirrorText ? ` · ${mirrorText}` : ''}</span>
           {#if memText}
             <span class="shrink-0 tabular-nums" title={MEMORY_TIP}>{memText}</span>
           {/if}

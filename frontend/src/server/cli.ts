@@ -8,6 +8,8 @@ import { start, type Running } from './server'
 
 export interface Args {
   docs?: string
+  /** the folder the factory stages evidence in (ticket 39) */
+  evidence?: string
   port: number
   open: boolean
   /** open an Edge app window (no tabs or address bar) instead of a browser tab; Windows only */
@@ -19,11 +21,14 @@ export interface Args {
 export const HELP = `folio: a read-only viewer for Markdown tickets, in your browser
 
 Usage:
-  folio --docs <path> [--port <n>] [--app] [--no-open]
+  folio --docs <path> [--evidence <folder>] [--port <n>] [--app] [--no-open]
 
 Options:
   --docs <path>   the repo root or its docs folder: one that holds modules/, handoffs/ or patterns/,
                   or any docs folder with a map.md or an issues/ folder (then the whole docs folder is read)
+  --evidence <folder>
+                  the folder agents stage evidence in (screenshots, videos). Folio shows a ticket's
+                  evidence files only from inside this folder. For this run only; Settings can save one
   --port <n>      listen on this port (default: a random free port)
   --app           open Folio in an Edge app window (no tabs or address bar). Windows only: on other
                   systems, or when Edge is not found, the normal browser opens instead
@@ -52,6 +57,9 @@ export function parseArgs(argv: string[]): Args {
     switch (flag) {
       case '--docs':
         a.docs = take()
+        break
+      case '--evidence':
+        a.evidence = take()
         break
       case '--port': {
         const v = take()
@@ -168,7 +176,12 @@ export async function main(argv: string[], version = ''): Promise<void> {
 
   let running: Running
   try {
-    running = await start({ distDir, docs: args.docs ? path.resolve(args.docs) : undefined, port: args.port })
+    running = await start({
+      distDir,
+      docs: args.docs ? path.resolve(args.docs) : undefined,
+      evidence: args.evidence ? path.resolve(args.evidence) : undefined,
+      port: args.port,
+    })
   } catch (e) {
     const err = e as NodeJS.ErrnoException
     console.error(err.code === 'EADDRINUSE' ? `folio: port ${args.port} is already in use` : `folio: ${err.message}`)

@@ -5,6 +5,7 @@
   import * as api from '../lib/api'
   import type { Config, RootCheck } from '../lib/api'
   import { checkPath, isNetworkPath, noRootsText, pickRoot } from '../lib/folder'
+  import EvidenceField from './EvidenceField.svelte'
   import {
     SECTIONS,
     THEMES,
@@ -464,6 +465,9 @@
                 </div>
               {/if}
             {/each}
+            {#if sec === 'folder' && api.isWeb}
+              <EvidenceField />
+            {/if}
             {#if sec === 'data'}
               <div>
                 <div class="lbl">Clear data</div>

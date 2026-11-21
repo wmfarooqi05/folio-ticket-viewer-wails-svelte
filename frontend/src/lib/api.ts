@@ -2,7 +2,7 @@
 // generated bindings, so the rest of the app can be tested with a fake. The backend itself
 // (the Wails exe, or the Node server in web mode) is picked in one place: lib/backend.ts.
 import { backend, isWeb } from './backend'
-import type { ClearDataResult, TooLargeFile } from './backend-types'
+import type { ClearDataResult, EvidenceList, EvidenceRoot, TooLargeFile } from './backend-types'
 import type {
   ChangeSet,
   ScanResult,
@@ -77,8 +77,19 @@ export async function readAll(paths: string[]): Promise<{ files: SourceFile[]; m
 /** Web mode: the folder from --docs, which wins over the saved one for this session; null otherwise. */
 export const docsFromCommandLine = (): Promise<string | null> => backend.docsFromCommandLine()
 
+/** The evidence root in effect (ticket 39). */
+export const getEvidence = (): Promise<EvidenceRoot> => backend.getEvidence()
+/** Saves the evidence root ("" clears it); --evidence still wins for this run. */
+export const setEvidence = (path: string): Promise<EvidenceRoot> => backend.setEvidence(path)
+/** A ticket's evidence files and whether each is served. */
+export const evidenceFiles = (ticketPath: string): Promise<EvidenceList> => backend.evidenceFiles(ticketPath)
+/** The URL the browser loads an evidence file from: by ticket and index, never by path. */
+export const evidenceUrl = (ticketPath: string, index: number): string =>
+  `/evidence/${ticketPath.split('/').map(encodeURIComponent).join('/')}/${index}`
+
 /** Subscribes to the debounced `docs:changed` event. Returns an unsubscribe function. */
-export const onDocsChanged = (handler: (cs: ChangeSet) => void): (() => void) => backend.onDocsChanged(handler)
+export const onDocsChanged = (handler: (cs: ChangeSet) => void, onState?: (connected: boolean) => void): (() => void) =>
+  backend.onDocsChanged(handler, onState)
 
 /**
  * "Clear data" (ticket 18): deletes the index cache now. On the desktop it also schedules the WebView2

@@ -11,6 +11,33 @@ export interface TooLargeFile {
   size: number
 }
 
+/** The evidence root (ticket 39): --evidence for this run, else the one saved in Settings, else "". */
+export interface EvidenceRoot {
+  root: string
+  fromCommandLine: boolean
+  /** a folder that exists now */
+  reachable: boolean
+}
+
+export type EvidenceRefusal = 'root not set' | 'not reachable' | 'type not served' | 'outside the root' | 'missing' | 'no such file'
+
+/** One file a ticket's board block lists, and whether Folio serves it (and why not). */
+export interface EvidenceEntry {
+  index: number
+  name: string
+  kind: 'image' | 'video' | 'scenarios' | 'write-up' | 'file'
+  served: boolean
+  reason?: EvidenceRefusal
+  size?: number
+}
+
+export interface EvidenceList {
+  root: string
+  folder: string | null
+  reachable: boolean
+  files: EvidenceEntry[]
+}
+
 export interface BatchResult {
   files?: SourceFile[] | null
   missing?: string[] | null
@@ -49,7 +76,12 @@ export interface Backend {
   readBatch(paths: string[]): Promise<BatchResult>
   /** Web mode: the folder given with --docs (it wins over the saved one this session), or null. */
   docsFromCommandLine(): Promise<string | null>
-  onDocsChanged(handler: (cs: ChangeSet) => void): () => void
+  /** Web mode only (ticket 39). The desktop app has no evidence support: its stubs say "not set". */
+  getEvidence(): Promise<EvidenceRoot>
+  setEvidence(path: string): Promise<EvidenceRoot>
+  evidenceFiles(ticketPath: string): Promise<EvidenceList>
+  /** `onState`: web mode reports whether the event stream is connected (ticket 41's "Mirror live") */
+  onDocsChanged(handler: (cs: ChangeSet) => void, onState?: (connected: boolean) => void): () => void
 
   /** Deletes the index cache now; on the desktop also schedules the WebView2 profile for the next start. */
   clearData(): Promise<ClearDataResult>

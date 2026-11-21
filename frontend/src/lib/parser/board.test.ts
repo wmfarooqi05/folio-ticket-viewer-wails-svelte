@@ -3,8 +3,9 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { boardFor, boardWidth, foldedColumns } from '../views'
-import { fileUrlToPath, parseFile, scanBoard, type DocRecord, type Index } from './index'
+import { boardFor, boardWidth, evidenceCounts, foldedColumns, isMirror, pinnedCounts, shortAge, verifyCount, waitingOn, waitingSince } from '../views'
+import { pinnedItems } from '../pinned'
+import { buildIndex, fileUrlToPath, parseFile, scanBoard, type DocRecord, type Index } from './index'
 import { buildIndexFromDisk } from './node'
 
 const mirror = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'fixtures', 'board-mirror')
@@ -199,5 +200,75 @@ describe('folding columns into rails (ticket 38, ticket 37 D6)', () => {
   it('a rail the owner opened stays open, and nothing folds in its place (the board scrolls instead)', () => {
     expect(ids(foldedColumns(1047, new Set(['done'])))).toEqual([])
     expect(ids(foldedColumns(100, new Set(['open', 'blocked'])))).toEqual(['done', 'in-review'])
+  })
+})
+
+describe('Needs you, ages and the mirror (ticket 41)', () => {
+  let index: Index
+  beforeAll(async () => {
+    index = await buildIndexFromDisk(mirror)
+  })
+  const at = (block: string, status = 'needs-verification', mtime = 5) =>
+    parseFile({
+      path: 'modules/pay/issues/05-x.md',
+      mtime,
+      text: `---\ntype: build\nstatus: ${status}\nwaiting_on: owner\n---\n\n# 05 — X\n\n<!-- factory:board begin v1 -->\n${block}\n<!-- factory:board end -->\n`,
+    })
+
+  it('AC1: Waiting on lists 04 and 08 first under Owner, and the tree says "2 to verify"', () => {
+    const owner = waitingOn(index).find((g) => g.person === 'owner')!
+    expect(owner.verify.map((r) => r.num)).toEqual(['04', '08'])
+    expect(owner.rows.map((r) => r.num)).toEqual([])
+    expect(verifyCount(index)).toBe(2)
+    const counts = pinnedCounts(index)
+    expect(counts.verify).toBe(2)
+    expect(pinnedItems(counts)[0]).toMatchObject({ id: 'waiting', badge: '2 to verify', count: counts.waiting })
+    expect(pinnedItems({ waiting: 3, verify: 0, questions: 0 })[0].badge).toBeNull()
+  })
+
+  it('reads "Waiting since" from the block', () => {
+    expect(at('- Waiting since: 2026-11-21 10:02').board?.waitingSince).toBe('2026-11-21 10:02')
+    expect(at('- Waiting since: `2026-11-21 10:02`').board?.waitingSince).toBe('2026-11-21 10:02')
+  })
+
+  it('AC2: a mirror ticket ages from Waiting since, or has no age; an ordinary ticket ages from its mtime', () => {
+    expect(waitingSince(at('- Waiting since: 2026-11-21 10:02'))).toBe(new Date(2026, 10, 21, 10, 2).getTime())
+    expect(waitingSince(at('- Waiting since: 2026-11-21'))).toBe(new Date(2026, 10, 21).getTime())
+    expect(waitingSince(at('- Branch: `b`'))).toBeNull()
+    expect(waitingSince(at('- Waiting since: soon'))).toBeNull()
+    const plain = parseFile({ path: 'modules/pay/issues/06-y.md', mtime: 1234, text: '---\nstatus: open\nwaiting_on: owner\n---\n\n# 06 — Y\n' })
+    expect(waitingSince(plain)).toBe(1234)
+  })
+
+  it('oldest wait first; tickets with no age last', () => {
+    const t = (n: string, line: string) => ({
+      path: `modules/q/issues/${n}-x.md`,
+      mtime: 9,
+      text: `---\nstatus: needs-verification\nwaiting_on: owner\n---\n\n# ${n} — X\n\n<!-- factory:board begin v1 -->\n${line}\n<!-- factory:board end -->\n`,
+    })
+    const idx = buildIndex([t('01', '- Waiting since: 2026-11-21 12:00'), t('02', '- Branch: `b`'), t('03', '- Waiting since: 2026-11-20 08:00')])
+    expect(waitingOn(idx)[0].verify.map((r) => r.num)).toEqual(['03', '01', '02'])
+  })
+
+  it('shortAge: minutes, hours, days', () => {
+    const t = Date.UTC(2026, 10, 22, 12)
+    expect(shortAge(t, t)).toBe('now')
+    expect(shortAge(t - 30 * 60_000, t)).toBe('30m')
+    expect(shortAge(t - 2 * 3_600_000, t)).toBe('2h')
+    expect(shortAge(t - 50 * 3_600_000, t)).toBe('2d')
+    expect(shortAge(t + 60_000, t)).toBe('now')
+  })
+
+  it('AC3: the mirror fixture is a mirror; the ordinary fixtures are not', async () => {
+    expect(isMirror(index)).toBe(true)
+    const plain = await buildIndexFromDisk(join(mirror, '..', 'docs'))
+    expect(isMirror(plain)).toBe(false)
+    expect(isMirror(buildIndex([]))).toBe(false)
+  })
+
+  it('the evidence summary for a Needs you row comes from the block', () => {
+    const r = index.files['modules/pay/issues/04-refund-screen.md']
+    expect(evidenceCounts(r)).toBe('1 video · 1 image')
+    expect(evidenceCounts(index.files['modules/pay/issues/08-chargebacks.md'])).toBe('')
   })
 })

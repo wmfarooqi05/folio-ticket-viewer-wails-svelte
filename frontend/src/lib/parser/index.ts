@@ -1266,6 +1266,8 @@ export interface Board {
   /** the Branch line's value without backticks, e.g. "feature/refunds (worktree C:/work/x), uncommitted" */
   branchNote: string | null
   claim: string | null
+  /** `- Waiting since: 2026-11-21 10:02` (ticket 41): when the ticket started waiting on the owner, as written */
+  waitingSince: string | null
   verdict: string | null
   evidence: { folder: string; reachable: boolean; files: EvidenceFile[] } | null
   /** 1-based file line of the begin marker */
@@ -1281,7 +1283,7 @@ export interface BoardScan {
 const BOARD_BEGIN = /^<!--\s*factory:board\s+begin\s+v(\d+)\s*-->$/
 const BOARD_END = /^<!--\s*factory:board\s+end\s*-->$/
 const BOARD_FENCE = /^ {0,3}(`{3,}|~{3,})/
-const BOARD_KEY = /^[-*]\s+(Branch|Claimed by|Verdict)\s*:\s*(.*)$/
+const BOARD_KEY = /^[-*]\s+(Branch|Claimed by|Verdict|Waiting since)\s*:\s*(.*)$/
 const BOARD_FOLDER = /^Folder\s*:\s*(.*)$/
 const BOARD_FILE = /^[-*]\s+\[([^\]]+)\]\(\s*<?(file:\/\/[^)\s>]+)>?\s*\)\s*(?:[—–]|-{1,2})\s*([a-z-]+)\s*$/i
 const EVIDENCE_KINDS: readonly EvidenceKind[] = ['image', 'video', 'scenarios', 'write-up', 'file']
@@ -1338,7 +1340,7 @@ export function scanBoard(body: string, lineOffset = 0): BoardScan {
 }
 
 function readBlock(lines: string[], line: number): Board {
-  const board: Board = { branch: null, branchNote: null, claim: null, verdict: null, evidence: null, line }
+  const board: Board = { branch: null, branchNote: null, claim: null, waitingSince: null, verdict: null, evidence: null, line }
   for (const raw of lines) {
     const t = raw.trim()
     const k = BOARD_KEY.exec(t)
@@ -1349,6 +1351,7 @@ function readBlock(lines: string[], line: number): Board {
         board.branch = /`([^`]+)`/.exec(value)?.[1].trim() ?? unquote(value)
         board.branchNote = unquote(value)
       } else if (k[1] === 'Claimed by') board.claim = unquote(value)
+      else if (k[1] === 'Waiting since') board.waitingSince = unquote(value)
       else board.verdict = value.replace(/`/g, '').trim()
       continue
     }

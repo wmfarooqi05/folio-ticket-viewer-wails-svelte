@@ -82,12 +82,12 @@ Reached when:
 | 33 | [The `needs-verification` status and column, and the branch badge](issues/33-needs-verification-status-and-branch-badge.md) | build | — | — | in-review — built | — |
 | 34 | [A docs root under `.git`, and a mirror rewritten by renames](issues/34-mirror-docs-root-under-git.md) | task | — | — | in-review — tested; same-ms rename gap fixed | — |
 | 35 | [Parse the factory's board block (v1)](issues/35-factory-board-block-parser.md) | build | — | — | in-review — built | — |
-| 36 | [Serve the evidence, and show it in the ticket view](issues/36-evidence-route-and-panel.md) | build | 38, 39, 40, 41 | — | blocked — split into 38 to 41 | — |
+| 36 | [Serve the evidence, and show it in the ticket view](issues/36-evidence-route-and-panel.md) | build | 38, 39, 40, 41 | — | blocked — 38 to 41 built, in review | — |
 | 37 | [Close the gaps in the factory board design before building it](issues/37-factory-board-design-gaps.md) | decision | — | — | done — all ten answered as proposed | — |
 | 38 | [The board: verify tokens, folding columns, and the card additions](issues/38-board-verify-styling-rails-and-card.md) | build | — | — | in-review — built; copy success path to check in a normal browser | — |
-| 39 | [The evidence route and the evidence root](issues/39-evidence-route-and-evidence-root.md) | build | 35 | — | open | — |
-| 40 | [The evidence panel in the ticket view](issues/40-evidence-panel-in-the-ticket-view.md) | build | 38, 39 | — | open | — |
-| 41 | [Needs you, the "to verify" count, and the mirror's live status](issues/41-needs-you-and-mirror-status.md) | build | 38 | — | open | — |
+| 39 | [The evidence route and the evidence root](issues/39-evidence-route-and-evidence-root.md) | build | 35 | — | in-review — built; 31 route tests, seeking checked in a browser | — |
+| 40 | [The evidence panel in the ticket view](issues/40-evidence-panel-in-the-ticket-view.md) | build | 38, 39 | — | in-review — built; every state checked in a browser | — |
+| 41 | [Needs you, the "to verify" count, and the mirror's live status](issues/41-needs-you-and-mirror-status.md) | build | 38 | — | in-review — built; checked live and reconnecting | — |
 <!-- tickets:end -->
 
 ## Decisions so far

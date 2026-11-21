@@ -16,6 +16,20 @@ Each entry has a **Security** line. It names every publicly known vulnerability 
   - on a narrow window, columns fold into rails (Done first), and In progress and Needs verification never fold;
   - long branch names keep their ending;
   - a card that arrives in Needs verification while you watch gets a short ring.
+- **Evidence files** (ticket 39): with `--evidence <folder>`, or a folder saved in Settings, Folio serves the screenshots, videos and scenario files a ticket's board block lists. It serves them only from inside that folder, only of those types, and videos can seek. Without a folder, nothing is served. 
+- **The evidence panel** (ticket 40): a ticket with evidence shows it under its header:
+  - the video, playable and seekable;
+  - thumbnails that open full size (← → to move, Esc to close);
+  - the scenarios and write-up as tabs;
+  - the owner's verdict when there is one;
+  - the branch and the agent's worktree in the header.
+  - It says plainly when the folder can't be read, a file is missing, or no evidence folder is set.
+- **Fixed:** numbered and bulleted lists in documents showed no numbers or bullets.
+- **Needs you** (ticket 41):
+  - Waiting on lists what needs your verification first, with what was built, the evidence, copy ref and how long it has waited;
+  - the tree shows "N to verify";
+  - on the factory's mirror, the board and footer say "Mirror live · updated 10:14", or "reconnecting";
+  - a mirror ticket's age comes from its `Waiting since:` line, and with no such line it shows none.
 - **CI:** a pull request that changes only docs skips the test and security jobs.
 - **Security:** no vulnerabilities fixed.
 

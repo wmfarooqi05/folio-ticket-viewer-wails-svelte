@@ -58,13 +58,19 @@ export const backend: Backend = {
   logTimings: async () => {}, // the desktop app logs these for the benchmarks; the browser has the console
   readBatch: (paths) => call('readBatch', paths),
   docsFromCommandLine: () => call('docsFromCommandLine'),
-  onDocsChanged: (handler) => {
+  getEvidence: () => call('getEvidence'),
+  setEvidence: (path) => call('setEvidence', path),
+  evidenceFiles: (ticketPath) => call('evidenceFiles', ticketPath),
+  onDocsChanged: (handler, onState) => {
     const es = new EventSource('/api/events')
     let opened = false
+    // "reconnecting" while EventSource retries by itself; "live" again on its next open
+    es.addEventListener('error', () => onState?.(false))
     es.addEventListener('docs:changed', (e) => handler(JSON.parse((e as MessageEvent<string>).data) as ChangeSet))
     // EventSource reconnects by itself. Anything that changed in the gap was never sent, so diff
     // against the server's stamps (a scan) and deliver that as one change set.
     es.addEventListener('open', () => {
+      onState?.(true)
       if (opened) {
         void call<{ changed: string[]; removed: string[] }>('scan')
           .then((r) => handler({ changed: r.changed, removed: r.removed, rescan: true }))
