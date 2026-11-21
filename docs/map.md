@@ -82,7 +82,8 @@ Reached when:
 | 33 | [The `needs-verification` status and column, and the branch badge](issues/33-needs-verification-status-and-branch-badge.md) | build | — | — | in-review — built | — |
 | 34 | [A docs root under `.git`, and a mirror rewritten by renames](issues/34-mirror-docs-root-under-git.md) | task | — | — | in-review — tested; same-ms rename gap fixed | — |
 | 35 | [Parse the factory's board block (v1)](issues/35-factory-board-block-parser.md) | build | — | — | in-review — built | — |
-| 36 | [Serve the evidence, and show it in the ticket view](issues/36-evidence-route-and-panel.md) | build | 35 | owner | blocked — contract accepted; waiting on the UI design | — |
+| 36 | [Serve the evidence, and show it in the ticket view](issues/36-evidence-route-and-panel.md) | build | 35, 37 | owner | blocked — design delivered; its gaps are ticket 37 | — |
+| 37 | [Close the gaps in the factory board design before building it](issues/37-factory-board-design-gaps.md) | decision | — | owner | open — 10 questions on the mockup | — |
 <!-- tickets:end -->
 
 ## Decisions so far
