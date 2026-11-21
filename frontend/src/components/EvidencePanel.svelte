@@ -5,6 +5,7 @@
   // so copy ref is the only action.
   import * as api from '../lib/api'
   import type { EvidenceEntry, EvidenceList } from '../lib/backend-types'
+  import { allowChoices } from '../lib/evidence-root'
   import { parseFile, type DocRecord, type Index } from '../lib/parser'
   import { renderMarkdown } from '../lib/render/markdown'
   import CopyRef from './CopyRef.svelte'
@@ -23,12 +24,14 @@
   const meta = $derived(rec.meta && 'waiting_on' in rec.meta ? rec.meta : null)
   const yourTurn = $derived(meta?.status === 'needs-verification')
 
-  // Fetched again when the ticket changes on disk (the mirror rewrites it).
+  // Fetched again when the ticket changes on disk (the mirror rewrites it), and after Allow (ticket 45).
   let list = $state<EvidenceList | null>(null)
   let failed = $state<string | null>(null)
+  let reload = $state(0)
   $effect(() => {
     const path = rec.path
     void rec.mtime
+    void reload
     if (!board?.evidence) {
       list = null
       return
@@ -51,6 +54,25 @@
   const others = $derived(files.filter((f) => f.kind === 'file' || (!f.served && f.reason !== 'missing' && f.reason !== 'root not set')))
   const rootUnset = $derived(list !== null && list.root === '' && files.length > 0)
   const url = (f: EvidenceEntry) => api.evidenceUrl(rec.path, f.index)
+
+  // Ticket 45: with no evidence folder set, offer the ticket's folder and its parents. Saving one is the
+  // owner's choice (C1 stays: the ticket never decides on its own), and it lands in Settings like a typed one.
+  const choices = $derived(board?.evidence ? allowChoices(board.evidence.folder) : [])
+  let allowing = $state<string | null>(null)
+  let allowError = $state<string | null>(null)
+  async function allow(p: string) {
+    allowing = p
+    allowError = null
+    try {
+      const r = await api.setEvidence(p)
+      if (!r.reachable) allowError = `Saved ${r.root}, but Folio can’t read it right now.`
+      reload++
+    } catch (e) {
+      allowError = e instanceof Error ? e.message : String(e)
+    } finally {
+      allowing = null
+    }
+  }
 
   const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`
   const summary = $derived.by(() => {
@@ -197,6 +219,29 @@
           Folio was started without an evidence folder, so these files are listed but not shown. Start it with
           <span class="font-mono">--evidence &lt;folder&gt;</span> or set the folder in Settings.
         </p>
+        {#if choices.length}
+          <!-- ticket 45: one click saves a folder to Settings; Folio then shows the files tickets list inside it -->
+          <div class="allow mt-10 rounded-lg px-12 py-10" role="group" aria-label="Allow an evidence folder">
+            <p class="m-0 text-xs text-fg2">
+              Or allow a folder now. Folio will show the images, videos and Markdown files that tickets list from inside it, and
+              nothing else.
+            </p>
+            <div class="mt-8 grid gap-6">
+              {#each choices as c, i (c.path)}
+                <button
+                  type="button"
+                  class="allow-btn {i === 0 ? 'primary' : ''}"
+                  disabled={allowing !== null}
+                  onclick={() => allow(c.path)}
+                  title="Save {c.path} as the evidence folder"
+                >
+                  <span class="lead">Allow</span><span class="path font-mono">{c.path}</span><span class="covers">{c.covers}</span>
+                </button>
+              {/each}
+            </div>
+            {#if allowError}<p class="m-0 mt-8 text-xs text-s-block" role="alert">{allowError}</p>{/if}
+          </div>
+        {/if}
         <ul class="m-0 mt-10 grid list-none gap-4 p-0">
           {#each files as f (f.index)}
             <li class="flex items-baseline gap-10 text-sm"><span class="font-mono text-xs">{f.name}</span><span class="text-xs text-fg3">{f.kind}</span></li>
@@ -340,6 +385,61 @@
     aspect-ratio: 16 / 9;
     border-radius: 8px;
     background: #000;
+  }
+  /* ticket 45: the Allow choices */
+  .allow {
+    border: 1px solid var(--line);
+    background: var(--chip);
+  }
+  .allow-btn {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    padding: 4px 10px;
+    border: 1px solid var(--line2);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--fg);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .allow-btn .path {
+    overflow-wrap: anywhere;
+  }
+  .allow-btn:hover:not(:disabled) {
+    background: var(--hover);
+  }
+  .allow-btn.primary {
+    border-color: var(--acc);
+    background: var(--acc);
+    color: var(--acc-ink);
+  }
+  .allow-btn.primary:hover:not(:disabled) {
+    background: var(--acc);
+    filter: brightness(1.08);
+  }
+  .allow-btn:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+  .allow-btn .lead {
+    flex: none;
+    font-weight: 600;
+  }
+  .allow-btn .path {
+    flex: 1;
+    min-width: 0;
+  }
+  .allow-btn .covers {
+    flex: none;
+    white-space: nowrap;
+    opacity: 0.75;
+  }
+  .allow-btn:focus-visible {
+    outline: 2px solid var(--acc);
+    outline-offset: 2px;
   }
   /* ticket 43: one section per passed round, divided by a rule */
   .round {

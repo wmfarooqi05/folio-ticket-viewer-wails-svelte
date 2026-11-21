@@ -5,9 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildIndex, parseFile } from '../lib/parser'
 
 const evidenceFiles = vi.fn()
+const setEvidence = vi.fn()
 vi.mock('../lib/api', () => ({
   isWeb: true,
   evidenceFiles: (...a: unknown[]) => evidenceFiles(...a),
+  setEvidence: (...a: unknown[]) => setEvidence(...a),
   evidenceUrl: (p: string, i: number) => `/evidence/${p}/${i}`,
 }))
 
@@ -41,6 +43,7 @@ afterEach(() => {
   app = null
   document.body.innerHTML = ''
   evidenceFiles.mockReset()
+  setEvidence.mockReset()
 })
 
 async function render(rec: ReturnType<typeof ticket>, compact = false) {
@@ -75,6 +78,45 @@ describe('the evidence panel (ticket 40)', () => {
     expect(s?.textContent).toContain('started without an evidence folder')
     expect(s?.querySelectorAll('video, img').length).toBe(0)
     expect(s?.textContent).toContain('demo.webm')
+  })
+
+  it('ticket 45: with no root, Allow offers the ticket folder and its parent, broadest first, and a click saves it and loads the evidence', async () => {
+    const unset = { root: '', folder: 'U:/Evidence/pay-05/', reachable: true, files: ALL.map((f) => ({ ...f, served: false, reason: 'root not set' })) }
+    evidenceFiles.mockResolvedValueOnce(unset).mockResolvedValue({ root: 'U:\\Evidence', folder: 'U:/Evidence/pay-05/', reachable: true, files: ALL })
+    setEvidence.mockResolvedValue({ root: 'U:\\Evidence', fromCommandLine: false, reachable: true })
+    const s = await render(ticket(EV))
+    const btns = [...(s?.querySelectorAll('.allow-btn') ?? [])] as HTMLButtonElement[]
+    expect(btns.map((b) => [...b.querySelectorAll('span')].map((x) => x.textContent?.trim()))).toEqual([
+      ['Allow', 'U:/Evidence', 'this project'],
+      ['Allow', 'U:/Evidence/pay-05', 'this ticket'],
+    ])
+    expect(setEvidence).not.toHaveBeenCalled()
+    btns[0].click()
+    for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0))
+    flushSync()
+    expect(setEvidence).toHaveBeenCalledWith('U:/Evidence')
+    expect(evidenceFiles).toHaveBeenCalledTimes(2)
+    expect(s?.querySelector('video')?.getAttribute('src')).toBe(`/evidence/${P}/0`)
+    expect(s?.querySelector('.allow')).toBeNull()
+  })
+
+  it('ticket 45: a refused folder says why, and nothing is reloaded', async () => {
+    evidenceFiles.mockResolvedValue({ root: '', folder: 'U:/Evidence/pay-05/', reachable: true, files: ALL.map((f) => ({ ...f, served: false, reason: 'root not set' })) })
+    setEvidence.mockRejectedValue(new Error('evidence folder: the evidence folder must be on this computer'))
+    const s = await render(ticket(EV))
+    ;(s?.querySelector('.allow-btn') as HTMLButtonElement).click()
+    for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0))
+    flushSync()
+    expect(s?.querySelector('[role=alert]')?.textContent).toContain('must be on this computer')
+    expect(evidenceFiles).toHaveBeenCalledTimes(1)
+  })
+
+  it('ticket 45: no Allow for a folder that is a network path', async () => {
+    const block = EV.replace(/U:\/Evidence\/pay-05\//g, '//server/share/pay-05/')
+    evidenceFiles.mockResolvedValue({ root: '', folder: '//server/share/pay-05/', reachable: true, files: ALL.map((f) => ({ ...f, served: false, reason: 'root not set' })) })
+    const s = await render(ticket(block))
+    expect(s?.textContent).toContain('started without an evidence folder')
+    expect(s?.querySelector('.allow')).toBeNull()
   })
 
   it('not reachable: a note, no file list, and evidenceFiles is still asked (the server is the judge)', async () => {

@@ -33,6 +33,7 @@ Each entry has a **Security** line. It names every publicly known vulnerability 
 - **Several videos on a ticket** (ticket 42): the factory records one video per scenario, so each video now shows its scenario above the player, taken from its file name, for example "S1 approve flow" from `pay-05-S1-approve-flow.webm`. A gap separates the players.
 - **Evidence by testing round** (ticket 43): when the factory groups a ticket's evidence under `#### S1 — <title>` sub-headings, each round shows together: its heading, its video with the note that the agent checked the screenshots and not the video, then its screenshots.
 - **`folio .`** (ticket 44): the docs folder can be given without `--docs`, so `folio .` opens the folder you're in and `folio <path>` any other. `--docs <path>` still works; give the folder once.
+- **Allow an evidence folder from the ticket** (ticket 45): with no evidence folder set, a ticket's evidence panel offers its folder and its parents (for every ticket, this project, or this ticket), with the exact path on each button. One click saves it to Settings and shows the evidence. A drive root or network path is never offered.
 - **CI:** a pull request that changes only docs skips the test and security jobs.
 - **Security:** no vulnerabilities fixed.
 

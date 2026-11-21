@@ -91,6 +91,7 @@ Reached when:
 | 42 | [The evidence panel names each video](issues/42-evidence-panel-names-each-video.md) | build | — | — | in-review — built; checked with five videos | — |
 | 43 | [The evidence panel groups a round's files by scenario](issues/43-evidence-grouped-by-scenario.md) | build | 42 | — | in-review — built; checked with three rounds | — |
 | 44 | [`folio .`: the docs folder without `--docs`](issues/44-folio-folder-argument.md) | build | — | — | in-review — built | — |
+| 45 | [Allow the evidence folder from the panel](issues/45-allow-evidence-folder.md) | build | — | — | in-review — built; one click checked | — |
 <!-- tickets:end -->
 
 ## Decisions so far
