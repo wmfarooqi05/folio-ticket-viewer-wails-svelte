@@ -32,6 +32,7 @@ Each entry has a **Security** line. It names every publicly known vulnerability 
   - a mirror ticket's age comes from its `Waiting since:` line, and with no such line it shows none.
 - **Several videos on a ticket** (ticket 42): the factory records one video per scenario, so each video now shows its scenario above the player, taken from its file name, for example "S1 approve flow" from `pay-05-S1-approve-flow.webm`. A gap separates the players.
 - **Evidence by testing round** (ticket 43): when the factory groups a ticket's evidence under `#### S1 — <title>` sub-headings, each round shows together: its heading, its video with the note that the agent checked the screenshots and not the video, then its screenshots.
+- **`folio .`** (ticket 44): the docs folder can be given without `--docs`, so `folio .` opens the folder you're in and `folio <path>` any other. `--docs <path>` still works; give the folder once.
 - **CI:** a pull request that changes only docs skips the test and security jobs.
 - **Security:** no vulnerabilities fixed.
 

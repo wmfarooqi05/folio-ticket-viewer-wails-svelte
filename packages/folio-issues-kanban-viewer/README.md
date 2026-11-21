@@ -17,7 +17,8 @@ Or install it once:
 
 ```
 npm install -g folio-issues-kanban-viewer
-folio-issues-kanban-viewer --docs <path>      # or the short name: folio --docs <path>
+folio-issues-kanban-viewer <path>      # or the short name: folio <path>
+folio .                                # this folder
 ```
 
 (`folio-issues-kanban-viewer` is the safe name: another npm package called `folio` also installs a `folio` command, and
@@ -25,7 +26,7 @@ two global installs would clash.)
 
 | Option | |
 |---|---|
-| `--docs <path>` | the repo root or docs folder. Without it, the page asks for a path. |
+| `<path>` or `--docs <path>` | the repo root or docs folder, given once. `folio .` is this folder. Without it, the page asks for a path. |
 | `--evidence <folder>` | the folder agents stage evidence in (screenshots, videos). A ticket's evidence is shown only from inside it. For this run only; Settings can save one. |
 | `--port <n>` | listen on this port. Default: a random free port. |
 | `--app` | open an Edge app window (no tabs or address bar) instead of a browser tab. Windows only; falls back to the normal browser if Edge is not found. |

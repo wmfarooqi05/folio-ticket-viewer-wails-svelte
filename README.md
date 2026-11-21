@@ -49,7 +49,7 @@ Folio runs in a browser, from Node alone: on your own PC (see [Run it](#run-it))
 npx folio-issues-kanban-viewer --docs <path>
 ```
 
-`<path>` is the repo root, or its docs folder (one with `modules/`, `handoffs/` or `patterns/`, or with a `map.md` or an `issues/` folder; the latter is read whole). Node 22 or newer is the only requirement. The command starts a server on `127.0.0.1`, prints a link whose token works once, and opens it in your default browser. To install it once instead: `npm install -g folio-issues-kanban-viewer`, then `folio --docs <path>`. `--port <n>` picks the port (default: a random free one), `--app` opens an Edge app window instead of a tab (Windows; see [Run it](#run-it)), `--no-open` only prints the link, and without `--docs` the page asks for a path.
+`<path>` is the repo root, or its docs folder (one with `modules/`, `handoffs/` or `patterns/`, or with a `map.md` or an `issues/` folder; the latter is read whole). Node 22 or newer is the only requirement. The command starts a server on `127.0.0.1`, prints a link whose token works once, and opens it in your default browser. To install it once instead: `npm install -g folio-issues-kanban-viewer`, then `folio <path>`, or `folio .` for the folder you're in (`--docs <path>` still works). `--port <n>` picks the port (default: a random free one), `--app` opens an Edge app window instead of a tab (Windows; see [Run it](#run-it)), `--no-open` only prints the link, and without `--docs` the page asks for a path.
 
 Stop it with Ctrl+C. Under `npx` on Windows the shell may then ask "Terminate batch job (Y/N)?": answer Y, that is fine.
 

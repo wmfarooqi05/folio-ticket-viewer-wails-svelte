@@ -90,6 +90,7 @@ Reached when:
 | 41 | [Needs you, the "to verify" count, and the mirror's live status](issues/41-needs-you-and-mirror-status.md) | build | 38 | — | done — merged; checked live and reconnecting | #11 |
 | 42 | [The evidence panel names each video](issues/42-evidence-panel-names-each-video.md) | build | — | — | in-review — built; checked with five videos | — |
 | 43 | [The evidence panel groups a round's files by scenario](issues/43-evidence-grouped-by-scenario.md) | build | 42 | — | in-review — built; checked with three rounds | — |
+| 44 | [`folio .`: the docs folder without `--docs`](issues/44-folio-folder-argument.md) | build | — | — | in-review — built | — |
 <!-- tickets:end -->
 
 ## Decisions so far
