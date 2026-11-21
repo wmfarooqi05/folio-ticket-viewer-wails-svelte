@@ -1,8 +1,8 @@
 ---
 type: build
-status: blocked
-status_note: "merged Nov 20, 2026; waiting on the owner: try the packed tarball on the PC, then npm publish"
-waiting_on: owner
+status: done
+status_note: "published Nov 21, 2026 as folio-issues-kanban-viewer 0.1.0 (ticket 27)"
+waiting_on: null
 blocked_by: []
 blocked_note: null
 related: ["09", "16", "18", "22", "23"]
