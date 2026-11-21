@@ -100,6 +100,17 @@
 
   let viewing = $state<number | null>(null)
   const shownImages = $derived(images.filter((f) => f.served))
+  // Ticket 42: the factory records one video per scenario, named `<space>-<NN>-S<n>-<slug>.<ext>`,
+  // so with several videos each gets its scenario as a caption. A lone video with a plain name has none.
+  const scenarioOf = (name: string) => {
+    const m = /-(S\d+)-(.+)\.[a-z0-9]+$/i.exec(name)
+    return m ? { id: m[1].toUpperCase(), title: m[2].replace(/[-_.]+/g, ' ').trim() } : null
+  }
+  const captioned = $derived(videos.length > 1 || videos.some((v) => scenarioOf(v.name)))
+  const videoName = (name: string) => {
+    const s = scenarioOf(name)
+    return s ? `${s.id} ${s.title} (${name})` : name
+  }
   const alt = (name: string) =>
     name
       .replace(/\.[a-z0-9]+$/i, '')
@@ -175,12 +186,21 @@
         </ul>
       {:else}
         {#each videos as v (v.index)}
-          {#if v.served}
-            <!-- svelte-ignore a11y_media_has_caption -->
-            <video class="video" controls preload="metadata" src={url(v)} aria-label={v.name}></video>
-          {:else}
-            <div class="missing video-missing"><span class="font-mono">{v.name}</span><span>File not found in the evidence folder</span></div>
-          {/if}
+          {@const s = scenarioOf(v.name)}
+          <figure class="clip m-0">
+            {#if captioned}
+              <figcaption class="mb-6 flex min-w-0 items-baseline gap-8 text-sm">
+                {#if s}<b class="font-semibold">{s.id}</b><span class="truncate">{s.title}</span>{/if}
+                <span class="min-w-0 truncate font-mono text-2xs text-fg3" class:ml-auto={s}>{v.name}</span>
+              </figcaption>
+            {/if}
+            {#if v.served}
+              <!-- svelte-ignore a11y_media_has_caption -->
+              <video class="video" controls preload="metadata" src={url(v)} aria-label={videoName(v.name)}></video>
+            {:else}
+              <div class="missing video-missing"><span class="font-mono">{v.name}</span><span>File not found in the evidence folder</span></div>
+            {/if}
+          </figure>
         {/each}
 
         {#if images.length}
@@ -285,6 +305,10 @@
     aspect-ratio: 16 / 9;
     border-radius: 8px;
     background: #000;
+  }
+  /* ticket 42: several videos (one per scenario) never touch */
+  .clip + .clip {
+    margin-top: 14px;
   }
   .missing {
     display: grid;

@@ -112,6 +112,33 @@ describe('the evidence panel (ticket 40)', () => {
     expect(evidenceFiles).not.toHaveBeenCalled()
   })
 
+  it('ticket 42: one video per scenario, each captioned with its scenario from the file name', async () => {
+    evidenceFiles.mockResolvedValue({
+      root: 'U:/Evidence', folder: 'U:/Evidence/pay-05/', reachable: true,
+      files: [
+        served(0, 'pay-05-S1-approve-flow.webm', 'video'),
+        { index: 1, name: 'pay-05-S2-reject.webm', kind: 'video', served: false, reason: 'missing' },
+        served(2, 'demo.webm', 'video'),
+      ],
+    })
+    const s = await render(ticket(EV))
+    const caps = [...(s?.querySelectorAll('figure.clip figcaption') ?? [])].map((c) => c.textContent?.replace(/\s+/g, ' ').trim())
+    expect(caps).toHaveLength(3)
+    expect(caps[0]).toMatch(/^S1 ?approve flow ?pay-05-S1-approve-flow\.webm$/)
+    expect(caps[1]).toMatch(/^S2 ?reject ?pay-05-S2-reject\.webm$/)
+    expect(caps[2]).toBe('demo.webm')
+    expect(s?.querySelector('video')?.getAttribute('aria-label')).toBe('S1 approve flow (pay-05-S1-approve-flow.webm)')
+    // the missing one keeps its placeholder under its caption
+    expect(s?.querySelectorAll('figure.clip')[1]?.textContent).toContain('File not found in the evidence folder')
+  })
+
+  it('ticket 42: one plain-named video has no caption, as before', async () => {
+    evidenceFiles.mockResolvedValue({ root: 'U:/Evidence', folder: 'U:/Evidence/pay-05/', reachable: true, files: ALL })
+    const s = await render(ticket(EV))
+    expect(s?.querySelector('figcaption')).toBeNull()
+    expect(s?.querySelector('video')?.getAttribute('aria-label')).toBe('demo.webm')
+  })
+
   it('compact (the side panel): the summary and copy ref, and no media', async () => {
     evidenceFiles.mockResolvedValue({ root: 'U:/Evidence', folder: 'U:/Evidence/pay-05/', reachable: true, files: ALL })
     const s = await render(ticket(EV), true)

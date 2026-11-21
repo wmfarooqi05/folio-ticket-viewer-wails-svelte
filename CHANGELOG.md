@@ -30,6 +30,7 @@ Each entry has a **Security** line. It names every publicly known vulnerability 
   - the tree shows "N to verify";
   - on the factory's mirror, the board and footer say "Mirror live · updated 10:14", or "reconnecting";
   - a mirror ticket's age comes from its `Waiting since:` line, and with no such line it shows none.
+- **Several videos on a ticket** (ticket 42): the factory records one video per scenario, so each video now shows its scenario above the player, taken from its file name, for example "S1 approve flow" from `pay-05-S1-approve-flow.webm`. A gap separates the players.
 - **CI:** a pull request that changes only docs skips the test and security jobs.
 - **Security:** no vulnerabilities fixed.
 
