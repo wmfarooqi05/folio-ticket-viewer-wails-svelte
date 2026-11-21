@@ -1,7 +1,7 @@
 ---
 type: build
-status: in-progress
-status_note: "started Nov 21, 2026"
+status: done
+status_note: "merged Nov 21, 2026 (PR 3)"
 waiting_on: null
 blocked_by: []
 blocked_note: null
@@ -38,3 +38,14 @@ From [credibility.md](../credibility.md), sections 6 and 9:
 - <a id="ac1"></a>**AC1** — `gh api repos/{owner}/{repo}/license` reports `MIT`.
 - <a id="ac2"></a>**AC2** — Both READMEs show the badges, and each badge renders a value rather than an error.
 - <a id="ac3"></a>**AC3** — The repo page shows the description, the npm link and the topics.
+
+## Outcome
+
+Merged in PR 3 on Nov 21, 2026.
+
+- **AC1.** `LICENSE`, at the root and in the package, is the plain MIT text. GitHub's licence API now reports `MIT` (it was `NOASSERTION`). The Geist font note moved to a new License section in the root README; the package README already had it.
+- **AC2.** Both READMEs have one line of badges: npm version, licence, Node, CI, dependencies, unpacked size, Socket (80) and OpenSSF Scorecard. Each badge URL was checked against the live package. The package README also explains the 4.4 MB unpacked size, and mentions the `map.md` + `issues/` layout. These badges reach the npm page only with the next version (ticket 31).
+- **AC3.** The About box (via `gh repo edit`):
+  - the description, with the npx command;
+  - the npm page as homepage;
+  - topics: `markdown`, `kanban`, `kanban-board`, `issue-tracker`, `tickets`, `markdown-viewer`, `cli`, `npm-package`, `svelte`, `nodejs`.

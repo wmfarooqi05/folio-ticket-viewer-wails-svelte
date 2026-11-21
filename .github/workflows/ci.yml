@@ -144,13 +144,34 @@ jobs:
         working-directory: files
         run: sha256sum -c SHA256SUMS-npm
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        id: attest
         with:
           subject-path: files/folio-issues-kanban-viewer-*.tgz
+      # The same signed provenance as a file, attached to the Release by the job below. Anyone can then
+      # check the tarball offline (`gh attestation verify <tgz> --bundle <this file> --repo ...`), and
+      # OpenSSF Scorecard's Signed-Releases check finds it (ticket 29).
+      - name: Provenance bundle as a file
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          mkdir -p provenance
+          name="$(basename files/folio-issues-kanban-viewer-*.tgz .tgz)"
+          jq -c . "$BUNDLE" > "provenance/$name.intoto.jsonl"
+          ls -l provenance
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: folio-issues-kanban-viewer-provenance
+          path: provenance/*.intoto.jsonl
+          if-no-files-found: error
 
   release:
     name: GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [npm-package]
+    # waits for `attest` so its provenance file goes into the Release; `attest` is skipped on a private
+    # repo, and then the Release is made without it
+    if: >-
+      always() && startsWith(github.ref, 'refs/tags/v') && needs.npm-package.result == 'success' &&
+      (needs.attest.result == 'success' || needs.attest.result == 'skipped')
+    needs: [npm-package, attest]
     runs-on: windows-2025
     permissions:
       contents: write      # creates the release
