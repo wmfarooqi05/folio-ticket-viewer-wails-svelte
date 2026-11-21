@@ -294,6 +294,10 @@ docs/                    the plan: map, decisions, specs
 - [06 Rendering and size budget](docs/issues/06-rendering-and-size-budget.md).
 - [07 WebView2 tuning](docs/issues/07-webview2-tuning.md): can idle RAM go well below 240 MB.
 
+## Contributing
+
+Bug reports, ideas and pull requests are welcome: [CONTRIBUTING.md](CONTRIBUTING.md) explains how, and what a change needs (tests, no new warnings). What changed in each release is in [CHANGELOG.md](CHANGELOG.md). Report security problems privately, as [SECURITY.md](SECURITY.md) describes.
+
 ## License
 
 MIT: see [LICENSE](LICENSE). The browser bundle also ships the Geist fonts, under the SIL Open Font License 1.1 (`dist/licenses/OFL-Geist.txt` in the npm package), and third-party code whose licence texts are in `dist/licenses/THIRD-PARTY-NOTICES.txt`.

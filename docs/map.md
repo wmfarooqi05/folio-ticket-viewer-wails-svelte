@@ -78,7 +78,7 @@ Reached when:
 | 29 | [OpenSSF Scorecard: a workflow, a published score and a badge](issues/29-openssf-scorecard.md) | build | — | — | done — Scorecard 6.8 | — |
 | 30 | [Protect main with a ruleset](issues/30-protect-main.md) | task | — | — | done — ruleset "protect main" | — |
 | 31 | [Release 0.1.1 through the workflow, with npm provenance](issues/31-first-provenance-release.md) | build | — | owner | blocked — waiting for something to release; trusted publisher on the day | — |
-| 32 | [OpenSSF Best Practices badge ("passing" level)](issues/32-best-practices-badge.md) | task | — | owner | open — later, after 29 and 31 | — |
+| 32 | [OpenSSF Best Practices badge ("passing" level)](issues/32-best-practices-badge.md) | task | — | owner | open — answers drafted, owner pastes them in | — |
 <!-- tickets:end -->
 
 ## Decisions so far

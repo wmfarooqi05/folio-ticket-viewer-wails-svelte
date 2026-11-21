@@ -56,7 +56,7 @@ Not every PR needs a release. You can merge several PRs and release them togethe
   npm version patch --no-git-tag-version --prefix packages/folio-issues-kanban-viewer
   ```
   Use `minor` instead of `patch` when that fits. `--no-git-tag-version` stops npm from making its own commit and tag: the tag comes later, from main.
-- [ ] **Write the release notes in the PR description.** Say what changed for the user in a few lines, and name anything that breaks. GitHub generates notes from PR titles, and you can paste yours over them later.
+- [ ] **Write the release notes in [CHANGELOG.md](../CHANGELOG.md).** Rename `## Unreleased` to `## 0.1.1 — <date>` and make sure it says, in a few lines, what changed for the user and anything that breaks. Keep its **Security** line: name each publicly known vulnerability this release fixes, with its advisory or CVE, or write "no vulnerabilities fixed". A list of PR titles is not enough: the OpenSSF Best Practices badge (ticket 32) requires human-written notes.
 - [ ] **Update the package README** (`packages/folio-issues-kanban-viewer/README.md`) if an option, a default or a path changed. npm shows this README on the package page.
 - [ ] **Pass the local checks** from the repo root (`task check` covers both type checks):
   ```powershell
@@ -124,7 +124,11 @@ Not every PR needs a release. You can merge several PRs and release them togethe
   2. writes `SHA256SUMS-npm`;
   3. signs the tarball (the `attest build provenance` job);
   4. creates the GitHub Release with the tarball attached.
-- [ ] **Check the release:** open it on GitHub › Releases and make sure the version, the files and the notes are right. Paste your notes from the PR if the generated ones are thin.
+- [ ] **Check the release:** open it on GitHub › Releases and make sure the version and the files are right. Then paste this version's CHANGELOG entry at the top of the notes, above the generated list:
+  ```powershell
+  gh release edit v0.1.1 --notes-file <file with the entry, then the existing notes>
+  ```
+  Or edit it on the release page.
 
 If something is wrong at this point, nothing is on npm yet:
 1. Delete the release and the tag:
@@ -191,7 +195,7 @@ Never move or reuse a tag that has been published. Tags, releases and npm versio
 
 1. **PR:**
    - bump with `npm version patch --no-git-tag-version --prefix packages/folio-issues-kanban-viewer`;
-   - write the release notes;
+   - write the CHANGELOG entry;
    - update the README if needed;
    - pass `task check`, `task test` and `task build`;
    - check `npm pack --dry-run`;
