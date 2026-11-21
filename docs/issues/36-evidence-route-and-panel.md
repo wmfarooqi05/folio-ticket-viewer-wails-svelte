@@ -63,11 +63,11 @@ Done Nov 22, 2026, through its four build tickets. [38](38-board-verify-styling-
 - **AC2:** met by 39. `server/evidence.test.ts` (31 tests) refuses unlisted indexes, files outside the root (including through a junction), `file` kinds and wrong extensions, and 200 fuzzed paths.
 - **AC3:** met by 39 and 40. A `(not reachable)` folder and a missing root each show the ticket with a note, never an error.
 - **Checked again on Nov 22, 2026, after the merge,** against a mirror laid out as the contract says (`<repo>/.git/factory/board/docs/`, written by rename-over) with a real evidence folder. The factory hasn't built its own mirror yet (its board 03 is open), so this stands in for it:
-  - the board in light mode at 1600px with the tree: all six columns;
-  - at 1280px with the tree **and** the right panel open: Done, Open, In review and Blocked fold to rails, In progress and Needs verification stay open, and the page doesn't scroll sideways;
-  - the 20s `.webm` from the mirror played and seeked to 15s (a 206 response), and the three screenshots loaded;
+  - the board in light mode at 1600px with the tree: all six columns ([screenshot](../assets/36-check-board-1600-light.jpg));
+  - at 1280px with the tree **and** the right panel open: Done, Open, In review and Blocked fold to rails, In progress and Needs verification stay open, and the page doesn't scroll sideways ([screenshot](../assets/36-check-board-1280-both-panes.jpg));
+  - the 20s `.webm` from the mirror played and seeked to 15s (a 206 response), and the three screenshots loaded ([screenshot](../assets/36-check-evidence-video.jpg), paused at 0:15);
   - copy ref in a real Edge window: see [38](38-board-verify-styling-rails-and-card.md);
-  - **a bug, fixed:** in the side panel's narrow Your turn strip, copy ref wrapped onto two lines. `CopyRef.svelte` now never shrinks or wraps.
+  - **a bug, fixed:** in the side panel's narrow Your turn strip, copy ref wrapped onto two lines. `CopyRef.svelte` now never shrinks or wraps ([screenshot after the fix](../assets/38-check-copy-ref-side-panel.png), Edge, dark).
 - **Security:** the README's web-mode security list covers the route and its limits. semgrep and CodeQL ran on both PRs, and CodeQL has no alert on the evidence code.
 
 ## Open questions
