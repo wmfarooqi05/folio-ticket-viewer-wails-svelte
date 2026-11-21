@@ -871,8 +871,9 @@ export function parseFile(file: SourceFile, rootName = ''): DocRecord {
   }
   for (const d of fm?.diagnostics ?? []) push(d.line, d.code, 'error', d.message)
   for (const d of scan.diagnostics) push(d.line, d.code, d.level, d.message)
-  const boardScan = kind === 'ticket' ? scanBoard(body, bodyLine - 1) : { board: null, problem: null }
+  const boardScan: BoardScan = kind === 'ticket' ? scanBoard(body, bodyLine - 1) : { board: null, problem: null, warnings: [] }
   if (boardScan.problem) push(boardScan.problem.line, 'BOARD', 'warning', boardScan.problem.message)
+  for (const w of boardScan.warnings) push(w.line, 'BOARD', 'warning', w.message)
 
   let meta: DocRecord['meta'] = null
   let legacyRule: DocRecord['legacyRule'] = null
@@ -1258,6 +1259,8 @@ export interface EvidenceFile {
   /** the local path from the file:/// URL, forward slashes, percent-decoded */
   path: string
   kind: EvidenceKind
+  /** ticket 43: the `#### S<n> — <title>` sub-heading the file sits under, or null (scenarios.md, the write-up) */
+  scenario: { id: string; title: string } | null
 }
 
 export interface Board {
@@ -1278,6 +1281,8 @@ export interface BoardScan {
   board: Board | null
   /** a block Folio could not use: another version, or no end marker */
   problem: { line: number; message: string } | null
+  /** a block Folio read, with lines it could not use (ticket 43: an evidence sub-heading in another shape) */
+  warnings: { line: number; message: string }[]
 }
 
 const BOARD_BEGIN = /^<!--\s*factory:board\s+begin\s+v(\d+)\s*-->$/
@@ -1288,6 +1293,8 @@ const BOARD_FOLDER = /^Folder\s*:\s*(.*)$/
 const BOARD_FILE = /^[-*]\s+\[([^\]]+)\]\(\s*<?(file:\/\/[^)\s>]+)>?\s*\)\s*(?:[—–]|-{1,2})\s*([a-z-]+)\s*$/i
 const EVIDENCE_KINDS: readonly EvidenceKind[] = ['image', 'video', 'scenarios', 'write-up', 'file']
 const NOT_REACHABLE = /\(not reachable\)\s*$/i
+const BOARD_SUB = /^####\s+(.*)$/
+const BOARD_SCENARIO = /^(S\d+)\s*(?:[—–]|-{1,2})\s*(.+)$/i
 
 const unquote = (s: string) => s.replace(/`/g, '').trim()
 
@@ -1325,7 +1332,7 @@ export function scanBoard(body: string, lineOffset = 0): BoardScan {
     const b = BOARD_BEGIN.exec(t)
     if (!b) continue
     const line = lineOffset + i + 1
-    if (b[1] !== '1') return { board: null, problem: { line, message: `Board block v${b[1]} is not a version Folio reads (v1); shown as plain text` } }
+    if (b[1] !== '1') return { board: null, problem: { line, message: `Board block v${b[1]} is not a version Folio reads (v1); shown as plain text` }, warnings: [] }
     let end = -1
     for (let j = i + 1; j < lines.length; j++) {
       if (BOARD_END.test(lines[j].trim())) {
@@ -1333,16 +1340,19 @@ export function scanBoard(body: string, lineOffset = 0): BoardScan {
         break
       }
     }
-    if (end < 0) return { board: null, problem: { line, message: 'Board block has no end marker; shown as plain text' } }
-    return { board: readBlock(lines.slice(i + 1, end), line), problem: null }
+    if (end < 0) return { board: null, problem: { line, message: 'Board block has no end marker; shown as plain text' }, warnings: [] }
+    const warnings: BoardScan['warnings'] = []
+    return { board: readBlock(lines.slice(i + 1, end), line, warnings), problem: null, warnings }
   }
-  return { board: null, problem: null }
+  return { board: null, problem: null, warnings: [] }
 }
 
-function readBlock(lines: string[], line: number): Board {
+function readBlock(lines: string[], line: number, warnings: BoardScan['warnings']): Board {
   const board: Board = { branch: null, branchNote: null, claim: null, waitingSince: null, verdict: null, evidence: null, line }
-  for (const raw of lines) {
-    const t = raw.trim()
+  // ticket 43: files after `#### S<n> — <title>` belong to that scenario; files before the first belong to none
+  let scenario: EvidenceFile['scenario'] = null
+  for (let n = 0; n < lines.length; n++) {
+    const t = lines[n].trim()
     const k = BOARD_KEY.exec(t)
     if (k && board.evidence === null) {
       const value = k[2].trim()
@@ -1362,12 +1372,19 @@ function readBlock(lines: string[], line: number): Board {
       board.evidence = { folder: unquote(v.replace(NOT_REACHABLE, '')), reachable, files: [] }
       continue
     }
+    const sub = board.evidence ? BOARD_SUB.exec(t) : null
+    if (sub) {
+      const sc = BOARD_SCENARIO.exec(sub[1].trim())
+      scenario = sc ? { id: sc[1].toUpperCase(), title: sc[2].trim() } : null
+      if (!sc) warnings.push({ line: line + n + 1, message: `Evidence sub-heading "${sub[1].trim()}" is not "#### S<n> — <title>"; its files are shown with no scenario` })
+      continue
+    }
     const e = board.evidence && board.evidence.reachable ? BOARD_FILE.exec(t) : null
     if (e && board.evidence) {
       const path = fileUrlToPath(e[2])
       if (path === null) continue
       const kind = e[3].toLowerCase() as EvidenceKind
-      board.evidence.files.push({ name: e[1].trim(), path, kind: EVIDENCE_KINDS.includes(kind) ? kind : 'file' })
+      board.evidence.files.push({ name: e[1].trim(), path, kind: EVIDENCE_KINDS.includes(kind) ? kind : 'file', scenario })
     }
   }
   return board

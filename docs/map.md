@@ -89,7 +89,7 @@ Reached when:
 | 40 | [The evidence panel in the ticket view](issues/40-evidence-panel-in-the-ticket-view.md) | build | 38, 39 | — | done — merged; every state checked in a browser | #11 |
 | 41 | [Needs you, the "to verify" count, and the mirror's live status](issues/41-needs-you-and-mirror-status.md) | build | 38 | — | done — merged; checked live and reconnecting | #11 |
 | 42 | [The evidence panel names each video](issues/42-evidence-panel-names-each-video.md) | build | — | — | in-review — built; checked with five videos | — |
-| 43 | [The evidence panel groups a round's files by scenario](issues/43-evidence-grouped-by-scenario.md) | build | 42 | — | open | — |
+| 43 | [The evidence panel groups a round's files by scenario](issues/43-evidence-grouped-by-scenario.md) | build | 42 | — | in-review — built; checked with three rounds | — |
 <!-- tickets:end -->
 
 ## Decisions so far

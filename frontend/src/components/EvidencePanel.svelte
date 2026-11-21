@@ -106,7 +106,25 @@
     const m = /-(S\d+)-(.+)\.[a-z0-9]+$/i.exec(name)
     return m ? { id: m[1].toUpperCase(), title: m[2].replace(/[-_.]+/g, ' ').trim() } : null
   }
-  const captioned = $derived(videos.length > 1 || videos.some((v) => scenarioOf(v.name)))
+  // Ticket 43: the factory lists a passed round's files under `#### S<n> — <title>` (its board D9). The
+  // agent checked the round's screenshots, never the video, so a round shows its video, the factory's
+  // note saying so, then its screenshots. Files outside any round keep the layout above.
+  const roundOf = (f: EvidenceEntry) => board?.evidence?.files[f.index]?.scenario ?? null
+  const rounds = $derived.by(() => {
+    const out: { id: string; title: string; videos: EvidenceEntry[]; images: EvidenceEntry[] }[] = []
+    for (const f of files) {
+      const s = roundOf(f)
+      if (!s || (f.kind !== 'video' && f.kind !== 'image')) continue
+      let r = out.find((x) => x.id === s.id)
+      if (!r) out.push((r = { id: s.id, title: s.title, videos: [], images: [] }))
+      ;(f.kind === 'video' ? r.videos : r.images).push(f)
+    }
+    return out
+  })
+  const looseVideos = $derived(videos.filter((v) => !roundOf(v)))
+  const looseImages = $derived(images.filter((im) => !roundOf(im)))
+  const ROUND_NOTE = 'Recorded during this round; its screenshots passed. Not checked frame by frame.'
+  const captioned = $derived(looseVideos.length > 1 || looseVideos.some((v) => scenarioOf(v.name)))
   const videoName = (name: string) => {
     const s = scenarioOf(name)
     return s ? `${s.id} ${s.title} (${name})` : name
@@ -185,10 +203,10 @@
           {/each}
         </ul>
       {:else}
-        {#each videos as v (v.index)}
+        {#snippet clip(v: EvidenceEntry, caption: boolean, label: string)}
           {@const s = scenarioOf(v.name)}
           <figure class="clip m-0">
-            {#if captioned}
+            {#if caption}
               <figcaption class="mb-6 flex min-w-0 items-baseline gap-8 text-sm">
                 {#if s}<b class="font-semibold">{s.id}</b><span class="truncate">{s.title}</span>{/if}
                 <span class="min-w-0 truncate font-mono text-2xs text-fg3" class:ml-auto={s}>{v.name}</span>
@@ -196,16 +214,15 @@
             {/if}
             {#if v.served}
               <!-- svelte-ignore a11y_media_has_caption -->
-              <video class="video" controls preload="metadata" src={url(v)} aria-label={videoName(v.name)}></video>
+              <video class="video" controls preload="metadata" src={url(v)} aria-label={label}></video>
             {:else}
               <div class="missing video-missing"><span class="font-mono">{v.name}</span><span>File not found in the evidence folder</span></div>
             {/if}
           </figure>
-        {/each}
-
-        {#if images.length}
-          <div class="thumbs" class:mt-10={videos.length > 0}>
-            {#each images as im (im.index)}
+        {/snippet}
+        {#snippet thumbs(list: EvidenceEntry[])}
+          <div class="thumbs">
+            {#each list as im (im.index)}
               {#if im.served}
                 <button type="button" class="thumb" onclick={() => (viewing = shownImages.indexOf(im))} aria-label="Open {im.name} full size">
                   <img src={url(im)} alt={alt(im.name)} loading="lazy" />
@@ -216,7 +233,25 @@
               {/if}
             {/each}
           </div>
+        {/snippet}
+
+        {#each looseVideos as v (v.index)}
+          {@render clip(v, captioned, videoName(v.name))}
+        {/each}
+        {#if looseImages.length}
+          <div class:mt-10={looseVideos.length > 0}>{@render thumbs(looseImages)}</div>
         {/if}
+
+        {#each rounds as r (r.id)}
+          <section class="round" class:first={looseVideos.length + looseImages.length === 0 && r === rounds[0]} aria-label="{r.id} {r.title}">
+            <h3 class="m-0 mb-8 flex items-baseline gap-8 text-sm font-normal"><b class="font-semibold">{r.id}</b><span>{r.title}</span></h3>
+            {#each r.videos as v (v.index)}
+              {@render clip(v, false, `${r.id} ${r.title} (${v.name})`)}
+            {/each}
+            {#if r.videos.length}<p class="m-0 mt-6 text-xs text-fg3">{ROUND_NOTE}</p>{/if}
+            {#if r.images.length}<div class:mt-10={r.videos.length > 0}>{@render thumbs(r.images)}</div>{/if}
+          </section>
+        {/each}
 
         {#if docs.length}
           <div class="mt-14" role="tablist" aria-label="Scenarios and write-up">
@@ -305,6 +340,17 @@
     aspect-ratio: 16 / 9;
     border-radius: 8px;
     background: #000;
+  }
+  /* ticket 43: one section per passed round, divided by a rule */
+  .round {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+  .round.first {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
   }
   /* ticket 42: several videos (one per scenario) never touch */
   .clip + .clip {

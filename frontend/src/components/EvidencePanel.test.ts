@@ -139,6 +139,55 @@ describe('the evidence panel (ticket 40)', () => {
     expect(s?.querySelector('video')?.getAttribute('aria-label')).toBe('demo.webm')
   })
 
+  it('ticket 43 AC1: a round per scenario, each with its heading, video, the note, then its screenshots', async () => {
+    const F = 'file:///U:/Evidence/pay-05'
+    const GROUPED = [
+      '### Evidence',
+      '',
+      'Folder: `U:/Evidence/pay-05/`',
+      '',
+      `- [scenarios.md](${F}/scenarios.md) — scenarios`,
+      '',
+      '#### S1 — Approve a refund',
+      `- [pay-05-S1-01-queue.png](${F}/pay-05-S1-01-queue.png) — image`,
+      `- [pay-05-S1-02-dialog.png](${F}/pay-05-S1-02-dialog.png) — image`,
+      `- [pay-05-S1-approve.webm](${F}/pay-05-S1-approve.webm) — video`,
+      '',
+      '#### S2 — Reject a refund',
+      `- [pay-05-S2-reject.webm](${F}/pay-05-S2-reject.webm) — video`,
+      `- [pay-05-S2-01-reject.png](${F}/pay-05-S2-01-reject.png) — image`,
+    ].join('\n')
+    evidenceFiles.mockResolvedValue({
+      root: 'U:/Evidence', folder: 'U:/Evidence/pay-05/', reachable: true,
+      files: [
+        served(0, 'scenarios.md', 'scenarios'),
+        served(1, 'pay-05-S1-01-queue.png', 'image'),
+        served(2, 'pay-05-S1-02-dialog.png', 'image'),
+        served(3, 'pay-05-S1-approve.webm', 'video'),
+        served(4, 'pay-05-S2-reject.webm', 'video'),
+        served(5, 'pay-05-S2-01-reject.png', 'image'),
+      ],
+    })
+    const s = await render(ticket(GROUPED))
+    const rounds = [...(s?.querySelectorAll('section.round') ?? [])]
+    expect(rounds.map((r) => r.getAttribute('aria-label'))).toEqual(['S1 Approve a refund', 'S2 Reject a refund'])
+    // inside a round: the video first, the factory's note, then the screenshots, in block order
+    const order = (r: Element) => [...r.querySelectorAll('video, p, .thumb')].map((e) => (e.tagName === 'VIDEO' ? 'video' : e.tagName === 'P' ? 'note' : (e.querySelector('.name')?.textContent ?? '')))
+    expect(order(rounds[0])).toEqual(['video', 'note', 'pay-05-S1-01-queue.png', 'pay-05-S1-02-dialog.png'])
+    expect(order(rounds[1])).toEqual(['video', 'note', 'pay-05-S2-01-reject.png'])
+    expect(rounds[0].textContent).toContain('Recorded during this round; its screenshots passed. Not checked frame by frame.')
+    expect(rounds[0].querySelector('video')?.getAttribute('aria-label')).toBe('S1 Approve a refund (pay-05-S1-approve.webm)')
+    expect(rounds[0].querySelector('figcaption')).toBeNull()
+    // nothing is drawn twice outside the rounds, and the scenarios tab is still there
+    expect(s?.querySelectorAll('video').length).toBe(2)
+    expect(s?.querySelectorAll('.thumb').length).toBe(3)
+    expect(s?.querySelector('[role=tab]')?.textContent).toContain('Scenarios')
+    // the viewer steps through every screenshot in block order, across rounds
+    ;(rounds[1].querySelector('.thumb') as HTMLButtonElement).click()
+    flushSync()
+    expect(document.body.textContent).toContain('3 / 3')
+  })
+
   it('compact (the side panel): the summary and copy ref, and no media', async () => {
     evidenceFiles.mockResolvedValue({ root: 'U:/Evidence', folder: 'U:/Evidence/pay-05/', reachable: true, files: ALL })
     const s = await render(ticket(EV), true)
