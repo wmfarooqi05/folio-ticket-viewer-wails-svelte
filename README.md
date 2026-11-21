@@ -49,7 +49,7 @@ Folio runs in a browser, from Node alone: on your own PC (see [Run it](#run-it))
 npx folio-issues-kanban-viewer --docs <path>
 ```
 
-`<path>` is the repo root, or its docs folder (one with `modules/`, `handoffs/` or `patterns/`, or with a `map.md` or an `issues/` folder; the latter is read whole). Node 22 or newer is the only requirement. The command starts a server on `127.0.0.1`, prints a link whose token works once, and opens it in your default browser. To install it once instead: `npm install -g folio-issues-kanban-viewer`, then `folio --docs <path>`. `--port <n>` picks the port (default: a random free one), `--app` opens an Edge app window instead of a tab (Windows; see [Run it](#run-it)), `--no-open` only prints the link, and without `--docs` the page asks for a path.
+`<path>` is the repo root, or its docs folder (one with `modules/`, `handoffs/` or `patterns/`, or with a `map.md` or an `issues/` folder; the latter is read whole). Node 22 or newer is the only requirement. The command starts a server on `127.0.0.1`, prints a link whose token works once, and opens it in your default browser. To install it once instead: `npm install -g folio-issues-kanban-viewer`, then `folio <path>`, or `folio .` for the folder you're in (`--docs <path>` still works). `--port <n>` picks the port (default: a random free one), `--app` opens an Edge app window instead of a tab (Windows; see [Run it](#run-it)), `--no-open` only prints the link, and without `--docs` the page asks for a path.
 
 Stop it with Ctrl+C. Under `npx` on Windows the shell may then ask "Terminate batch job (Y/N)?": answer Y, that is fine.
 
@@ -64,7 +64,7 @@ What is different from the desktop app:
 - No window bounds, no RAM readout, no "Open settings file".
 - Only the browser that used the printed link can talk to the server: it listens on `127.0.0.1` only, accepts only `127.0.0.1:<port>` and `localhost:<port>` as the host, and wants a cookie it gets from the token in the link. Cross-site requests are refused. Images are served under `/doc/` with the same path rules as the desktop app.
 - **Evidence from outside the docs folder** (ticket 39), for a ticket in the factory's mirror: `/evidence/<ticket>/<n>` is the one route that reads files outside the docs folder, so it is tightly limited:
-  - **Nothing without a declared folder.** Folio serves nothing until you name the evidence folder with `--evidence <folder>` (this run only) or in Settings (saved as `evidenceRoot`).
+  - **Nothing without a declared folder.** Folio serves nothing until you name the evidence folder with `--evidence <folder>` (this run only) or in Settings (saved as `evidenceRoot`). A ticket's evidence panel can also offer its folder or a parent of it, with the exact path on the button; one click saves it to Settings the same way (ticket 45). A drive root or a network path is never offered.
   - **No paths in the URL.** The request names a ticket and an index. The server reads that ticket and its generated board block itself, so a path only ever comes from a ticket on disk.
   - **Only listed files of a few types.** A file must be listed in the block, as an image (`.png .jpg .jpeg .webp .gif`), a video (`.webm .mp4`), or the scenarios or write-up (`.md`, sent as plain text). The kind and the extension must agree, and SVG is never served.
   - **Only from inside the folder.** The file's real path, with links resolved, must be inside the folder's real path. Nothing that reaches a network share is touched.

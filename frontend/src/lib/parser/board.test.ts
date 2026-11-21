@@ -38,12 +38,12 @@ describe('the board block (ticket 35)', () => {
       folder: 'U:/Evidence/app/pay-04-refund-screen/',
       reachable: true,
       files: [
-        { name: 'pay-04-01-queue.png', path: 'U:/Evidence/app/pay-04-refund-screen/pay-04-01-queue.png', kind: 'image' },
-        { name: 'pay-04-demo-approve.webm', path: 'U:/Evidence/app/pay-04-refund-screen/pay-04-demo-approve.webm', kind: 'video' },
-        { name: 'scenarios.md', path: 'U:/Evidence/app/pay-04-refund-screen/scenarios.md', kind: 'scenarios' },
-        { name: 'pay-04-evidence.md', path: 'U:/Evidence/app/pay-04-refund-screen/pay-04-evidence.md', kind: 'write-up' },
+        { name: 'pay-04-01-queue.png', path: 'U:/Evidence/app/pay-04-refund-screen/pay-04-01-queue.png', kind: 'image', scenario: null },
+        { name: 'pay-04-demo-approve.webm', path: 'U:/Evidence/app/pay-04-refund-screen/pay-04-demo-approve.webm', kind: 'video', scenario: null },
+        { name: 'scenarios.md', path: 'U:/Evidence/app/pay-04-refund-screen/scenarios.md', kind: 'scenarios', scenario: null },
+        { name: 'pay-04-evidence.md', path: 'U:/Evidence/app/pay-04-refund-screen/pay-04-evidence.md', kind: 'write-up', scenario: null },
         // percent-encoded in the URL, decoded in the path; the link text is kept as written
-        { name: 'trace%20log.zip', path: 'U:/Evidence/app/pay-04-refund-screen/trace log.zip', kind: 'file' },
+        { name: 'trace%20log.zip', path: 'U:/Evidence/app/pay-04-refund-screen/trace log.zip', kind: 'file', scenario: null },
       ],
     })
   })
@@ -114,9 +114,51 @@ describe('the board block (ticket 35)', () => {
       ),
     )
     expect(r.board?.evidence?.files).toEqual([
-      { name: 'c.gif', path: 'U:/E/c.gif', kind: 'file' },
-      { name: 'd.webm', path: 'U:/E/d.webm', kind: 'video' },
+      { name: 'c.gif', path: 'U:/E/c.gif', kind: 'file', scenario: null },
+      { name: 'd.webm', path: 'U:/E/d.webm', kind: 'video', scenario: null },
     ])
+  })
+
+  it('ticket 43: files under "#### S<n> — <title>" carry that scenario; files before the first carry none', () => {
+    const r = ticket(
+      block(
+        [
+          '### Evidence',
+          '',
+          'Folder: `U:/Evidence/app/pay-05-refund-screen/`',
+          '',
+          '- [scenarios.md](file:///U:/Evidence/app/pay-05-refund-screen/scenarios.md) — scenarios',
+          '- [pay-05-evidence.md](file:///U:/Evidence/app/pay-05-refund-screen/pay-05-evidence.md) — write-up',
+          '',
+          '#### S1 — Approve a refund',
+          '',
+          '- [pay-05-S1-01-queue.png](file:///U:/Evidence/app/pay-05-refund-screen/pay-05-S1-01-queue.png) — image',
+          '- [pay-05-S1-approve.webm](file:///U:/Evidence/app/pay-05-refund-screen/pay-05-S1-approve.webm) — video',
+          '',
+          '#### S2 - Reject a refund',
+          '- [pay-05-S2-01-reject.png](file:///U:/Evidence/app/pay-05-refund-screen/pay-05-S2-01-reject.png) — image',
+        ].join('\n'),
+      ),
+    )
+    expect(r.board?.evidence?.files.map((f) => [f.name, f.scenario])).toEqual([
+      ['scenarios.md', null],
+      ['pay-05-evidence.md', null],
+      ['pay-05-S1-01-queue.png', { id: 'S1', title: 'Approve a refund' }],
+      ['pay-05-S1-approve.webm', { id: 'S1', title: 'Approve a refund' }],
+      ['pay-05-S2-01-reject.png', { id: 'S2', title: 'Reject a refund' }],
+    ])
+    expect(r.diagnostics.filter((d) => d.code === 'BOARD')).toEqual([])
+  })
+
+  it('ticket 43: a sub-heading in another shape is a warning, and its files get no scenario', () => {
+    const r = ticket(
+      block(['Folder: `U:/E/`', '#### S1 — Good', '- [a.png](file:///U:/E/a.png) — image', '#### Round two', '- [b.png](file:///U:/E/b.png) — image'].join('\n')),
+    )
+    expect(r.board?.evidence?.files.map((f) => f.scenario?.id ?? null)).toEqual(['S1', null])
+    const w = r.diagnostics.filter((d) => d.code === 'BOARD')
+    expect(w).toHaveLength(1)
+    expect(w[0]).toMatchObject({ level: 'warning' })
+    expect(w[0].message).toContain('"Round two"')
   })
 
   it('never throws on a malformed block', () => {
@@ -138,7 +180,7 @@ describe('fileUrlToPath', () => {
   })
 
   it('scanBoard on plain text with no block', () => {
-    expect(scanBoard('# Hi\n\nNothing here.')).toEqual({ board: null, problem: null })
+    expect(scanBoard('# Hi\n\nNothing here.')).toEqual({ board: null, problem: null, warnings: [] })
   })
 })
 

@@ -21,10 +21,16 @@ export interface Args {
 export const HELP = `folio: a read-only viewer for Markdown tickets, in your browser
 
 Usage:
-  folio --docs <path> [--evidence <folder>] [--port <n>] [--app] [--no-open]
+  folio [<folder>] [--evidence <folder>] [--port <n>] [--app] [--no-open]
+  folio --docs <folder> ...      the same, with the folder named by --docs
+
+Examples:
+  folio .                     this folder (a repo root, or its docs folder)
+  folio ../other-repo --app   another folder, in an Edge app window
 
 Options:
-  --docs <path>   the repo root or its docs folder: one that holds modules/, handoffs/ or patterns/,
+  <folder>, --docs <path>
+                  the repo root or its docs folder: one that holds modules/, handoffs/ or patterns/,
                   or any docs folder with a map.md or an issues/ folder (then the whole docs folder is read)
   --evidence <folder>
                   the folder agents stage evidence in (screenshots, videos). Folio shows a ticket's
@@ -41,6 +47,11 @@ The server listens on 127.0.0.1 only. Open the printed link: it carries a token 
 
 export function parseArgs(argv: string[]): Args {
   const a: Args = { port: 0, open: true, app: false, help: false, version: false }
+  // ticket 44: `folio .` is `folio --docs .`; the folder may be given once, either way
+  const setDocs = (v: string) => {
+    if (a.docs !== undefined) throw new Error('give the docs folder once: "folio <folder>" or "--docs <folder>", not both')
+    a.docs = v
+  }
   const value = (i: number, name: string) => {
     const v = argv[i + 1]
     if (v === undefined || v.startsWith('--')) throw new Error(`${name} needs a value`)
@@ -56,7 +67,7 @@ export function parseArgs(argv: string[]): Args {
     }
     switch (flag) {
       case '--docs':
-        a.docs = take()
+        setDocs(take())
         break
       case '--evidence':
         a.evidence = take()
@@ -82,7 +93,9 @@ export function parseArgs(argv: string[]): Args {
         a.version = true
         break
       default:
-        throw new Error(`unknown argument "${argv[i]}"`)
+        // a bare word is the docs folder (a folder whose name starts with "-" needs --docs)
+        if (inline === undefined && !argv[i].startsWith('-')) setDocs(argv[i])
+        else throw new Error(`unknown argument "${argv[i]}"`)
     }
   }
   return a

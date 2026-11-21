@@ -22,8 +22,19 @@ describe('parseArgs', () => {
     expect(parseArgs(['--help']).help).toBe(true)
   })
 
-  it.each([['--port', 'abc'], ['--port', '70000'], ['--port', '-1'], ['--docs'], ['--docs', '--no-open'], ['--bogus'], ['stray']])('rejects %j', (...argv) => {
+  it.each([['--port', 'abc'], ['--port', '70000'], ['--port', '-1'], ['--docs'], ['--docs', '--no-open'], ['--bogus'], ['-x']])('rejects %j', (...argv) => {
     expect(() => parseArgs(argv)).toThrow()
+  })
+
+  it('ticket 44: a bare folder is the docs folder, so `folio .` is `folio --docs .`', () => {
+    expect(parseArgs(['.'])).toMatchObject({ docs: '.' })
+    expect(parseArgs(['C:\\my repo', '--app'])).toMatchObject({ docs: 'C:\\my repo', app: true })
+    expect(parseArgs(['--no-open', 'docs'])).toMatchObject({ docs: 'docs', open: false })
+    expect(parseArgs(['.'])).toEqual(parseArgs(['--docs', '.']))
+  })
+
+  it.each([['.', 'other'], ['.', '--docs', 'x'], ['--docs', 'x', '.'], ['--docs=x', '--docs=y']])('ticket 44: the folder is given once, %j is refused', (...argv) => {
+    expect(() => parseArgs(argv)).toThrow(/once/)
   })
 })
 

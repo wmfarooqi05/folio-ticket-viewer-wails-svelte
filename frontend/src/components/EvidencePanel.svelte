@@ -5,6 +5,7 @@
   // so copy ref is the only action.
   import * as api from '../lib/api'
   import type { EvidenceEntry, EvidenceList } from '../lib/backend-types'
+  import { allowChoices } from '../lib/evidence-root'
   import { parseFile, type DocRecord, type Index } from '../lib/parser'
   import { renderMarkdown } from '../lib/render/markdown'
   import CopyRef from './CopyRef.svelte'
@@ -23,12 +24,14 @@
   const meta = $derived(rec.meta && 'waiting_on' in rec.meta ? rec.meta : null)
   const yourTurn = $derived(meta?.status === 'needs-verification')
 
-  // Fetched again when the ticket changes on disk (the mirror rewrites it).
+  // Fetched again when the ticket changes on disk (the mirror rewrites it), and after Allow (ticket 45).
   let list = $state<EvidenceList | null>(null)
   let failed = $state<string | null>(null)
+  let reload = $state(0)
   $effect(() => {
     const path = rec.path
     void rec.mtime
+    void reload
     if (!board?.evidence) {
       list = null
       return
@@ -51,6 +54,25 @@
   const others = $derived(files.filter((f) => f.kind === 'file' || (!f.served && f.reason !== 'missing' && f.reason !== 'root not set')))
   const rootUnset = $derived(list !== null && list.root === '' && files.length > 0)
   const url = (f: EvidenceEntry) => api.evidenceUrl(rec.path, f.index)
+
+  // Ticket 45: with no evidence folder set, offer the ticket's folder and its parents. Saving one is the
+  // owner's choice (C1 stays: the ticket never decides on its own), and it lands in Settings like a typed one.
+  const choices = $derived(board?.evidence ? allowChoices(board.evidence.folder) : [])
+  let allowing = $state<string | null>(null)
+  let allowError = $state<string | null>(null)
+  async function allow(p: string) {
+    allowing = p
+    allowError = null
+    try {
+      const r = await api.setEvidence(p)
+      if (!r.reachable) allowError = `Saved ${r.root}, but Folio can’t read it right now.`
+      reload++
+    } catch (e) {
+      allowError = e instanceof Error ? e.message : String(e)
+    } finally {
+      allowing = null
+    }
+  }
 
   const plural = (n: number, one: string, many = one + 's') => `${n} ${n === 1 ? one : many}`
   const summary = $derived.by(() => {
@@ -100,6 +122,35 @@
 
   let viewing = $state<number | null>(null)
   const shownImages = $derived(images.filter((f) => f.served))
+  // Ticket 42: the factory records one video per scenario, named `<space>-<NN>-S<n>-<slug>.<ext>`,
+  // so with several videos each gets its scenario as a caption. A lone video with a plain name has none.
+  const scenarioOf = (name: string) => {
+    const m = /-(S\d+)-(.+)\.[a-z0-9]+$/i.exec(name)
+    return m ? { id: m[1].toUpperCase(), title: m[2].replace(/[-_.]+/g, ' ').trim() } : null
+  }
+  // Ticket 43: the factory lists a passed round's files under `#### S<n> — <title>` (its board D9). The
+  // agent checked the round's screenshots, never the video, so a round shows its video, the factory's
+  // note saying so, then its screenshots. Files outside any round keep the layout above.
+  const roundOf = (f: EvidenceEntry) => board?.evidence?.files[f.index]?.scenario ?? null
+  const rounds = $derived.by(() => {
+    const out: { id: string; title: string; videos: EvidenceEntry[]; images: EvidenceEntry[] }[] = []
+    for (const f of files) {
+      const s = roundOf(f)
+      if (!s || (f.kind !== 'video' && f.kind !== 'image')) continue
+      let r = out.find((x) => x.id === s.id)
+      if (!r) out.push((r = { id: s.id, title: s.title, videos: [], images: [] }))
+      ;(f.kind === 'video' ? r.videos : r.images).push(f)
+    }
+    return out
+  })
+  const looseVideos = $derived(videos.filter((v) => !roundOf(v)))
+  const looseImages = $derived(images.filter((im) => !roundOf(im)))
+  const ROUND_NOTE = 'Recorded during this round; its screenshots passed. Not checked frame by frame.'
+  const captioned = $derived(looseVideos.length > 1 || looseVideos.some((v) => scenarioOf(v.name)))
+  const videoName = (name: string) => {
+    const s = scenarioOf(name)
+    return s ? `${s.id} ${s.title} (${name})` : name
+  }
   const alt = (name: string) =>
     name
       .replace(/\.[a-z0-9]+$/i, '')
@@ -168,24 +219,55 @@
           Folio was started without an evidence folder, so these files are listed but not shown. Start it with
           <span class="font-mono">--evidence &lt;folder&gt;</span> or set the folder in Settings.
         </p>
+        {#if choices.length}
+          <!-- ticket 45: one click saves a folder to Settings; Folio then shows the files tickets list inside it -->
+          <div class="allow mt-10 rounded-lg px-12 py-10" role="group" aria-label="Allow an evidence folder">
+            <p class="m-0 text-xs text-fg2">
+              Or allow a folder now. Folio will show the images, videos and Markdown files that tickets list from inside it, and
+              nothing else.
+            </p>
+            <div class="mt-8 grid gap-6">
+              {#each choices as c, i (c.path)}
+                <button
+                  type="button"
+                  class="allow-btn {i === 0 ? 'primary' : ''}"
+                  disabled={allowing !== null}
+                  onclick={() => allow(c.path)}
+                  title="Save {c.path} as the evidence folder"
+                >
+                  <span class="lead">Allow</span><span class="path font-mono">{c.path}</span><span class="covers">{c.covers}</span>
+                </button>
+              {/each}
+            </div>
+            {#if allowError}<p class="m-0 mt-8 text-xs text-s-block" role="alert">{allowError}</p>{/if}
+          </div>
+        {/if}
         <ul class="m-0 mt-10 grid list-none gap-4 p-0">
           {#each files as f (f.index)}
             <li class="flex items-baseline gap-10 text-sm"><span class="font-mono text-xs">{f.name}</span><span class="text-xs text-fg3">{f.kind}</span></li>
           {/each}
         </ul>
       {:else}
-        {#each videos as v (v.index)}
-          {#if v.served}
-            <!-- svelte-ignore a11y_media_has_caption -->
-            <video class="video" controls preload="metadata" src={url(v)} aria-label={v.name}></video>
-          {:else}
-            <div class="missing video-missing"><span class="font-mono">{v.name}</span><span>File not found in the evidence folder</span></div>
-          {/if}
-        {/each}
-
-        {#if images.length}
-          <div class="thumbs" class:mt-10={videos.length > 0}>
-            {#each images as im (im.index)}
+        {#snippet clip(v: EvidenceEntry, caption: boolean, label: string)}
+          {@const s = scenarioOf(v.name)}
+          <figure class="clip m-0">
+            {#if caption}
+              <figcaption class="mb-6 flex min-w-0 items-baseline gap-8 text-sm">
+                {#if s}<b class="font-semibold">{s.id}</b><span class="truncate">{s.title}</span>{/if}
+                <span class="min-w-0 truncate font-mono text-2xs text-fg3" class:ml-auto={s}>{v.name}</span>
+              </figcaption>
+            {/if}
+            {#if v.served}
+              <!-- svelte-ignore a11y_media_has_caption -->
+              <video class="video" controls preload="metadata" src={url(v)} aria-label={label}></video>
+            {:else}
+              <div class="missing video-missing"><span class="font-mono">{v.name}</span><span>File not found in the evidence folder</span></div>
+            {/if}
+          </figure>
+        {/snippet}
+        {#snippet thumbs(list: EvidenceEntry[])}
+          <div class="thumbs">
+            {#each list as im (im.index)}
               {#if im.served}
                 <button type="button" class="thumb" onclick={() => (viewing = shownImages.indexOf(im))} aria-label="Open {im.name} full size">
                   <img src={url(im)} alt={alt(im.name)} loading="lazy" />
@@ -196,7 +278,25 @@
               {/if}
             {/each}
           </div>
+        {/snippet}
+
+        {#each looseVideos as v (v.index)}
+          {@render clip(v, captioned, videoName(v.name))}
+        {/each}
+        {#if looseImages.length}
+          <div class:mt-10={looseVideos.length > 0}>{@render thumbs(looseImages)}</div>
         {/if}
+
+        {#each rounds as r (r.id)}
+          <section class="round" class:first={looseVideos.length + looseImages.length === 0 && r === rounds[0]} aria-label="{r.id} {r.title}">
+            <h3 class="m-0 mb-8 flex items-baseline gap-8 text-sm font-normal"><b class="font-semibold">{r.id}</b><span>{r.title}</span></h3>
+            {#each r.videos as v (v.index)}
+              {@render clip(v, false, `${r.id} ${r.title} (${v.name})`)}
+            {/each}
+            {#if r.videos.length}<p class="m-0 mt-6 text-xs text-fg3">{ROUND_NOTE}</p>{/if}
+            {#if r.images.length}<div class:mt-10={r.videos.length > 0}>{@render thumbs(r.images)}</div>{/if}
+          </section>
+        {/each}
 
         {#if docs.length}
           <div class="mt-14" role="tablist" aria-label="Scenarios and write-up">
@@ -285,6 +385,76 @@
     aspect-ratio: 16 / 9;
     border-radius: 8px;
     background: #000;
+  }
+  /* ticket 45: the Allow choices */
+  .allow {
+    border: 1px solid var(--line);
+    background: var(--chip);
+  }
+  .allow-btn {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    padding: 4px 10px;
+    border: 1px solid var(--line2);
+    border-radius: 6px;
+    background: var(--card);
+    color: var(--fg);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .allow-btn .path {
+    overflow-wrap: anywhere;
+  }
+  .allow-btn:hover:not(:disabled) {
+    background: var(--hover);
+  }
+  .allow-btn.primary {
+    border-color: var(--acc);
+    background: var(--acc);
+    color: var(--acc-ink);
+  }
+  .allow-btn.primary:hover:not(:disabled) {
+    background: var(--acc);
+    filter: brightness(1.08);
+  }
+  .allow-btn:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+  .allow-btn .lead {
+    flex: none;
+    font-weight: 600;
+  }
+  .allow-btn .path {
+    flex: 1;
+    min-width: 0;
+  }
+  .allow-btn .covers {
+    flex: none;
+    white-space: nowrap;
+    opacity: 0.75;
+  }
+  .allow-btn:focus-visible {
+    outline: 2px solid var(--acc);
+    outline-offset: 2px;
+  }
+  /* ticket 43: one section per passed round, divided by a rule */
+  .round {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+  .round.first {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+  /* ticket 42: several videos (one per scenario) never touch */
+  .clip + .clip {
+    margin-top: 14px;
   }
   .missing {
     display: grid;

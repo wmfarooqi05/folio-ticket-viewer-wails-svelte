@@ -88,6 +88,10 @@ Reached when:
 | 39 | [The evidence route and the evidence root](issues/39-evidence-route-and-evidence-root.md) | build | 35 | — | done — merged; 31 route tests, seeking checked in a browser | #11 |
 | 40 | [The evidence panel in the ticket view](issues/40-evidence-panel-in-the-ticket-view.md) | build | 38, 39 | — | done — merged; every state checked in a browser | #11 |
 | 41 | [Needs you, the "to verify" count, and the mirror's live status](issues/41-needs-you-and-mirror-status.md) | build | 38 | — | done — merged; checked live and reconnecting | #11 |
+| 42 | [The evidence panel names each video](issues/42-evidence-panel-names-each-video.md) | build | — | — | in-review — built; checked with five videos | — |
+| 43 | [The evidence panel groups a round's files by scenario](issues/43-evidence-grouped-by-scenario.md) | build | 42 | — | in-review — built; checked with three rounds | — |
+| 44 | [`folio .`: the docs folder without `--docs`](issues/44-folio-folder-argument.md) | build | — | — | in-review — built | — |
+| 45 | [Allow the evidence folder from the panel](issues/45-allow-evidence-folder.md) | build | — | — | in-review — built; one click checked | — |
 <!-- tickets:end -->
 
 ## Decisions so far
