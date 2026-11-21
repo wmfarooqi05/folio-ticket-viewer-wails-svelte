@@ -70,10 +70,15 @@ Reached when:
 | 21 | [Code signing: whether and how](issues/21-code-signing.md) | decision | — | — | dropped — no exe goes to the VM | — |
 | 22 | [How Folio reaches the company VM](issues/22-distribution-channel.md) | decision | — | — | done — public npm package, run with npx (owner) | — |
 | 23 | [First run on the company VM](issues/23-first-company-vm-install.md) | verify | [24](issues/24-node-web-mode.md) | — | blocked | — |
-| 24 | [Web mode: a zero-dependency Node server, published to npm](issues/24-node-web-mode.md) | build | — | — | blocked — merged, waiting on owner (try tarball, publish) | — |
+| 24 | [Web mode: a zero-dependency Node server, published to npm](issues/24-node-web-mode.md) | build | — | — | done — published as folio-issues-kanban-viewer 0.1.0 (27) | — |
 | 25 | [Any docs layout, and choosing the docs roots in Settings](issues/25-generic-docs-layout.md) | build | — | owner | blocked — merged, waiting on owner (open this repo by hand) | — |
 | 26 | [Retire the Go desktop app, keep the code](issues/26-retire-the-desktop-app.md) | build | — | owner | blocked — merged, waiting on owner (try --app) | — |
 | 27 | [Get the npm package ready for its first publish](issues/27-npm-publish-prep.md) | build | — | — | done — 0.1.0 published, checked with npx | — |
+| 28 | [GitHub recognises the licence, the About box is filled in, both READMEs show badges](issues/28-repo-basics-and-badges.md) | build | — | — | in progress | — |
+| 29 | [OpenSSF Scorecard: a workflow, a published score and a badge](issues/29-openssf-scorecard.md) | build | — | — | in progress | — |
+| 30 | [Protect main with a ruleset](issues/30-protect-main.md) | task | [29](issues/29-openssf-scorecard.md) | — | open | — |
+| 31 | [Release 0.1.1 through the workflow, with npm provenance](issues/31-first-provenance-release.md) | build | — | owner | blocked — waiting for something to release; trusted publisher on the day | — |
+| 32 | [OpenSSF Best Practices badge ("passing" level)](issues/32-best-practices-badge.md) | task | — | owner | open — later, after 29 and 31 | — |
 <!-- tickets:end -->
 
 ## Decisions so far

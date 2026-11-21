@@ -1,5 +1,7 @@
 # Folio
 
+[![npm](https://img.shields.io/npm/v/folio-issues-kanban-viewer)](https://www.npmjs.com/package/folio-issues-kanban-viewer) [![license](https://img.shields.io/npm/l/folio-issues-kanban-viewer)](https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/blob/main/LICENSE) [![node](https://img.shields.io/node/v/folio-issues-kanban-viewer)](https://nodejs.org) [![ci](https://img.shields.io/github/actions/workflow/status/wmfarooqi05/folio-ticket-viewer-wails-svelte/ci.yml?branch=main&label=ci)](https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/actions/workflows/ci.yml) ![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen) ![size](https://img.shields.io/npm/unpacked-size/folio-issues-kanban-viewer) [![Socket](https://socket.dev/api/badge/npm/package/folio-issues-kanban-viewer)](https://socket.dev/npm/package/folio-issues-kanban-viewer) [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/badge)](https://scorecard.dev/viewer/?uri=github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte)
+
 Folio is a read-only viewer for file-based tickets, in your browser: markdown files with a small frontmatter convention, kept in a repo under `docs/modules/`, `docs/handoffs/` and `docs/patterns/`, or in a plainer layout of `docs/map.md` and `docs/issues/NN-*.md` (see [Docs layouts](#docs-layouts)). It shows the tree, the status of each ticket, and (as the slices land) boards, a dependency graph, waiting-on and open-question views. It never writes to a ticket. The only files it writes are its own settings and a disposable index cache; [Where Folio writes](#where-folio-writes) lists every place (the retired desktop app also wrote a WebView2 profile).
 
 Folio is lightweight on purpose: it is a small Node server with no dependencies plus the browser you already have open (about 92 MB in total with Edge already open), and size budgets keep it that way (see [Budgets](#budgets)). Since ticket 26 web mode is the only way Folio is built and run; the Go desktop app is [retired and frozen](#retired-desktop-app) (see [RETIRED.md](RETIRED.md)).
@@ -291,3 +293,7 @@ docs/                    the plan: map, decisions, specs
 - [05 Index cache and refresh](docs/issues/05-index-cache-refresh.md): the Go/JS split, the cache, refresh, settings.
 - [06 Rendering and size budget](docs/issues/06-rendering-and-size-budget.md).
 - [07 WebView2 tuning](docs/issues/07-webview2-tuning.md): can idle RAM go well below 240 MB.
+
+## License
+
+MIT: see [LICENSE](LICENSE). The browser bundle also ships the Geist fonts, under the SIL Open Font License 1.1 (`dist/licenses/OFL-Geist.txt` in the npm package), and third-party code whose licence texts are in `dist/licenses/THIRD-PARTY-NOTICES.txt`.

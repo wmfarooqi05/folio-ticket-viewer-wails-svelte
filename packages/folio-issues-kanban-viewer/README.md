@@ -1,5 +1,7 @@
 # folio-issues-kanban-viewer
 
+[![npm](https://img.shields.io/npm/v/folio-issues-kanban-viewer)](https://www.npmjs.com/package/folio-issues-kanban-viewer) [![license](https://img.shields.io/npm/l/folio-issues-kanban-viewer)](https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/blob/main/LICENSE) [![node](https://img.shields.io/node/v/folio-issues-kanban-viewer)](https://nodejs.org) [![ci](https://img.shields.io/github/actions/workflow/status/wmfarooqi05/folio-ticket-viewer-wails-svelte/ci.yml?branch=main&label=ci)](https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/actions/workflows/ci.yml) ![dependencies](https://img.shields.io/badge/dependencies-0-brightgreen) ![size](https://img.shields.io/npm/unpacked-size/folio-issues-kanban-viewer) [![Socket](https://socket.dev/api/badge/npm/package/folio-issues-kanban-viewer)](https://socket.dev/npm/package/folio-issues-kanban-viewer) [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/badge)](https://scorecard.dev/viewer/?uri=github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte)
+
 A read-only viewer for Markdown tickets. It starts a small web server on your own machine
 and opens your browser. No exe, no dependencies: only Node 22 or newer.
 
@@ -7,7 +9,9 @@ and opens your browser. No exe, no dependencies: only Node 22 or newer.
 npx folio-issues-kanban-viewer --docs <path>
 ```
 
-`<path>` is the repo root, or its docs folder (the one that holds `modules/`, `handoffs/`, `patterns/`).
+It downloads about 1.3 MB (4.4 MB unpacked). Most of that is Mermaid, KaTeX and highlight.js, for diagrams, maths and code, and the browser loads each only when a document needs it.
+
+`<path>` is the repo root, or its docs folder: one that holds `modules/`, `handoffs/` or `patterns/`, or a `map.md` with an `issues/` folder of numbered tickets, shown as a list and a kanban board.
 
 Or install it once:
 
@@ -55,6 +59,7 @@ Tested on Windows. macOS and Linux should work (the paths above are in the code)
 
 ## Licences, security and releases
 
+- Folio is MIT licensed (`LICENSE`).
 - The browser bundle includes third-party code. Its licence texts are in `dist/licenses/THIRD-PARTY-NOTICES.txt` in this package (the Geist font's licence is `dist/licenses/OFL-Geist.txt`).
 - Report a security problem privately: [SECURITY.md](https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/blob/main/SECURITY.md).
 - Release notes and the tarballs: [GitHub Releases](https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/releases).
