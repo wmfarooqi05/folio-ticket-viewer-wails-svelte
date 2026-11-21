@@ -1,8 +1,8 @@
 ---
 type: task
-status: open
-status_note: "answers drafted Nov 21, 2026; waiting for the owner to paste them in"
-waiting_on: owner
+status: done
+status_note: "passing, Nov 21, 2026 (project 16975)"
+waiting_on: null
 blocked_by: []
 blocked_note: null
 related: ["29", "31"]
@@ -22,8 +22,8 @@ The [OpenSSF Best Practices badge](https://www.bestpractices.dev) is a self-cert
 
 - [x] **Claude: draft an answer**, with a link as evidence, for every passing criterion ([the list](https://bestpractices.dev/criteria/0)), in `docs/assets/32-best-practices-answers.md`. Flag any MUST that isn't met yet.
 - [x] **Fix the unmet MUSTs**, if any.
-- [ ] **Owner:** sign in at bestpractices.dev with GitHub, add the project, and paste the answers in. About an hour.
-- [ ] **Add the badge** to both READMEs.
+- [x] **Owner:** sign in at bestpractices.dev with GitHub, add the project, and paste the answers in. About an hour.
+- [x] **Add the badge** to both READMEs.
 
 ## Done when
 
@@ -40,3 +40,11 @@ Nov 21, 2026:
 - **CodeQL alerts:** the 15 open ones were triaged as false positives, or as mockups that are not shipped. The owner dismisses them; the answers file has the table.
 - **The owner confirmed** the two "know secure design" answers (Nov 21).
 - **Left for the owner:** paste the 0.1.0 notes onto its Release; dismiss the alerts; fill in the form.
+
+## Outcome
+
+Done Nov 21, 2026.
+
+- **AC1.** The owner filled in the form from the drafted answers. The project page, [bestpractices.dev/projects/16975](https://www.bestpractices.dev/projects/16975), shows **passing** (Metal series).
+- **AC2.** Both READMEs show the badge, after the Scorecard badge.
+- **Scorecard's CII-Best-Practices check** goes up on its next weekly run.
