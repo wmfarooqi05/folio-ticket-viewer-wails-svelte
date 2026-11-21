@@ -4,9 +4,11 @@ What changed for users in each release of [`folio-issues-kanban-viewer`](https:/
 
 Each entry has a **Security** line. It names every publicly known vulnerability fixed in that release, with its advisory or CVE, or says there were none.
 
-## Unreleased
+## 0.1.1 — 2026-11-21
 
-- **Package page:** the README now shows badges (npm version, licence, Node, CI, dependencies, size, Socket, OpenSSF Scorecard, OpenSSF Best Practices) and explains the 4.4 MB unpacked size.
+No change to how Folio works. This release brings the new README to the npm page, and it is the first version published by the release workflow, with npm provenance ("Built and signed on GitHub Actions").
+
+- **Package page:** the README now shows badges (npm version, licence, Node, CI, dependencies, size, Socket, OpenSSF Scorecard, OpenSSF Best Practices) and explains the 4.4 MB unpacked size, and links to the changelog, the contribution guide and the issues page.
 - **Project:** added `CONTRIBUTING.md` and this changelog. `LICENSE` is now the plain MIT text, so GitHub and npm detect it.
 - **Security:** no vulnerabilities fixed.
 
