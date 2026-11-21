@@ -6,7 +6,7 @@ Each entry has a **Security** line. It names every publicly known vulnerability 
 
 ## Unreleased
 
-- **Package page:** the README now shows badges (npm version, licence, Node, CI, dependencies, size, Socket, OpenSSF Scorecard) and explains the 4.4 MB unpacked size.
+- **Package page:** the README now shows badges (npm version, licence, Node, CI, dependencies, size, Socket, OpenSSF Scorecard, OpenSSF Best Practices) and explains the 4.4 MB unpacked size.
 - **Project:** added `CONTRIBUTING.md` and this changelog. `LICENSE` is now the plain MIT text, so GitHub and npm detect it.
 - **Security:** no vulnerabilities fixed.
 

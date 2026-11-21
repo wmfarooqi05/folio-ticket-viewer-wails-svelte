@@ -30,7 +30,7 @@ People who check packages carefully look at the earned signals. Most other peopl
 | [GitHub release attestation](#2-github-release-attestation) | The Release tarball was built and signed by `ci.yml` | **Done** for v0.1.0 | None | Already have it |
 | [OpenSSF Scorecard](#3-openssf-scorecard) | A 0–10 score from about 18 automated security checks on the repo | Not set up | One workflow file, plus a few repo settings | **Yes** |
 | [Socket score](#4-socket-score) | Supply-chain risk, quality, maintenance, vulnerabilities and licence of the package | **Already 80/100**, automatically | Only the badge | Yes, it's free |
-| [OpenSSF Best Practices badge](#5-openssf-best-practices-badge) | You answered a checklist of good project practices ("passing" level) | Not started | About an hour of questions on a website | Nice to have, later |
+| [OpenSSF Best Practices badge](#5-openssf-best-practices-badge) | You answered a checklist of good project practices ("passing" level) | **Done** (Nov 21, 2026): passing, [project 16975](https://www.bestpractices.dev/projects/16975) | About an hour of questions on a website | Nice to have, later |
 | [Information badges](#6-information-badges-shieldsio) | Version, licence, Node version, CI status, size, downloads | Not in the READMEs yet | Copy and paste | Yes, cheap |
 | [Bundlephobia](#7-bundlephobia-no) | Size inside a browser bundle | **Does not apply**: it rejects CLI packages | — | **No** |
 | [Snyk Advisor](#8-snyk-advisor-gone) | Package health score | Service retired in January 2026 | — | No action |
