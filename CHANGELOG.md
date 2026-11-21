@@ -10,6 +10,13 @@ Each entry has a **Security** line. It names every publicly known vulnerability 
 - **A status Folio doesn't know** now shows as written on the card and in the header, for example `needs-review`. Before, only "unknown" was shown. The ticket still sits in Open.
 - **The factory board block:** Folio reads the generated `<!-- factory:board begin v1 -->` block that ai-software-factory adds to tickets in its mirror. A card shows the ticket's branch. Showing the evidence comes later (ticket 36).
 - **Mirror folders:** `--docs` works for a docs folder inside `.git`, such as the factory's mirror. A file replaced by a rename now always counts as changed, even when it keeps the same size and modified time.
+- **The board, as designed** (ticket 38):
+  - Needs verification is orchid, with a solid pill and a ringed dot;
+  - its cards show what was built, the hint to say "verified" in the agent's chat, and a copy-ref button;
+  - on a narrow window, columns fold into rails (Done first), and In progress and Needs verification never fold;
+  - long branch names keep their ending;
+  - a card that arrives in Needs verification while you watch gets a short ring.
+- **CI:** a pull request that changes only docs skips the test and security jobs.
 - **Security:** no vulnerabilities fixed.
 
 ## 0.1.1 — 2026-11-21

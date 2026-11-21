@@ -25,8 +25,10 @@
   --s-prog: oklch(0.6 0.14 245);
   --s-block: oklch(0.58 0.17 27);
   --s-rev: oklch(0.73 0.14 75);
-  /* needs-verification (ticket 33): provisional until the ticket 36 design sets it */
-  --s-verify: oklch(0.6 0.17 320);
+  /* needs-verification: the design's orchid (ticket 37 D7), solid pill text on it, and the full-size image backdrop */
+  --s-verify: oklch(0.55 0.19 330);
+  --s-verify-ink: #ffffff;
+  --lightbox: rgba(20, 20, 15, 0.9);
   --s-done: oklch(0.62 0.12 152);
   --s-mute: #b5b5ae;
 
@@ -70,7 +72,9 @@
   --s-prog: oklch(0.72 0.13 245);
   --s-block: oklch(0.68 0.16 27);
   --s-rev: oklch(0.8 0.13 80);
-  --s-verify: oklch(0.74 0.15 320);
+  --s-verify: oklch(0.76 0.14 330);
+  --s-verify-ink: #151514;
+  --lightbox: rgba(0, 0, 0, 0.92);
   --s-done: oklch(0.73 0.12 152);
   --s-mute: #5f5f59;
 
@@ -104,7 +108,9 @@
     --s-prog: oklch(0.72 0.13 245);
     --s-block: oklch(0.68 0.16 27);
     --s-rev: oklch(0.8 0.13 80);
-    --s-verify: oklch(0.74 0.15 320);
+    --s-verify: oklch(0.76 0.14 330);
+    --s-verify-ink: #151514;
+    --lightbox: rgba(0, 0, 0, 0.92);
     --s-done: oklch(0.73 0.12 152);
     --s-mute: #5f5f59;
 
@@ -139,6 +145,7 @@
   --color-s-block: var(--s-block);
   --color-s-rev: var(--s-rev);
   --color-s-verify: var(--s-verify);
+  --color-s-verify-ink: var(--s-verify-ink);
   --color-s-done: var(--s-done);
   --color-s-mute: var(--s-mute);
   --shadow-hair: var(--shadow);
@@ -176,7 +183,17 @@
   --animate-pulse-dot: pulse 2.2s ease-out infinite;
   --animate-breathe: breathe 3.2s ease-in-out infinite;
   --animate-toast: toast 0.2s ease backwards;
+  /* a card arriving in Needs verification (ticket 37 Q9) */
+  --animate-verify-ring: verify-ring 1.6s ease-out;
 
+  @keyframes verify-ring {
+    from {
+      box-shadow: 0 0 0 3px var(--s-verify);
+    }
+    to {
+      box-shadow: 0 0 0 3px transparent;
+    }
+  }
   @keyframes rise {
     from {
       opacity: 0;

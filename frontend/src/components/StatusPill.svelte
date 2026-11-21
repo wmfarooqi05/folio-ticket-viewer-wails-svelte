@@ -14,6 +14,8 @@
 
   const color = $derived(statusVar(status))
   const label = $derived(status === 'unknown' ? (note ?? 'unknown') : STATUS_LABEL[status])
+  /** the only solid pill (ticket 37 D7): the owner's turn */
+  const solid = $derived(status === 'needs-verification')
 </script>
 
 <span
@@ -21,9 +23,10 @@
   'md'
     ? 'h-22 text-[12px]'
     : 'h-20 text-[11.5px]'}"
-  style:background={color ? `color-mix(in oklab, ${color} 13%, transparent)` : 'transparent'}
-  style:border-color={color ? `color-mix(in oklab, ${color} 30%, transparent)` : 'var(--line2)'}
+  class:text-s-verify-ink={solid}
+  style:background={solid ? 'var(--s-verify)' : color ? `color-mix(in oklab, ${color} 13%, transparent)` : 'transparent'}
+  style:border-color={solid ? 'var(--s-verify)' : color ? `color-mix(in oklab, ${color} 30%, transparent)` : 'var(--line2)'}
 >
-  <StatusDot {status} raw={note} size={size === 'md' ? 7 : 6} {pulse} />
+  <StatusDot {status} raw={note} size={size === 'md' ? 7 : 6} {pulse} ink={solid} />
   <span class:line-through={isStruck(status)}>{label}</span>
 </span>

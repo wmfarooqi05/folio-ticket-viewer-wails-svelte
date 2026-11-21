@@ -142,6 +142,32 @@ export const COLUMNS: readonly { id: ColumnId; label: string }[] = [
   { id: 'done', label: 'Done' },
 ]
 
+/** Board column sizes (ticket 37 D6): a full column, a folded rail, and the gap between them. */
+export const COLUMN_MIN = 168
+export const RAIL = 40
+export const COLUMN_GAP = 8
+/** The order columns fold in when the board is narrow. In progress and Needs verification never fold. */
+export const FOLD_ORDER: readonly ColumnId[] = ['done', 'open', 'in-review', 'blocked']
+
+/** The width the board needs with `folded` columns as rails. */
+export const boardWidth = (folded: number, columns = COLUMNS.length): number =>
+  (columns - folded) * COLUMN_MIN + folded * RAIL + (columns - 1) * COLUMN_GAP
+
+/**
+ * Which columns fold to rails at `width` (D6). 1,048px holds all six; below that, Done folds first, then
+ * Open, In review, Blocked. A rail the owner opened stays open and nothing folds in its place: the board
+ * scrolls sideways instead, as the design says.
+ */
+export function foldedColumns(width: number, opened: ReadonlySet<ColumnId> = new Set()): Set<ColumnId> {
+  const folded = new Set<ColumnId>()
+  for (const id of FOLD_ORDER) {
+    if (boardWidth(folded.size) <= width) break
+    folded.add(id)
+  }
+  for (const id of opened) folded.delete(id)
+  return folded
+}
+
 export interface Blocker {
   /** the ref as written: "05", "cloud-migration 07#q3" */
   ref: string

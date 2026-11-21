@@ -3,7 +3,7 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { boardFor } from '../views'
+import { boardFor, boardWidth, foldedColumns } from '../views'
 import { fileUrlToPath, parseFile, scanBoard, type DocRecord, type Index } from './index'
 import { buildIndexFromDisk } from './node'
 
@@ -170,5 +170,34 @@ describe('needs-verification and unknown statuses (ticket 33)', () => {
   it('needs-verification is not an unknown-status warning', () => {
     const r = index.files[P + '04-refund-screen.md']
     expect(r.diagnostics.filter((d) => d.code === 'FM_ENUM')).toEqual([])
+  })
+})
+
+describe('folding columns into rails (ticket 38, ticket 37 D6)', () => {
+  const ids = (s: Set<string>) => [...s]
+
+  it('six columns need 1,048px; at that width nothing folds', () => {
+    expect(boardWidth(0)).toBe(1048)
+    expect(ids(foldedColumns(1048))).toEqual([])
+    expect(ids(foldedColumns(2000))).toEqual([])
+  })
+
+  it('folds Done, then Open, In review, Blocked, one at a time as the width shrinks', () => {
+    expect(ids(foldedColumns(1047))).toEqual(['done'])
+    expect(ids(foldedColumns(boardWidth(1) - 1))).toEqual(['done', 'open'])
+    expect(ids(foldedColumns(boardWidth(2) - 1))).toEqual(['done', 'open', 'in-review'])
+    expect(ids(foldedColumns(boardWidth(3) - 1))).toEqual(['done', 'open', 'in-review', 'blocked'])
+  })
+
+  it('never folds In progress or Needs verification, however narrow', () => {
+    const f = foldedColumns(100)
+    expect(f.has('in-progress')).toBe(false)
+    expect(f.has('needs-verification')).toBe(false)
+    expect(f.size).toBe(4)
+  })
+
+  it('a rail the owner opened stays open, and nothing folds in its place (the board scrolls instead)', () => {
+    expect(ids(foldedColumns(1047, new Set(['done'])))).toEqual([])
+    expect(ids(foldedColumns(100, new Set(['open', 'blocked'])))).toEqual(['done', 'in-review'])
   })
 })
