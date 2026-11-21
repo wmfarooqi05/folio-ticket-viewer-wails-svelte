@@ -68,6 +68,13 @@ Done Nov 22, 2026, through its four build tickets. [38](38-board-verify-styling-
   - the 20s `.webm` from the mirror played and seeked to 15s (a 206 response), and the three screenshots loaded ([screenshot](../assets/36-check-evidence-video.jpg), paused at 0:15);
   - copy ref in a real Edge window: see [38](38-board-verify-styling-rails-and-card.md);
   - **a bug, fixed:** in the side panel's narrow Your turn strip, copy ref wrapped onto two lines. `CopyRef.svelte` now never shrinks or wraps ([screenshot after the fix](../assets/38-check-copy-ref-side-panel.png), Edge, dark).
+- **Recorded as video, the factory's way** (the factory board map's D8: one video per scenario, ffmpeg recording the screen while the checks run, then a VP9 encode). Each video is the Edge app window only, at 10 fps, driven over CDP:
+  - [S1, the board at 1600px in light mode](../assets/36-check-S1-board-1600-light.webm), 7.5s;
+  - [S2, 1280px with both panes, and 05 moving live into Needs verification by rename-over](../assets/36-check-S2-board-1280-both-panes-live.webm), 12.2s;
+  - [S3, the evidence panel](../assets/36-check-S3-evidence-panel.webm), 18.1s: the video plays and seeks to 15s, and the image viewer steps 1/3 to 3/3 and closes with Esc;
+  - [copy ref](../assets/38-check-S1-copy-ref.webm), in [38](38-board-verify-styling-rails-and-card.md).
+
+  All four were then listed in pay 04's board block next to its demo video, and Folio played and seeked all five. **A gap:** several videos stack full-width with no name, so you can't tell which scenario each one is.
 - **Security:** the README's web-mode security list covers the route and its limits. semgrep and CodeQL ran on both PRs, and CodeQL has no alert on the evidence code.
 
 ## Open questions
