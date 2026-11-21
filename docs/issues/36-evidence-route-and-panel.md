@@ -1,10 +1,10 @@
 ---
 type: build
 status: blocked
-status_note: "Nov 22, 2026: design delivered; waiting on its gaps (ticket 37)"
-waiting_on: owner
-blocked_by: ["35", "37"]
-blocked_note: "the design is in (assets/36-factory-board-mockup.html); ticket 37 settles its ten gaps. The route can start once 35 is done"
+status_note: "Nov 22, 2026: split into 38 to 41; done when they are"
+waiting_on: null
+blocked_by: ["38", "39", "40", "41"]
+blocked_note: "the umbrella for the evidence work: 38 the board, 39 the route, 40 the panel, 41 Needs you"
 related: ["33", "34", "35"]
 superseded_by: null
 pr: []
@@ -13,6 +13,8 @@ afk: false
 ---
 
 # 36 — Serve the evidence, and show it in the ticket view
+
+> **Split, Nov 22, 2026.** Once the design was settled ([37](37-factory-board-design-gaps.md)), this became four build tickets: [38](38-board-verify-styling-rails-and-card.md) the board, [39](39-evidence-route-and-evidence-root.md) the route and root, [40](40-evidence-panel-in-the-ticket-view.md) the panel, and [41](41-needs-you-and-mirror-status.md) Needs you. The list below is the original scope. Its ACs are met when those four are done.
 
 ## Why
 

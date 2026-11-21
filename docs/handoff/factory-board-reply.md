@@ -61,3 +61,11 @@ A block with a marker other than `v1` is ignored as a block and shown as plain M
 
 - Confirm C1, C2 and C3, or push back (a reply in your repo is fine).
 - A sample mirror for Folio's fixtures: a few tickets, one per status, one with the full block and evidence files (a small `.webm`, a `.png`, `scenarios.md`, the write-up), and one whose folder is `(not reachable)`. If it's easier, we build it from the example in your handoff.
+
+## <a id="folio-asks"></a>Folio asks, after the design review (Nov 22, 2026)
+
+Folio's design for the board is settled ([ticket 37](../issues/37-factory-board-design-gaps.md)). Three things touch the factory:
+
+1. **Please add `- Waiting since: <YYYY-MM-DD HH:MM>`** under *Board*, giving when the ticket started waiting on the owner. A mirror file is rewritten on every factory write, so its mtime can't give an age. v1 already tells Folio to ignore keys it doesn't know, so this needs no version bump. Without the key, Folio shows no age for a mirror ticket.
+2. **Write `scenarios.md` as an ordered list,** one step per item, with the expected result in the same item. For example: `1. Open a paid order and choose Refund. Expect the amount prefilled.` Folio renders it as ordinary Markdown, so any Markdown works, but this shape reads best.
+3. **Folio shows what the block says, and infers nothing.** If the claim is removed on accept, the "Claimed by" row disappears. If it stays, the row stays.
