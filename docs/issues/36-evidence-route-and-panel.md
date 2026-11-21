@@ -1,13 +1,13 @@
 ---
 type: build
-status: blocked
-status_note: "Nov 22, 2026: 38 to 41 built (in review); done when they merge"
+status: done
+status_note: "Nov 22, 2026: delivered by 38 to 41, merged in PRs 10 and 11"
 waiting_on: null
 blocked_by: ["38", "39", "40", "41"]
 blocked_note: "the umbrella for the evidence work: 38 the board, 39 the route, 40 the panel, 41 Needs you"
 related: ["33", "34", "35"]
 superseded_by: null
-pr: []
+pr: ["10", "11"]
 ado: []
 afk: false
 ---
@@ -24,22 +24,22 @@ This is the first time Folio serves files from outside the docs folder. It needs
 
 ## To do
 
-- [ ] **The evidence root (C1).** Add a `--evidence <folder>` option and a Settings field. With neither, Folio serves no evidence at all.
-- [ ] **A read-only route** (GET and HEAD only). It serves a file only if all of these hold:
+- [x] **The evidence root (C1).** Add a `--evidence <folder>` option and a Settings field. With neither, Folio serves no evidence at all.
+- [x] **A read-only route** (GET and HEAD only). It serves a file only if all of these hold:
   - the file is listed in the ticket's parsed board block (ticket 35);
   - its real path (after `realpath`) is inside the evidence root;
   - its extension is on the list: `.png .jpg .jpeg .webp .gif .webm .mp4 .md`.
 
   The request names the file by ticket and index, never by a path from the query string. The response has no directory listing, and sends `nosniff` and a sandbox CSP.
-- [ ] **HTTP Range requests** (206, `Accept-Ranges`, `Content-Range`, 416), so seeking in a video works and a long video doesn't load whole.
-- [ ] **The evidence panel**, built from the design:
+- [x] **HTTP Range requests** (206, `Accept-Ranges`, `Content-Range`, 416), so seeking in a video works and a long video doesn't load whole.
+- [x] **The evidence panel**, built from the design:
   - images as thumbnails that open full size;
   - video in a `<video controls>` player;
   - `scenarios.md` and the write-up rendered by Folio's own renderer and sanitizer;
   - the verdict quote;
   - plain notes for "(not reachable)" and "evidence root not set".
-- [ ] **A "Needs you" view, or a filter:** `needs-verification` tickets first, then the rest of `waiting_on: owner`. Show `status_note` on the card, plus the hint *say "pay 05 verified" in the agent's chat*, with a copy-ref button.
-- [ ] **Tests:**
+- [x] **A "Needs you" view, or a filter:** `needs-verification` tickets first, then the rest of `waiting_on: owner`. Show `status_note` on the card, plus the hint *say "pay 05 verified" in the agent's chat*, with a copy-ref button.
+- [x] **Tests:**
   - a listed file is served;
   - an unlisted file is refused;
   - a listed file outside the root is refused, including through a symlink or junction;
@@ -47,13 +47,22 @@ This is the first time Folio serves files from outside the docs folder. It needs
   - no root set means nothing is served;
   - Range requests behave correctly;
   - fuzz the route the way ticket 19 fuzzed `/doc/`.
-- [ ] **Security:** update the threat model in the README, and put the new route through semgrep and CodeQL.
+- [x] **Security:** update the threat model in the README, and put the new route through semgrep and CodeQL.
 
 ## Done when
 
 - <a id="ac1"></a>**AC1** — With the sample block and the evidence root set, the ticket view plays the video with seeking, shows the image, and renders `scenarios.md`.
 - <a id="ac2"></a>**AC2** — Any file not listed, outside the root, or of another type is refused (404).
 - <a id="ac3"></a>**AC3** — A `(not reachable)` folder, or no evidence root, shows the ticket and a note, never an error.
+
+## Outcome
+
+Done Nov 22, 2026, through its four build tickets. [38](38-board-verify-styling-rails-and-card.md) merged in PR 10, and [39](39-evidence-route-and-evidence-root.md), [40](40-evidence-panel-in-the-ticket-view.md) and [41](41-needs-you-and-mirror-status.md) in PR 11.
+
+- **AC1:** met by 40. With the fixture's block and a declared root, the panel played a real `.webm` and seeked through 206 range requests, opened the image in the viewer, and rendered `scenarios.md` and the write-up.
+- **AC2:** met by 39. `server/evidence.test.ts` (31 tests) refuses unlisted indexes, files outside the root (including through a junction), `file` kinds and wrong extensions, and 200 fuzzed paths.
+- **AC3:** met by 39 and 40. A `(not reachable)` folder and a missing root each show the ticket with a note, never an error.
+- **Security:** the README's web-mode security list covers the route and its limits. semgrep and CodeQL ran on both PRs, and CodeQL has no alert on the evidence code.
 
 ## Open questions
 

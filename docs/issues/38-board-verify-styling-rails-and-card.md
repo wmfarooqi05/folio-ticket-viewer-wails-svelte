@@ -1,13 +1,13 @@
 ---
 type: build
-status: in-review
-status_note: "Nov 22, 2026: built; checked in the browser"
+status: done
+status_note: "Nov 22, 2026: merged in PR 10; copy ref's Copied message still to check in a normal browser"
 waiting_on: null
 blocked_by: []
 blocked_note: null
 related: ["36", "37"]
 superseded_by: null
-pr: []
+pr: ["10"]
 ado: []
 afk: true
 ---

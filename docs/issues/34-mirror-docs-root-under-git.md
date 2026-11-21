@@ -1,13 +1,13 @@
 ---
 type: task
-status: in-review
-status_note: "Nov 21, 2026: tested, one gap fixed; in the factory-board PR"
+status: done
+status_note: "Nov 22, 2026: merged in PR 10; the same-ms rename gap it found is fixed"
 waiting_on: null
 blocked_by: []
 blocked_note: null
 related: ["33", "35", "36"]
 superseded_by: null
-pr: []
+pr: ["10"]
 ado: []
 afk: true
 ---
@@ -20,11 +20,11 @@ The factory writes its mirror to `<repo>/.git/factory/board/docs/`, file by file
 
 ## To do
 
-- [ ] **A test:** `--docs` pointing at a folder under `.git` (and under another dot folder) lists its tickets. The CLI, the first-run detection and the Settings path box all accept it.
-- [ ] **A test:** a burst of temporary-write-then-rename updates (for example 50 files in a second) ends with the board showing every file's last content, with no restart. Temporary names that don't end in `.md` never show up as tickets.
-- [ ] **Windows:** Folio never holds a mirror file open between reads (check the parser and cache reads).
-- [ ] **Find out whether a `--docs` path is remembered** for the next start, as the reply promises to check. If not, decide whether it should be.
-- [ ] **Fix whatever the tests find.**
+- [x] **A test:** `--docs` pointing at a folder under `.git` (and under another dot folder) lists its tickets. The CLI, the first-run detection and the Settings path box all accept it.
+- [x] **A test:** a burst of temporary-write-then-rename updates (for example 50 files in a second) ends with the board showing every file's last content, with no restart. Temporary names that don't end in `.md` never show up as tickets.
+- [x] **Windows:** Folio never holds a mirror file open between reads (check the parser and cache reads).
+- [x] **Find out whether a `--docs` path is remembered** for the next start, as the reply promises to check. If not, decide whether it should be.
+- [x] **Fix whatever the tests find.**
 
 ## Done when
 

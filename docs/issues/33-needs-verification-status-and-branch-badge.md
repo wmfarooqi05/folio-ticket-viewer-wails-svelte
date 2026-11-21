@@ -1,13 +1,13 @@
 ---
 type: build
-status: in-review
-status_note: "Nov 21, 2026: built; in the factory-board PR"
+status: done
+status_note: "Nov 22, 2026: merged in PR 10"
 waiting_on: null
 blocked_by: []
 blocked_note: null
 related: ["34", "35", "36"]
 superseded_by: null
-pr: []
+pr: ["10"]
 ado: []
 afk: true
 ---
@@ -20,15 +20,15 @@ The factory's agents move a ticket to `needs-verification` when it is built and 
 
 ## To do
 
-- [ ] **Add `needs-verification`**, labelled "Needs verification", in the four places statuses live:
+- [x] **Add `needs-verification`**, labelled "Needs verification", in the four places statuses live:
   - the `Status` type and `STATUSES` list in `lib/parser/index.ts`;
   - the labels in `lib/status.ts`, with a colour token of its own in the theme;
   - the columns in `lib/views.ts`, between In progress and In review: `open, in-progress, blocked, needs-verification, in-review, done`;
   - the colours in `components/views/Board.svelte`.
-- [ ] **Show the raw value of an unknown status** on its card, for example `unknown: needs-review`. It stays in the Open column.
-- [ ] **The branch badge** on a card, from ticket 35's `board.branch`. Its look comes from ticket 36's design.
-- [ ] **The frozen Go parser** doesn't know the new status. Keep `test:contract:go` passing, or record the expected difference.
-- [ ] Update the package README if it lists statuses, and the CHANGELOG.
+- [x] **Show the raw value of an unknown status** on its card, for example `unknown: needs-review`. It stays in the Open column.
+- [x] **The branch badge** on a card, from ticket 35's `board.branch`. Its look comes from ticket 36's design.
+- [x] **The frozen Go parser** doesn't know the new status. Keep `test:contract:go` passing, or record the expected difference.
+- [x] Update the package README if it lists statuses, and the CHANGELOG.
 
 ## Done when
 
