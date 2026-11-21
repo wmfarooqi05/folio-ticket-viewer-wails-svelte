@@ -1,0 +1,46 @@
+# Ticket 29: OpenSSF Scorecard (https://github.com/ossf/scorecard). Checks the repo against its security
+# practices, publishes the score to api.scorecard.dev (the README badge reads it from there) and uploads
+# the findings to the repo's Security > Code scanning tab. See docs/credibility.md, section 3.
+# Scorecard only accepts a published result from a workflow that stays simple: no top-level env or
+# defaults, and only the actions below in the publishing job. Every action is pinned by full commit SHA.
+name: scorecard
+
+on:
+  push:
+    branches: [main]
+  branch_protection_rule:
+  schedule:
+    - cron: '29 5 * * 2' # Tuesdays 05:29 UTC
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: scorecard analysis
+    runs-on: ubuntu-24.04
+    permissions:
+      security-events: write # upload the SARIF to code scanning
+      id-token: write        # publish the result (OIDC), which the badge needs
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run analysis
+        uses: ossf/scorecard-action@23f22cd43608bae7a1f1fa2603d7314dee9538a5 # v2.6.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - name: Keep the SARIF as an artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 5
+      - name: Upload to code scanning
+        uses: github/codeql-action/upload-sarif@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4.39.4
+        with:
+          sarif_file: results.sarif
