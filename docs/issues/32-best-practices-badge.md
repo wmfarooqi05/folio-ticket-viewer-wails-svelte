@@ -1,7 +1,7 @@
 ---
 type: task
 status: open
-status_note: "later: after 29 and 31"
+status_note: "answers drafted Nov 21, 2026; waiting for the owner to paste them in"
 waiting_on: owner
 blocked_by: []
 blocked_note: null
@@ -20,8 +20,8 @@ The [OpenSSF Best Practices badge](https://www.bestpractices.dev) is a self-cert
 
 ## To do
 
-- [ ] **Claude: draft an answer**, with a link as evidence, for every passing criterion ([the list](https://bestpractices.dev/criteria/0)), in `docs/assets/32-best-practices-answers.md`. Flag any MUST that isn't met yet.
-- [ ] **Fix the unmet MUSTs**, if any.
+- [x] **Claude: draft an answer**, with a link as evidence, for every passing criterion ([the list](https://bestpractices.dev/criteria/0)), in `docs/assets/32-best-practices-answers.md`. Flag any MUST that isn't met yet.
+- [x] **Fix the unmet MUSTs**, if any.
 - [ ] **Owner:** sign in at bestpractices.dev with GitHub, add the project, and paste the answers in. About an hour.
 - [ ] **Add the badge** to both READMEs.
 
@@ -29,3 +29,14 @@ The [OpenSSF Best Practices badge](https://www.bestpractices.dev) is a self-cert
 
 - <a id="ac1"></a>**AC1** — The project's bestpractices.dev page shows "passing".
 - <a id="ac2"></a>**AC2** — Both READMEs show the badge.
+
+## Progress
+
+Nov 21, 2026:
+- **Answers drafted** for all 67 criteria in [32-best-practices-answers.md](../assets/32-best-practices-answers.md).
+- **The unmet MUSTs are fixed in this PR:**
+  - `contribution` and `test_policy`: the new [CONTRIBUTING.md](../../CONTRIBUTING.md);
+  - `release_notes` and `release_notes_vulns`: the new [CHANGELOG.md](../../CHANGELOG.md), with a Security line in every entry; [releasing.md](../releasing.md) now makes the CHANGELOG entry part of every release.
+- **CodeQL alerts:** the 15 open ones were triaged as false positives, or as mockups that are not shipped. The owner dismisses them; the answers file has the table.
+- **The owner confirmed** the two "know secure design" answers (Nov 21).
+- **Left for the owner:** paste the 0.1.0 notes onto its Release; dismiss the alerts; fill in the form.

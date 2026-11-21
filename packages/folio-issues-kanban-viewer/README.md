@@ -62,5 +62,6 @@ Tested on Windows. macOS and Linux should work (the paths above are in the code)
 - Folio is MIT licensed (`LICENSE`).
 - The browser bundle includes third-party code. Its licence texts are in `dist/licenses/THIRD-PARTY-NOTICES.txt` in this package (the Geist font's licence is `dist/licenses/OFL-Geist.txt`).
 - Report a security problem privately: [SECURITY.md](https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/blob/main/SECURITY.md).
-- Release notes and the tarballs: [GitHub Releases](https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/releases).
-- Source and issues: https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte
+- What changed in each release: [CHANGELOG.md](https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/blob/main/CHANGELOG.md). The tarballs, checksums and provenance: [GitHub Releases](https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/releases).
+- Report a bug or ask for a feature: [issues](https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/issues). To contribute: [CONTRIBUTING.md](https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/blob/main/CONTRIBUTING.md).
+- Source: https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte
