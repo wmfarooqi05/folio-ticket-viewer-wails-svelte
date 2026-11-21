@@ -1,13 +1,13 @@
 ---
 type: build
-status: in-review
-status_note: "Nov 22, 2026: built; every state checked in a browser, light and dark"
+status: done
+status_note: "Nov 22, 2026: merged in PR 11"
 waiting_on: null
 blocked_by: ["38", "39"]
 blocked_note: null
 related: ["36", "37"]
 superseded_by: null
-pr: []
+pr: ["11"]
 ado: []
 afk: true
 ---

@@ -26,10 +26,11 @@
   }
 </script>
 
-<span class="relative z-1 inline-flex items-center gap-6">
+<!-- shrink-0 and nowrap: in the side panel's narrow Your turn strip, flex squeezed it onto two lines -->
+<span class="relative z-1 inline-flex shrink-0 items-center gap-6">
   <button
     type="button"
-    class="inline-flex items-center rounded-[6px] border border-solid border-line2 bg-card px-8 font-mono text-[11px] text-fg2 hover:bg-hover hover:text-fg {size ===
+    class="inline-flex items-center rounded-[6px] whitespace-nowrap border border-solid border-line2 bg-card px-8 font-mono text-[11px] text-fg2 hover:bg-hover hover:text-fg {size ===
     'md'
       ? 'h-24'
       : 'h-22'}"
