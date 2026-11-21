@@ -19,6 +19,7 @@
     open: 'var(--s-open)',
     'in-progress': 'var(--s-prog)',
     blocked: 'var(--s-block)',
+    'needs-verification': 'var(--s-verify)',
     'in-review': 'var(--s-rev)',
     done: 'var(--s-done)',
   } as const
@@ -46,7 +47,7 @@
         {/if}
       </div>
     </header>
-    <div class="grid grid-cols-[repeat(5,minmax(180px,1fr))] gap-10">
+    <div class="grid grid-cols-[repeat(6,minmax(140px,1fr))] gap-10">
       {#each board.columns as col, ci (col.id)}
         <section class="min-h-260 rounded-xl bg-colbg p-8" aria-label={col.label}>
           <h3 class="m-0 mb-8 flex items-center gap-6 px-3 text-sm font-semibold">
@@ -79,7 +80,11 @@
                 {#if t.meta.status === 'unknown'}
                   <span class="flex items-center gap-6 text-xs text-fg3">
                     <span class="size-7 rounded-full border border-dashed border-fg3" aria-hidden="true"></span>
-                    <span>status unknown{t.meta.status_note ? ': ' : ''}<i>{t.meta.status_note ?? ''}</i></span>
+                    {#if t.statusRaw}
+                      <span>status <i>{t.statusRaw}</i> (unknown)</span>
+                    {:else}
+                      <span>status unknown{t.meta.status_note ? ': ' : ''}<i>{t.meta.status_note ?? ''}</i></span>
+                    {/if}
                   </span>
                 {:else}
                   <span class="sr-only">{t.meta.status}</span>
@@ -96,6 +101,13 @@
                 {/if}
                 {#if t.meta.waiting_on}
                   <span class="text-xs text-fg2">waiting on {t.meta.waiting_on}</span>
+                {/if}
+                {#if t.board?.branch}
+                  <!-- ticket 33 (R5): the branch the ticket is moving in; the look waits on ticket 36's design -->
+                  <span
+                    class="inline-flex max-w-full items-center gap-4 rounded-xs bg-chip px-6 font-mono text-2xs leading-[18px] text-fg2"
+                    title={t.board.branchNote ?? t.board.branch}
+                  ><Icon name="git-branch" size={9} /><span class="truncate">{t.board.branch}</span></span>
                 {/if}
               </button>
             {/each}

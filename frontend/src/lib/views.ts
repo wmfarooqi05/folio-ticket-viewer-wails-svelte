@@ -131,12 +131,13 @@ export function questionWhere(rec: DocRecord): string {
 
 // ---- Board ---------------------------------------------------------------------
 
-export type ColumnId = 'open' | 'in-progress' | 'blocked' | 'in-review' | 'done'
+export type ColumnId = 'open' | 'in-progress' | 'blocked' | 'needs-verification' | 'in-review' | 'done'
 
 export const COLUMNS: readonly { id: ColumnId; label: string }[] = [
   { id: 'open', label: 'Open' },
   { id: 'in-progress', label: 'In progress' },
   { id: 'blocked', label: 'Blocked' },
+  { id: 'needs-verification', label: 'Needs verification' },
   { id: 'in-review', label: 'In review' },
   { id: 'done', label: 'Done' },
 ]
@@ -216,6 +217,7 @@ export const STATUS_VAR: Record<Status, string> = {
   open: 'var(--s-open)',
   'in-progress': 'var(--s-prog)',
   blocked: 'var(--s-block)',
+  'needs-verification': 'var(--s-verify)',
   'in-review': 'var(--s-rev)',
   done: 'var(--s-done)',
   dropped: 'var(--s-mute)',

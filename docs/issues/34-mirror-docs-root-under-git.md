@@ -1,7 +1,7 @@
 ---
 type: task
-status: open
-status_note: "Nov 21, 2026: from the factory board handoff"
+status: in-review
+status_note: "Nov 21, 2026: tested, one gap fixed; in the factory-board PR"
 waiting_on: null
 blocked_by: []
 blocked_note: null
@@ -30,3 +30,12 @@ The factory writes its mirror to `<repo>/.git/factory/board/docs/`, file by file
 
 - <a id="ac1"></a>**AC1** — `npx folio-issues-kanban-viewer --docs <repo>/.git/factory/board/docs` shows the mirror's tickets.
 - <a id="ac2"></a>**AC2** — The rename-burst test passes on Windows in CI.
+
+## Outcome
+
+Nov 21, 2026. The tests are in `server/mirror.test.ts`.
+
+- **AC1.** A docs folder under `.git` (and under any dot folder) works. `inspectRoot`, which `--docs` and the path box both use, accepts it, and the scan lists every file. The dot-folder rule only applies below the docs folder.
+- **AC2.** A burst of 60 rename-over writes (20 files × 3 rounds, `.<name>.tmp` renamed over the target) ends with every file at its last content. No `.tmp` is ever reported, and nothing is reported as removed. A reader runs in parallel with the renames, and every rename still succeeds on Windows, so Folio never holds a mirror file open.
+- **Found and fixed:** a file replaced in **the same millisecond with the same size** was not seen as changed, because a stamp was only mtime and size. A stamp now also carries the file ID (`ino`), which a rename-over always changes. The cache keeps format `v: 1`, which is shared with the frozen Go app: a stamp is now `[mtime, size, ino]`, and Go's `[2]int64` decode drops the third value. An older cache reads every file as changed once.
+- **Is `--docs` remembered?** No, by design: `server.ts` applies a `--docs` path in memory only and never writes it to `settings.json`. A folder chosen in the page is saved. So the owner passes `--docs <mirror>` each time, or uses a shortcut (README, "A Windows shortcut").

@@ -7,6 +7,7 @@ export const STATUS_LABEL: Record<Status, string> = {
   open: 'Open',
   'in-progress': 'In progress',
   blocked: 'Blocked',
+  'needs-verification': 'Needs verification',
   'in-review': 'In review',
   done: 'Done',
   dropped: 'Dropped',
@@ -23,6 +24,8 @@ export function statusVar(s: Status): string | null {
       return 'var(--s-prog)'
     case 'blocked':
       return 'var(--s-block)'
+    case 'needs-verification':
+      return 'var(--s-verify)'
     case 'in-review':
       return 'var(--s-rev)'
     case 'done':
@@ -38,9 +41,9 @@ export function statusVar(s: Status): string | null {
 /** Dropped and superseded read as struck through. */
 export const isStruck = (s: Status): boolean => s === 'dropped' || s === 'superseded'
 
-/** Counts toward a module's open badge: not started, being worked, stuck, or waiting for review. */
+/** Counts toward a module's open badge: not started, being worked, stuck, waiting for the owner's check, or for review. */
 export const isOpenStatus = (s: Status): boolean =>
-  s === 'open' || s === 'in-progress' || s === 'blocked' || s === 'in-review'
+  s === 'open' || s === 'in-progress' || s === 'blocked' || s === 'needs-verification' || s === 'in-review'
 
 export const PERSON_LABEL: Record<Person, string> = {
   owner: 'Owner',

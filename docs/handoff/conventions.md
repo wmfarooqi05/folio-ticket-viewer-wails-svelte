@@ -129,6 +129,7 @@ superseded_by: null      # a space name
 | `open` | not started | |
 | `in-progress` | being worked on now | |
 | `blocked` | cannot move | `blocked_by` or `waiting_on` |
+| `needs-verification` | built, with evidence staged; waiting for the owner to check it (added Nov 21, 2026, for the factory board) | `waiting_on: owner`, and an evidence folder |
 | `in-review` | built and not merged: a PR is open, or the work sits on a branch | `pr`, or the branch in `status_note` |
 | `done` | merged, or (for a decision ticket) its *Outcome* is written | |
 | `dropped` | will not be done | the reason in `status_note` |

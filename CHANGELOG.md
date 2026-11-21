@@ -4,6 +4,14 @@ What changed for users in each release of [`folio-issues-kanban-viewer`](https:/
 
 Each entry has a **Security** line. It names every publicly known vulnerability fixed in that release, with its advisory or CVE, or says there were none.
 
+## Unreleased
+
+- **New status: Needs verification.** A ticket with `status: needs-verification` (built, waiting for the owner to check its evidence) gets its own colour and a Board column between Blocked and In review.
+- **A status Folio doesn't know** now shows as written on the card and in the header, for example `needs-review`. Before, only "unknown" was shown. The ticket still sits in Open.
+- **The factory board block:** Folio reads the generated `<!-- factory:board begin v1 -->` block that ai-software-factory adds to tickets in its mirror. A card shows the ticket's branch. Showing the evidence comes later (ticket 36).
+- **Mirror folders:** `--docs` works for a docs folder inside `.git`, such as the factory's mirror. A file replaced by a rename now always counts as changed, even when it keeps the same size and modified time.
+- **Security:** no vulnerabilities fixed.
+
 ## 0.1.1 — 2026-11-21
 
 No change to how Folio works. This release brings the new README to the npm page, and it is the first version published by the release workflow, with npm provenance ("Built and signed on GitHub Actions").

@@ -25,6 +25,8 @@
   --s-prog: oklch(0.6 0.14 245);
   --s-block: oklch(0.58 0.17 27);
   --s-rev: oklch(0.73 0.14 75);
+  /* needs-verification (ticket 33): provisional until the ticket 36 design sets it */
+  --s-verify: oklch(0.6 0.17 320);
   --s-done: oklch(0.62 0.12 152);
   --s-mute: #b5b5ae;
 
@@ -68,6 +70,7 @@
   --s-prog: oklch(0.72 0.13 245);
   --s-block: oklch(0.68 0.16 27);
   --s-rev: oklch(0.8 0.13 80);
+  --s-verify: oklch(0.74 0.15 320);
   --s-done: oklch(0.73 0.12 152);
   --s-mute: #5f5f59;
 
@@ -101,6 +104,7 @@
     --s-prog: oklch(0.72 0.13 245);
     --s-block: oklch(0.68 0.16 27);
     --s-rev: oklch(0.8 0.13 80);
+    --s-verify: oklch(0.74 0.15 320);
     --s-done: oklch(0.73 0.12 152);
     --s-mute: #5f5f59;
 
@@ -134,6 +138,7 @@
   --color-s-prog: var(--s-prog);
   --color-s-block: var(--s-block);
   --color-s-rev: var(--s-rev);
+  --color-s-verify: var(--s-verify);
   --color-s-done: var(--s-done);
   --color-s-mute: var(--s-mute);
   --shadow-hair: var(--shadow);

@@ -1,7 +1,7 @@
 ---
 type: build
-status: open
-status_note: "Nov 21, 2026: format v1 accepted with C1 to C3; fixtures from the R3 example, later the factory's test/fixtures/board-mirror/"
+status: in-review
+status_note: "Nov 21, 2026: built; in the factory-board PR"
 waiting_on: null
 blocked_by: []
 blocked_note: null
@@ -35,3 +35,21 @@ The factory appends a generated block to each ticket in its mirror, holding the 
 ## Done when
 
 - <a id="ac1"></a>**AC1** — Every test case above passes. The parser never throws on a bad block.
+
+## Outcome
+
+Built Nov 21, 2026.
+
+- **The parser** (`lib/parser/index.ts`, a new "factory's board block" section, still with no imports) gives each ticket record `board: { branch, branchNote, claim, verdict, evidence: { folder, reachable, files: [{ name, path, kind }] }, line } | null`. File URLs become local paths (`fileUrlToPath`): drive paths, POSIX paths and `file://localhost/` are read. A UNC host, a malformed escape and a NUL are refused. An unknown kind becomes `file`.
+- **AC1.** `board.test.ts` covers:
+  - the handoff's sample block;
+  - `(not reachable)`;
+  - a block without evidence;
+  - no block;
+  - a `v2` marker and an unclosed block (no board, and a `BOARD` warning);
+  - two blocks (the first is read);
+  - a block inside fenced code (ignored, so a ticket can quote the format);
+  - a block in a doc that is not a ticket (ignored);
+  - evidence lines it can't read;
+  - and malformed blocks, which never throw.
+- The block still renders as plain Markdown in the ticket body until ticket 36.
