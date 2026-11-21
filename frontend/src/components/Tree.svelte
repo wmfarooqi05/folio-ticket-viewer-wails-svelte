@@ -93,6 +93,10 @@
         >
           <span class="grid w-16 place-items-center text-acc">{#if p.icon}<Icon name={p.icon} size={13} />{/if}</span>
           <span class="flex-1">{p.label}</span>
+          {#if p.badge}
+            <!-- ticket 41: Waiting on's "2 to verify" -->
+            <span class="rounded-full bg-s-verify px-6 font-mono text-2xs leading-[16px] font-medium text-s-verify-ink">{p.badge}</span>
+          {/if}
           {#if p.count !== null}<span class="font-mono text-2xs text-fg3">{p.count}</span>{/if}
         </button>
       {/each}

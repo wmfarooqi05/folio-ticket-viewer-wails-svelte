@@ -4,6 +4,7 @@
 // `index` is $state.raw on purpose (05 D1): one copy of the index, never proxied.
 import * as api from './api'
 import { createIndexEngine, type IndexEngine, type StartTimings } from './index-engine'
+import { live as liveState } from './live.svelte'
 import { buildIndex, rootNameFor, updateIndex, type Index } from './parser'
 
 class IndexStore {
@@ -89,10 +90,14 @@ class IndexStore {
       },
     )
     const engine = this.#engine
-    this.#unsubscribe = api.onDocsChanged((cs) =>
-      void engine
-        .applyChangeSet({ changed: cs.changed ?? [], removed: cs.removed ?? [], rescan: !!cs.rescan })
-        .catch((err) => console.error('docs:changed failed', err)),
+    this.#unsubscribe = api.onDocsChanged(
+      (cs) => {
+        if ((cs.changed?.length ?? 0) + (cs.removed?.length ?? 0) > 0) liveState.lastChange = Date.now()
+        void engine
+          .applyChangeSet({ changed: cs.changed ?? [], removed: cs.removed ?? [], rescan: !!cs.rescan })
+          .catch((err) => console.error('docs:changed failed', err))
+      },
+      (connected) => (liveState.connected = connected),
     )
     return engine.start().then((t) => {
       // The start timings go to the Go log once; nothing else crosses IPC for logging.

@@ -37,7 +37,10 @@ export const backend: Backend = {
     throw new Error('the evidence folder needs web mode')
   },
   evidenceFiles: async () => ({ root: '', folder: null, reachable: true, files: [] }),
-  onDocsChanged: (handler) => Events.On('docs:changed', (e) => handler(e.data as ChangeSet)),
+  onDocsChanged: (handler, onState) => {
+    onState?.(true) // Wails events need no connection
+    return Events.On('docs:changed', (e) => handler(e.data as ChangeSet))
+  },
 
   clearData: async () => {
     const r = await LocalDataService.ClearData()

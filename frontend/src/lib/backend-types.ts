@@ -80,7 +80,8 @@ export interface Backend {
   getEvidence(): Promise<EvidenceRoot>
   setEvidence(path: string): Promise<EvidenceRoot>
   evidenceFiles(ticketPath: string): Promise<EvidenceList>
-  onDocsChanged(handler: (cs: ChangeSet) => void): () => void
+  /** `onState`: web mode reports whether the event stream is connected (ticket 41's "Mirror live") */
+  onDocsChanged(handler: (cs: ChangeSet) => void, onState?: (connected: boolean) => void): () => void
 
   /** Deletes the index cache now; on the desktop also schedules the WebView2 profile for the next start. */
   clearData(): Promise<ClearDataResult>

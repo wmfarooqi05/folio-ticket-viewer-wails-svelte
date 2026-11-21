@@ -232,10 +232,10 @@ describe('Open questions', () => {
 
 describe('pinnedCounts', () => {
   it('matches the views: 8 waiting, 8 questions', () => {
-    expect(pinnedCounts(index)).toEqual({ waiting: 8, questions: 8 })
+    expect(pinnedCounts(index)).toEqual({ waiting: 8, verify: 0, questions: 8 })
   })
   it('is zero for an empty index', () => {
-    expect(pinnedCounts(buildIndex([]))).toEqual({ waiting: 0, questions: 0 })
+    expect(pinnedCounts(buildIndex([]))).toEqual({ waiting: 0, verify: 0, questions: 0 })
   })
 })
 

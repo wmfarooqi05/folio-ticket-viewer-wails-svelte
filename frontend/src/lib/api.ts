@@ -88,7 +88,8 @@ export const evidenceUrl = (ticketPath: string, index: number): string =>
   `/evidence/${ticketPath.split('/').map(encodeURIComponent).join('/')}/${index}`
 
 /** Subscribes to the debounced `docs:changed` event. Returns an unsubscribe function. */
-export const onDocsChanged = (handler: (cs: ChangeSet) => void): (() => void) => backend.onDocsChanged(handler)
+export const onDocsChanged = (handler: (cs: ChangeSet) => void, onState?: (connected: boolean) => void): (() => void) =>
+  backend.onDocsChanged(handler, onState)
 
 /**
  * "Clear data" (ticket 18): deletes the index cache now. On the desktop it also schedules the WebView2

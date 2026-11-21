@@ -1,7 +1,8 @@
 <script lang="ts">
   import Icon from '../../lib/icons/Icon.svelte'
   import type { Index, Status } from '../../lib/parser'
-  import { COLUMN_GAP, RAIL, STATUS_VAR, boardFor, foldedColumns, type ColumnId } from '../../lib/views'
+  import { live, clock } from '../../lib/live.svelte'
+  import { COLUMN_GAP, RAIL, STATUS_VAR, boardFor, foldedColumns, isMirror, type ColumnId } from '../../lib/views'
   import BranchBadge from '../BranchBadge.svelte'
   import CopyRef from '../CopyRef.svelte'
 
@@ -15,6 +16,8 @@
 
   const board = $derived(boardFor(index, mapPath))
   const rec = $derived(index.files[mapPath])
+  // Q2: "Mirror live · updated 10:14" when the docs folder is the factory's mirror
+  const mirror = $derived(isMirror(index))
   let stripOpen = $state(false)
 
   const COL_VAR = {
@@ -62,6 +65,14 @@
     <header class="mb-14">
       <p class="m-0 font-mono text-xs text-fg3">{mapPath}</p>
       <h2 class="m-0 mt-2 text-lg font-semibold">{rec?.title}</h2>
+      {#if mirror}
+        <p class="m-0 mt-4 flex items-center gap-6 text-xs text-fg2" role="status">
+          <span class="size-6 rounded-full {live.connected ? 'bg-s-done' : 'bg-s-rev'}" aria-hidden="true"></span>
+          {live.connected ? 'Mirror live' : 'Mirror reconnecting'}{#if live.lastChange}<span class="text-fg3"
+              >· updated {clock(live.lastChange)}</span
+            >{/if}
+        </p>
+      {/if}
       <p class="m-0 mt-4 text-sm text-fg2">
         {board.summary.total}
         {board.summary.total === 1 ? 'ticket' : 'tickets'} · {board.summary.open} open · {board.summary.blocked} blocked
