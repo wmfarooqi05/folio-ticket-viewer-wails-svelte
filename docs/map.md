@@ -75,7 +75,7 @@ Reached when:
 | 26 | [Retire the Go desktop app, keep the code](issues/26-retire-the-desktop-app.md) | build | — | owner | blocked — merged, waiting on owner (try --app) | — |
 | 27 | [Get the npm package ready for its first publish](issues/27-npm-publish-prep.md) | build | — | — | done — 0.1.0 published, checked with npx | — |
 | 28 | [GitHub recognises the licence, the About box is filled in, both READMEs show badges](issues/28-repo-basics-and-badges.md) | build | — | — | done — licence is MIT on GitHub, badges, About box | — |
-| 29 | [OpenSSF Scorecard: a workflow, a published score and a badge](issues/29-openssf-scorecard.md) | build | — | — | in progress — score 5.7, first fixes in a PR | — |
+| 29 | [OpenSSF Scorecard: a workflow, a published score and a badge](issues/29-openssf-scorecard.md) | build | — | — | done — Scorecard 6.8 | — |
 | 30 | [Protect main with a ruleset](issues/30-protect-main.md) | task | — | — | done — ruleset "protect main" | — |
 | 31 | [Release 0.1.1 through the workflow, with npm provenance](issues/31-first-provenance-release.md) | build | — | owner | blocked — waiting for something to release; trusted publisher on the day | — |
 | 32 | [OpenSSF Best Practices badge ("passing" level)](issues/32-best-practices-badge.md) | task | — | owner | open — later, after 29 and 31 | — |

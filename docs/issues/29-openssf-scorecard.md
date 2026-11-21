@@ -1,7 +1,7 @@
 ---
 type: build
-status: in-progress
-status_note: "workflow merged and score published (5.7); first fixes in a PR"
+status: done
+status_note: "score 6.8 on Nov 21, 2026; the rest rises with time, 0.1.1 (31) and the badge (32)"
 waiting_on: null
 blocked_by: []
 blocked_note: null
@@ -59,4 +59,16 @@ Scorecard is the best-known security badge on GitHub ([credibility.md](../credib
 | Contributors | 0 | No contributing organisations. | Expected for a solo project. |
 | CII-Best-Practices | 0 | No badge yet. | Ticket 32. |
 
-Remaining for AC3: re-read the score once the fixes are on main, and after ticket 31's workflow publish.
+**After the fixes (PR 4, `f1117df`): 6.8 / 10.**
+- Security-Policy went from 4 to 10.
+- Signed-Releases went from 0 to 10. The provenance file is enough, without immutable releases.
+- SAST went from 7 to 8, and CI-Tests from 6 to 7.
+
+The rest is as the table says:
+- Maintained, SAST and CI-Tests rise with time and PRs;
+- Packaging rises after ticket 31;
+- CII-Best-Practices rises with ticket 32;
+- Code-Review, Contributors and Branch-Protection are capped for a solo maintainer;
+- Fuzzing waits on the owner's call about `fast-check`.
+
+AC1–AC3 are met.
