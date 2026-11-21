@@ -24,6 +24,8 @@ Every issue gets a reply, usually within a week.
 
 `main` is protected: every change comes in through a pull request, and the required CI checks must pass before it can merge: tests, type checks, `npm audit`, semgrep, the hostile-input and fuzz tests, and the package contents check.
 
+A pull request that changes only docs (files under `docs/`, or a `.md` file at the repo root) skips those jobs. They show as skipped, which counts as passed. Anything else, including the package README, runs them all. To save CI runs, push a branch once it's ready rather than after every commit.
+
 ## What a change needs
 
 - **Tests for new behaviour.** New functionality comes with automated tests (vitest, under `frontend/src/**/*.test.ts`). A bug fix comes with a test that fails without the fix. A pull request that adds behaviour without tests will be asked for them.
