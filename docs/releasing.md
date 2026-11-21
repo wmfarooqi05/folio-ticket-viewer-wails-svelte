@@ -28,7 +28,7 @@ Do these right before releasing 0.1.1, not earlier. A trusted publisher that has
   - **tick "npm publish"**. Without it, the publisher allows only `npm stage publish`, and the workflow fails.
 - [ ] **Turn off token publishing.** In the same settings, choose "Require two-factor authentication and disallow tokens", once the first workflow publish has worked.
 
-After this, publishing needs no npm token anywhere.
+After this, publishing needs no npm token anywhere, and every version gets npm's provenance badge. For the other badges and trust signals, see [credibility.md](credibility.md).
 
 ---
 
