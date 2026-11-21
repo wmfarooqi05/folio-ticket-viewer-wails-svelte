@@ -10,7 +10,7 @@ Links point at `main`, so they work once this ticket's PR is merged (it adds `CO
 
 1. **Merge this ticket's PR.** It adds the contribution guide and the test policy, which were the unmet MUSTs `contribution`, `contribution_requirements` and `test_policy`. It also adds human-written release notes, which were the unmet MUSTs `release_notes` and `release_notes_vulns`.
 2. **Put the 0.1.0 notes on the GitHub Release.** Its notes are only GitHub's generated list of PR titles, which the badge doesn't accept as release notes. Paste the `0.1.0` entry from `CHANGELOG.md` at the top: Releases › v0.1.0 › Edit. The answer below links to `CHANGELOG.md`, which is enough for the form, but the Release should say the same.
-3. **Dismiss the 15 open CodeQL alerts**, in Security › Code scanning. `static_analysis_fixed` says medium and higher findings get handled. I checked each one, and none is a real problem:
+3. **Done Nov 21, 2026: dismissed the 15 CodeQL alerts** with these reasons (by Claude, at the owner's request), in Security › Code scanning. `static_analysis_fixed` says medium and higher findings get handled. I checked each one, and none is a real problem:
 
    | Alerts | Rule | Where | Why it is not a problem | Dismiss as |
    |---|---|---|---|---|
@@ -20,7 +20,7 @@ Links point at `main`, so they work once this ticket's PR is merged (it adds `CO
    | 2, 3 | incomplete sanitization | `parser/index.ts:393, 402` | Those strings are for slugs, labels and matching. They are never put into HTML: rendered Markdown goes through the allowlist in `render/sanitize.ts`, and Svelte escapes text. | False positive |
    | 4–13 | cross-window leak, XSS through DOM | `docs/assets/*-mockup.html` | Design mockups from tickets 3 and 13. They are not in the npm package or the app. | Used in tests (the closest reason: "not production code") |
 
-4. **Optional, but it makes `no_leaked_credentials` stronger:** turn on secret scanning and push protection in Settings › Code security. They are free for public repos. It's off today. I scanned the whole git history (159 commits) for npm, GitHub, AWS, Slack, Google and private-key patterns, and found none.
+4. **Done Nov 21, 2026: the owner turned on secret scanning.** It makes `no_leaked_credentials` stronger: turn on secret scanning and push protection in Settings › Code security. They are free for public repos. It's off today. I scanned the whole git history (159 commits) for npm, GitHub, AWS, Slack, Google and private-key patterns, and found none.
 
 Then sign in at https://www.bestpractices.dev with GitHub. Choose "Add project", enter the repo URL, and paste the answers. Most of Basics fills itself from the repo.
 
