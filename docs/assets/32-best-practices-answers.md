@@ -2,11 +2,11 @@
 
 Drafted Nov 21, 2026, against the [67 passing criteria](https://www.bestpractices.dev/en/criteria/0). Paste them in at bestpractices.dev: for each criterion, pick the **Answer**, then paste the **Justification** text, which includes the URL where one is needed.
 
-**Before you paste anything, do the two owner steps below.** All but 2 MUSTs are met by the repo or by this ticket's PR. Those 2 are **know_secure_design** and **know_common_errors**: they are statements about you. Read the drafted text, and change it until it is true for you.
+**Every MUST is met**, by the repo or by this ticket's PR. **know_secure_design** and **know_common_errors** are statements about the maintainer: the owner read them and confirmed them on Nov 21, 2026.
 
 Links point at `main`, so they work once this ticket's PR is merged (it adds `CONTRIBUTING.md` and `CHANGELOG.md`).
 
-## Owner steps first
+## Owner steps first (in this order)
 
 1. **Merge this ticket's PR.** It adds the contribution guide and the test policy, which were the unmet MUSTs `contribution`, `contribution_requirements` and `test_policy`. It also adds human-written release notes, which were the unmet MUSTs `release_notes` and `release_notes_vulns`.
 2. **Put the 0.1.0 notes on the GitHub Release.** Its notes are only GitHub's generated list of PR titles, which the badge doesn't accept as release notes. Paste the `0.1.0` entry from `CHANGELOG.md` at the top: Releases › v0.1.0 › Edit. The answer below links to `CHANGELOG.md`, which is enough for the form, but the Release should say the same.
@@ -93,8 +93,8 @@ R = `https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte`
 
 | Criterion | Level | Answer | Justification (paste) |
 |---|---|---|---|
-| know_secure_design | MUST | Met (**owner: confirm**) | The maintainer designed the threat model: the server listens on 127.0.0.1 only and checks the Host and Origin headers; a single-use token becomes an HttpOnly SameSite=Strict cookie; the API is read-only; paths are confined and realpath-checked; Markdown HTML goes through an allowlist sanitizer; there is a strict CSP; and the package has no runtime dependencies. |
-| know_common_errors | MUST | Met (**owner: confirm**) | The maintainer knows the common web and CLI errors and their mitigations, and they are tested: path traversal (realpath confinement, fuzz tests), XSS (sanitizer, hostile corpus), DNS rebinding and CSRF (Host and Origin checks, SameSite cookie), open redirect (path rules), timing attacks (timingSafeEqual), and supply chain (pinned actions, npm audit, signatures). |
+| know_secure_design | MUST | Met | The maintainer designed the threat model: the server listens on 127.0.0.1 only and checks the Host and Origin headers; a single-use token becomes an HttpOnly SameSite=Strict cookie; the API is read-only; paths are confined and realpath-checked; Markdown HTML goes through an allowlist sanitizer; there is a strict CSP; and the package has no runtime dependencies. |
+| know_common_errors | MUST | Met | The maintainer knows the common web and CLI errors and their mitigations, and they are tested: path traversal (realpath confinement, fuzz tests), XSS (sanitizer, hostile corpus), DNS rebinding and CSRF (Host and Origin checks, SameSite cookie), open redirect (path rules), timing attacks (timingSafeEqual), and supply chain (pinned actions, npm audit, signatures). |
 | crypto_published | MUST | Met | Folio uses only Node's built-in `node:crypto`, with SHA-256 and a CSPRNG. No custom cryptography. |
 | crypto_call | SHOULD | Met | All cryptography goes through `node:crypto`, which wraps OpenSSL. |
 | crypto_floss | MUST | Met | Node and OpenSSL are FLOSS. |

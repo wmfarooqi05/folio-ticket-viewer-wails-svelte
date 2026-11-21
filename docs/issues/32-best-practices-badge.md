@@ -38,4 +38,5 @@ Nov 21, 2026:
   - `contribution` and `test_policy`: the new [CONTRIBUTING.md](../../CONTRIBUTING.md);
   - `release_notes` and `release_notes_vulns`: the new [CHANGELOG.md](../../CHANGELOG.md), with a Security line in every entry; [releasing.md](../releasing.md) now makes the CHANGELOG entry part of every release.
 - **CodeQL alerts:** the 15 open ones were triaged as false positives, or as mockups that are not shipped. The owner dismisses them; the answers file has the table.
-- **Left for the owner:** confirm the two "know secure design" answers; paste the 0.1.0 notes onto its Release; dismiss the alerts; fill in the form.
+- **The owner confirmed** the two "know secure design" answers (Nov 21).
+- **Left for the owner:** paste the 0.1.0 notes onto its Release; dismiss the alerts; fill in the form.
