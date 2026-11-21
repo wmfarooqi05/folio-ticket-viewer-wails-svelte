@@ -7,6 +7,7 @@
   import { renderMarkdown } from '../lib/render/markdown'
   import { makeUrls, type UrlTemplates } from '../lib/render/urls'
   import { editedAgo } from '../lib/status'
+  import EvidencePanel from './EvidencePanel.svelte'
   import HeaderCard from './HeaderCard.svelte'
   import '../lib/render/doc.css'
 
@@ -27,6 +28,8 @@
     range?: LineRange | null
     /** a plain click on an internal link goes here (the panel); without it, to `onnavigate` */
     onpanel?: (path: string, fragment: string | null) => void
+    /** the side panel's "open in the middle", offered by the compact evidence summary */
+    onpromote?: () => void
   }
   let {
     path,
@@ -39,6 +42,7 @@
     variant = 'main',
     range = null,
     onpanel,
+    onpromote,
   }: Props = $props()
 
   const rec = $derived(path && index ? (fileAt(index, path) ?? null) : null)
@@ -48,8 +52,21 @@
   // a live refresh swaps the index on every disk change, and the open document must not be
   // re-rendered (and lose its scroll) for an edit to some other file. Link states (a broken
   // link that now resolves) refresh the next time the document is shown.
+  // The factory's board block is drawn by EvidencePanel, so the body does not repeat it. Its lines are
+  // blanked, never cut, so the parser's file lines still match headings and items below it.
+  const body_text = $derived.by(() => {
+    if (text === null || !rec?.board) return text
+    const lines = text.split('\n')
+    const b = rec.board.line - 1
+    let e = b
+    while (e < lines.length && !/^<!--\s*factory:board\s+end\s*-->$/.test(lines[e].trim())) e++
+    if (b < 0 || e >= lines.length) return text
+    for (let i = b; i <= e; i++) lines[i] = ''
+    return lines.join('\n')
+  })
   let cache: { key: string; text: string; html: string } | null = null
   const html = $derived.by(() => {
+    const text = body_text
     if (text === null || !rec) return null
     const key = [rec.path, rec.mtime, isTicket, range ? `${range.start}-${range.end}` : '', config?.adoWorkItemUrl ?? '', config?.adoPrUrl ?? ''].join('|')
     if (cache && cache.key === key && cache.text === text) return cache.html
@@ -148,6 +165,10 @@
               onvscode={() => api.openInVSCode(rec.path, 0).catch((e) => fail('Could not open VS Code', e))}
             />
           </div>
+        {/if}
+
+        {#if rec && isTicket && !range && rec.board && index}
+          <EvidencePanel {rec} {index} compact={variant === 'panel'} {onpromote} />
         {/if}
 
         {#if text === null}

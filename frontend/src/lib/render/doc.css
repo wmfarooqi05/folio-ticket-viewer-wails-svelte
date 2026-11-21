@@ -63,6 +63,16 @@
   margin: 0 0 12px;
   padding-left: 22px;
 }
+/* Tailwind's reset removes list markers; documents need them back (task lists turn them off below) */
+.doc ul {
+  list-style: disc;
+}
+.doc ul ul {
+  list-style: circle;
+}
+.doc ol {
+  list-style: decimal;
+}
 .doc li {
   margin: 2px 0;
 }

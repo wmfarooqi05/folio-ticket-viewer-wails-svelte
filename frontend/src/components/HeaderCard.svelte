@@ -80,6 +80,28 @@
       {/if}
     </dd>
 
+    <!-- the factory's board block (ticket 40, D5): drawn only when the block has the line (Q6, Q7) -->
+    {#if rec.board?.branch}
+      <dt class="text-fg3">Branch</dt>
+      <dd class="flex min-w-0 items-center gap-6 font-mono text-xs text-fg2" title={rec.board.branchNote ?? rec.board.branch}>
+        <Icon name="git-branch" size={11} /><span class="min-w-0 truncate">{rec.board.branch}</span>
+        {#if rec.board.branchNote && rec.board.branchNote !== rec.board.branch && /uncommitted/i.test(rec.board.branchNote)}
+          <span class="font-sans text-fg3">uncommitted</span>
+        {/if}
+      </dd>
+    {/if}
+    {#if rec.board?.claim}
+      {@const m = /^worktree\s+(\S+?),?\s+(since\s+.*)$/i.exec(rec.board.claim)}
+      <dt class="text-fg3">Claimed by</dt>
+      <dd class="flex min-w-0 flex-wrap items-baseline gap-x-8">
+        {#if m}
+          <span class="font-mono text-xs text-fg2">{m[1]}</span><span class="text-xs text-fg3">agent worktree, {m[2]}</span>
+        {:else}
+          <span class="text-xs text-fg2">{rec.board.claim}</span>
+        {/if}
+      </dd>
+    {/if}
+
     <dt class="text-fg3">Blocked by</dt>
     <dd class="flex min-w-0 flex-col gap-6">
       <div class="flex flex-wrap gap-6">

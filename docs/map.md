@@ -86,7 +86,7 @@ Reached when:
 | 37 | [Close the gaps in the factory board design before building it](issues/37-factory-board-design-gaps.md) | decision | — | — | done — all ten answered as proposed | — |
 | 38 | [The board: verify tokens, folding columns, and the card additions](issues/38-board-verify-styling-rails-and-card.md) | build | — | — | in-review — built; copy success path to check in a normal browser | — |
 | 39 | [The evidence route and the evidence root](issues/39-evidence-route-and-evidence-root.md) | build | 35 | — | in-review — built; 31 route tests, seeking checked in a browser | — |
-| 40 | [The evidence panel in the ticket view](issues/40-evidence-panel-in-the-ticket-view.md) | build | 38, 39 | — | open | — |
+| 40 | [The evidence panel in the ticket view](issues/40-evidence-panel-in-the-ticket-view.md) | build | 38, 39 | — | in-review — built; every state checked in a browser | — |
 | 41 | [Needs you, the "to verify" count, and the mirror's live status](issues/41-needs-you-and-mirror-status.md) | build | 38 | — | open | — |
 <!-- tickets:end -->
 
