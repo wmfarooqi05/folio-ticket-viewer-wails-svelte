@@ -63,6 +63,12 @@ What is different from the desktop app:
 - External links open in a new browser tab (`http` and `https` only). "Open in VS Code" is a `vscode://` link; Edge asks once.
 - No window bounds, no RAM readout, no "Open settings file".
 - Only the browser that used the printed link can talk to the server: it listens on `127.0.0.1` only, accepts only `127.0.0.1:<port>` and `localhost:<port>` as the host, and wants a cookie it gets from the token in the link. Cross-site requests are refused. Images are served under `/doc/` with the same path rules as the desktop app.
+- **Evidence from outside the docs folder** (ticket 39), for a ticket in the factory's mirror: `/evidence/<ticket>/<n>` is the one route that reads files outside the docs folder, so it is tightly limited:
+  - **Nothing without a declared folder.** Folio serves nothing until you name the evidence folder with `--evidence <folder>` (this run only) or in Settings (saved as `evidenceRoot`).
+  - **No paths in the URL.** The request names a ticket and an index. The server reads that ticket and its generated board block itself, so a path only ever comes from a ticket on disk.
+  - **Only listed files of a few types.** A file must be listed in the block, as an image (`.png .jpg .jpeg .webp .gif`), a video (`.webm .mp4`), or the scenarios or write-up (`.md`, sent as plain text). The kind and the extension must agree, and SVG is never served.
+  - **Only from inside the folder.** The file's real path, with links resolved, must be inside the folder's real path. Nothing that reaches a network share is touched.
+  - **Read-only, for seeking.** GET and HEAD only, with single byte ranges so a video can seek, `nosniff`, a sandbox CSP and `no-store`. Anything else gets the same 404.
 
 For development, from the repo root: `npm run web -- --docs fixtures\docs` (or `task web -- --docs fixtures\docs`) builds what is stale and runs it. `task build` builds `packages/folio-issues-kanban-viewer/` (`folio-web.mjs` plus `dist/`), the folder that gets published; run `npm pack` there to check the file list. The server is TypeScript under `frontend/src/server/`, with no dependencies. `task test` runs the frontend tests and the contract suite against the Node server. The Go services are frozen, but `task test:contract:go` (the same as `FOLIO_CONTRACT_GO=1 npm run test:contract`, needs Go) still runs every case against both and checks that the two report the same (`cmd/contract-server` is the Go side of that harness).
 

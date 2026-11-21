@@ -8,6 +8,8 @@ vi.mock('../lib/api', () => ({
   isWeb: true,
   checkDocs: (...a: unknown[]) => checkDocs(...a),
   docsFromCommandLine: async () => null,
+  getEvidence: async () => ({ root: '', fromCommandLine: false, reachable: false }),
+  setEvidence: async () => ({ root: '', fromCommandLine: false, reachable: false }),
   setConfig: async () => ({}),
   clearData: async () => ({}),
 }))

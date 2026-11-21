@@ -8,6 +8,25 @@ import type { Roots } from './docs'
 import { resolveMarkdown, skipDir } from './paths'
 import * as S from './settings'
 
+/** The evidence root (ticket 39). `fromCommandLine`: --evidence set it for this run, over Settings. */
+export interface EvidenceRoot {
+  root: string
+  fromCommandLine: boolean
+  /** a folder that exists now, from one stat; false for "" */
+  reachable: boolean
+}
+
+/** The settings.json key for the evidence root: an extra key, written only when set, so a file without
+ * one stays byte-for-byte what the frozen Go app writes (Go keeps keys it does not know). */
+export const EVIDENCE_KEY = 'evidenceRoot'
+
+/** "" when `p` may be an evidence root, else why not. */
+export function evidenceRootError(p: string): string {
+  if (p === '') return ''
+  if (!path.isAbsolute(p)) return 'the evidence folder must be a full path, for example U:\\Evidence'
+  return S.rootShapeError(p)
+}
+
 export interface ConfigPatch {
   repoRoot?: string
   docsDir?: string
@@ -194,10 +213,22 @@ export function inspectDocs(repoRoot: string, docsDir: string, roots: string[]):
   return rc
 }
 
+/** A local folder that exists now. A path that reaches a network share is never stat'ed. */
+function isLocalDir(p: string): boolean {
+  if (S.pathReachesNetwork(p)) return false
+  try {
+    return statSync(p).isDirectory()
+  } catch {
+    return false
+  }
+}
+
 export class ShellService {
   private saved: S.Settings
   private extra: S.Extra = {}
   private override: { repoRoot: string; docsDir: string; docsRoots?: string[] } | null = null
+  /** --evidence: in memory only, never saved, and it wins over the saved one (ticket 39) */
+  private evidenceOverride: string | null = null
   /** Set when settings.json was corrupt and moved aside (the first-run screen follows). */
   loadError: string | null = null
   /** One line per settings.json field that was rejected on load and replaced by its default (L2). */
@@ -206,6 +237,7 @@ export class ShellService {
   constructor(
     private file: string,
     docsOverride?: string,
+    evidenceOverride?: string,
   ) {
     const l = S.load(file)
     this.saved = l.settings
@@ -216,6 +248,12 @@ export class ShellService {
       const rc = inspectRoot(docsOverride, this.saved.docsRoots)
       if (!rc.ok) throw new Error(`--docs ${docsOverride}: ${rc.message}`)
       this.override = { repoRoot: rc.repoRoot, docsDir: rc.docsDir, ...(rc.suggested.length > 0 ? { docsRoots: [...rc.suggested] } : {}) }
+    }
+    if (evidenceOverride) {
+      const abs = path.resolve(evidenceOverride)
+      const err = evidenceRootError(abs)
+      if (err) throw new Error(`--evidence ${evidenceOverride}: ${err}`)
+      this.evidenceOverride = abs
     }
   }
 
@@ -238,6 +276,35 @@ export class ShellService {
   /** The folder given with --docs, which wins over the saved one for this session; null without it. */
   docsFromCommandLine(): string | null {
     return this.override ? S.docsPath(this.effective()) : null
+  }
+
+  /** The evidence root in effect: --evidence, else the saved one, else "". */
+  evidenceRoot = (): string => {
+    if (this.evidenceOverride) return this.evidenceOverride
+    const v = this.extra[EVIDENCE_KEY]
+    return typeof v === 'string' && evidenceRootError(v) === '' ? v : ''
+  }
+
+  getEvidence(): EvidenceRoot {
+    const root = this.evidenceRoot()
+    return { root, fromCommandLine: this.evidenceOverride !== null, reachable: root !== '' && isLocalDir(root) }
+  }
+
+  /** Saves the evidence root ("" clears it). --evidence still wins for this run. */
+  setEvidence(p: string): EvidenceRoot {
+    // checked as typed: resolving first would turn "relative/folder" into a folder under the server's cwd
+    const typed = p.trim()
+    const err = evidenceRootError(typed)
+    if (err) throw new Error(`evidence folder: ${err}`)
+    const v = typed === '' ? '' : path.resolve(typed)
+    const base = this.fresh(['window', 'sidebarWidth', 'panelWidth', 'sidebarCollapsed'])
+    const extra = { ...this.extra }
+    if (v === '') delete extra[EVIDENCE_KEY]
+    else extra[EVIDENCE_KEY] = v
+    S.save(this.file, base, extra)
+    this.saved = base
+    this.extra = extra
+    return this.getEvidence()
   }
 
   /** Picks up hand edits to settings.json, keeping the UI state held in memory. */

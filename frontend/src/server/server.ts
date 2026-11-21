@@ -1,12 +1,13 @@
 // The web-mode HTTP server: the built frontend, one JSON endpoint per backend call
 // (POST /api/<name>, body = the argument list), Server-Sent Events for docs:changed, and
-// /doc/ for images. Node built-ins only.
+// /doc/ for images, /evidence/ for a ticket's factory evidence (ticket 39). Node built-ins only.
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { readFile, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { DOC_PREFIX, serveDocAsset } from './assets'
 import { CHANGED_EVENT, DocsService, defaultCacheDir, type ChangeSet } from './docs'
+import { EVIDENCE_PREFIX, listEvidence, serveEvidence, type EvidenceDeps } from './evidence'
 import { within } from './paths'
 import { SECURITY_HEADERS, checkOrigin, cookieName, cookieOf, newToken, tokenMatches } from './security'
 import { settingsPath } from './settings'
@@ -17,6 +18,8 @@ export interface Options {
   distDir: string
   /** a docs folder or repo root, applied in memory only (never written to settings.json) */
   docs?: string
+  /** the evidence root, applied in memory only like `docs` (ticket 39) */
+  evidence?: string
   /** 0 picks a free port */
   port?: number
   settingsFile?: string
@@ -65,7 +68,7 @@ export async function start(opts: Options): Promise<Running> {
   const session = newToken()
   let tokenUsed = false
   const MAX_STREAMS = 4
-  const shell = new ShellService(opts.settingsFile ?? settingsPath(), opts.docs)
+  const shell = new ShellService(opts.settingsFile ?? settingsPath(), opts.docs, opts.evidence)
   const clients = new Set<ServerResponse>()
   const broadcast = (cs: ChangeSet) => {
     const frame = `event: ${CHANGED_EVENT}\ndata: ${JSON.stringify(cs)}\n\n`
@@ -74,12 +77,23 @@ export async function start(opts: Options): Promise<Running> {
   const docs = new DocsService(shell.roots, broadcast, opts.cacheDir ?? defaultCacheDir(), opts.timing)
   const distRoot = await realpath(opts.distDir)
   let port = 0
+  const evidence: EvidenceDeps = {
+    root: shell.evidenceRoot,
+    docs: () => {
+      const c = shell.getConfig()
+      return { docs: shell.roots().docs, repoRoot: c.repoRoot, docsDir: c.docsDir }
+    },
+    readTicket: (rel) => docs.readFile(rel),
+  }
 
   // One entry per call api.ts makes. Arguments arrive as a JSON array.
   const calls: Record<string, (a: any[]) => unknown> = {
     getConfig: () => shell.getConfig(),
     setConfig: ([p]) => shell.setConfig(p),
     docsFromCommandLine: () => shell.docsFromCommandLine(),
+    getEvidence: () => shell.getEvidence(),
+    setEvidence: ([p]) => shell.setEvidence(str(p)),
+    evidenceFiles: ([p]) => listEvidence(evidence, str(p)),
     setSidebarWidth: ([w]) => shell.setSidebarWidth(num(w)),
     setPanelWidth: ([w]) => shell.setPanelWidth(num(w)),
     setSidebarCollapsed: ([c]) => shell.setSidebarCollapsed(c === true),
@@ -194,6 +208,7 @@ export async function start(opts: Options): Promise<Running> {
     if (rawPath === '/api/events') return events(req, res)
     if (rawPath.startsWith('/api/')) return api(req, res, rawPath.slice(5))
     if (rawPath.startsWith(DOC_PREFIX)) return serveDocAsset(req, res, rawPath, shell.roots().docs)
+    if (rawPath.startsWith(EVIDENCE_PREFIX)) return serveEvidence(req, res, rawPath, evidence)
     return serveStatic(req, res, rawPath)
   }
 

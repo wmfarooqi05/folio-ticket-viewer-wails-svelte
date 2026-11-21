@@ -16,6 +16,7 @@ Each entry has a **Security** line. It names every publicly known vulnerability 
   - on a narrow window, columns fold into rails (Done first), and In progress and Needs verification never fold;
   - long branch names keep their ending;
   - a card that arrives in Needs verification while you watch gets a short ring.
+- **Evidence files** (ticket 39): with `--evidence <folder>`, or a folder saved in Settings, Folio serves the screenshots, videos and scenario files a ticket's board block lists. It serves them only from inside that folder, only of those types, and videos can seek. Without a folder, nothing is served. The panel that shows them comes next.
 - **CI:** a pull request that changes only docs skips the test and security jobs.
 - **Security:** no vulnerabilities fixed.
 

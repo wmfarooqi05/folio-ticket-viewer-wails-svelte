@@ -31,6 +31,12 @@ export const backend: Backend = {
   logTimings: (line) => DocsService.LogTimings(line),
   readBatch: (paths) => DocsService.ReadBatch(paths),
   docsFromCommandLine: async () => null,
+  // the desktop app is retired and frozen (RETIRED.md): no evidence route
+  getEvidence: async () => ({ root: '', fromCommandLine: false, reachable: false }),
+  setEvidence: async () => {
+    throw new Error('the evidence folder needs web mode')
+  },
+  evidenceFiles: async () => ({ root: '', folder: null, reachable: true, files: [] }),
   onDocsChanged: (handler) => Events.On('docs:changed', (e) => handler(e.data as ChangeSet)),
 
   clearData: async () => {
