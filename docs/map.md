@@ -84,7 +84,7 @@ Reached when:
 | 35 | [Parse the factory's board block (v1)](issues/35-factory-board-block-parser.md) | build | — | — | done — merged | #10 |
 | 36 | [Serve the evidence, and show it in the ticket view](issues/36-evidence-route-and-panel.md) | build | 38, 39, 40, 41 | — | done — delivered by 38 to 41 | #10, #11 |
 | 37 | [Close the gaps in the factory board design before building it](issues/37-factory-board-design-gaps.md) | decision | — | — | done — all ten answered as proposed | — |
-| 38 | [The board: verify tokens, folding columns, and the card additions](issues/38-board-verify-styling-rails-and-card.md) | build | — | — | done — merged; copy success path to check in a normal browser | #10 |
+| 38 | [The board: verify tokens, folding columns, and the card additions](issues/38-board-verify-styling-rails-and-card.md) | build | — | — | done — merged; copy ref checked in a real browser | #10 |
 | 39 | [The evidence route and the evidence root](issues/39-evidence-route-and-evidence-root.md) | build | 35 | — | done — merged; 31 route tests, seeking checked in a browser | #11 |
 | 40 | [The evidence panel in the ticket view](issues/40-evidence-panel-in-the-ticket-view.md) | build | 38, 39 | — | done — merged; every state checked in a browser | #11 |
 | 41 | [Needs you, the "to verify" count, and the mirror's live status](issues/41-needs-you-and-mirror-status.md) | build | 38 | — | done — merged; checked live and reconnecting | #11 |

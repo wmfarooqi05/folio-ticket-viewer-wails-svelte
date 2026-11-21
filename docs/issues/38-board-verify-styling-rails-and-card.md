@@ -1,7 +1,7 @@
 ---
 type: build
 status: done
-status_note: "Nov 22, 2026: merged in PR 10; copy ref's Copied message still to check in a normal browser"
+status_note: "Nov 22, 2026: merged in PR 10; copy ref checked in a real Edge window"
 waiting_on: null
 blocked_by: []
 blocked_note: null
@@ -53,4 +53,5 @@ Built Nov 22, 2026.
   - **AC1:** at 1440px all six columns show; at 1280px Done folds to a rail with no overflow, and "Needs verification" is never cut. Opening the rail keeps it open.
   - **AC2:** `feature/payment-intents` shows as `fea…ment-intents`, `feature/chargebacks` as `fea…/chargebacks`, and `feature/refunds` whole.
   - **The arrival ring:** renaming a changed 05 over the file (as the factory writes) moved it live into Needs verification with the ring.
-  - **AC3, partly:** the copy button didn't open the ticket, and when the clipboard refused, the fallback showed. The embedded test browser refuses clipboard writes (`NotAllowedError`), even for a real click, so the success path ("copied", announced) is **not verified here**. Check it once in a normal browser.
+  - **AC3, partly:** the copy button didn't open the ticket, and when the clipboard refused, the fallback showed. The embedded test browser refuses clipboard writes (`NotAllowedError`), even for a real click, so the success path ("copied", announced) was not verified there.
+  - **AC3, Nov 22, 2026, after the merge:** in a real Edge window (a scratch profile driven over CDP, with a trusted mouse click), copy ref on the pay 04 card showed "copied", announced "pay 04 copied", didn't open the card, went back to "copy pay 04" after about 1.5s, and the Windows clipboard held `pay 04`.
