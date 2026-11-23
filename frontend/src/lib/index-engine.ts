@@ -234,9 +234,8 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
         deps.log(`index: LoadCache failed, cold start: ${String(err)}`)
       }
       const hit = isIndex(cached) ? cached : null
-      // A payload the frontend rejects while Go has loaded its stamps would leave a nearly
-      // empty index: ask for a full rescan instead of a diff.
-      const rejected = cached != null && !hit
+      // Any cache miss (none, another parser version or map names, a payload we reject) can leave the server holding
+      // stamps from an earlier start, so a diff would come back empty: ask for a full rescan instead.
       const warm = hit !== null
       let base: Index
       if (hit) {
@@ -250,7 +249,7 @@ export function createIndexEngine(deps: EngineDeps, hooks: EngineHooks) {
         hooks.onStatus({ text: 'Scanning…', checking: false })
       }
 
-      const scan = await (rejected ? deps.rescan() : deps.scan())
+      const scan = await (hit ? deps.scan() : deps.rescan())
       const scanMs = Math.round(deps.now() - t0)
       deps.log(`index: scan returned in ${scanMs} ms (walk ${scan.walkMs} ms, ${scan.changed.length} changed, ${scan.removed.length} removed)`)
 

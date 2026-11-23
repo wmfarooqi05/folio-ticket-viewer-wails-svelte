@@ -8,6 +8,7 @@ import {
   saveDisabled,
   SECTIONS,
   templateExample,
+  parseMapFiles,
   parseTypedRoot,
   rootCandidates,
   rootLabel,
@@ -150,5 +151,12 @@ describe('roots and previews', () => {
     expect(expandTemplate(ADO, 72633)).toBe('https://dev.azure.com/acme/payments/_workitems/edit/72633')
     expect(expandTemplate('', 1)).toBe('')
     expect(expandTemplate('http://x/{id}', 1)).toBe('')
+  })
+})
+
+describe('parseMapFiles (ticket 47)', () => {
+  it('splits on commas, trims, and drops empties', () => {
+    expect(parseMapFiles(' map.md , README.md,, ')).toEqual(['map.md', 'README.md'])
+    expect(parseMapFiles('')).toEqual([])
   })
 })

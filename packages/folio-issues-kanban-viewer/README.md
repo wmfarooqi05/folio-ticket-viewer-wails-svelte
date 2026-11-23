@@ -11,7 +11,7 @@ npx folio-issues-kanban-viewer --docs <path>
 
 It downloads about 1.3 MB (4.4 MB unpacked). Most of that is Mermaid, KaTeX and highlight.js, for diagrams, maths and code, and the browser loads each only when a document needs it.
 
-`<path>` is any local folder. Known layouts come first: a repo root, or its docs folder with `modules/`, `handoffs/` or `patterns/`, or a `map.md` with an `issues/` folder of numbered tickets, shown as a list and a kanban board. Otherwise Folio reads `docs/` if it has Markdown, else the folder itself. A drive root is refused.
+`<path>` is any local folder. Known layouts come first: a repo root, or its docs folder with `modules/`, `handoffs/` or `patterns/`, or a `map.md` or `README.md` with an `issues/` folder of numbered tickets, shown as a list and a kanban board. Otherwise Folio reads `docs/` if it has Markdown, else the folder itself. A drive root is refused.
 
 Or install it once:
 

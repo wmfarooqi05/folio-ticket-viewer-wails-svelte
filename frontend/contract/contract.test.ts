@@ -412,15 +412,17 @@ for (const d of drivers) {
     })
 
     t('settings: unknown keys survive, hand edits are picked up, a corrupt file is moved aside', async (c) => {
-      writeFileSync(c.sb.settingsFile, JSON.stringify({ v: 1, theme: 'light', zzz: { keep: [1, 2] }, adoPrUrl: 'https://old.example.com/{id}' }))
+      writeFileSync(c.sb.settingsFile, JSON.stringify({ v: 1, theme: 'light', zzz: { keep: [1, 2] }, mapFiles: ['map.md', 'index.md'], adoPrUrl: 'https://old.example.com/{id}' }))
       expect((await c.b.call('getConfig')).theme).toBe('light') // read at start
-      writeFileSync(c.sb.settingsFile, JSON.stringify({ v: 1, theme: 'light', zzz: { keep: [1, 2] }, adoPrUrl: 'https://hand.example.com/{id}' }))
+      if (d.name === 'node') expect(await c.b.call('getMapFiles')).toEqual(['map.md', 'index.md']) // Go has no such call
+      writeFileSync(c.sb.settingsFile, JSON.stringify({ v: 1, theme: 'light', zzz: { keep: [1, 2] }, mapFiles: ['map.md', 'index.md'], adoPrUrl: 'https://hand.example.com/{id}' }))
       const next = await c.b.call('setConfig', { repoRoot: c.repo })
       expect(next.adoPrUrl).toBe('https://hand.example.com/{id}') // the hand edit was not overwritten
       const onDisk = JSON.parse(readFileSync(c.sb.settingsFile, 'utf8'))
       expect(onDisk.zzz).toEqual({ keep: [1, 2] })
+      expect(onDisk.mapFiles).toEqual(['map.md', 'index.md']) // ticket 47: Node reads it as the map file names; Go only keeps it
       expect(onDisk.repoRoot).toBe(c.repo)
-    }, ({ sb }) => writeFileSync(sb.settingsFile, JSON.stringify({ v: 1, theme: 'light', zzz: { keep: [1, 2] }, adoPrUrl: 'https://old.example.com/{id}' })))
+    }, ({ sb }) => writeFileSync(sb.settingsFile, JSON.stringify({ v: 1, theme: 'light', zzz: { keep: [1, 2] }, mapFiles: ['map.md', 'index.md'], adoPrUrl: 'https://old.example.com/{id}' })))
 
     t('settings: a corrupt file gives the defaults and is renamed to .bad', async (c) => {
       expect((await c.b.call('getConfig')).theme).toBe('system')

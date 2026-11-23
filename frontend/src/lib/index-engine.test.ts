@@ -313,10 +313,11 @@ describe('failures heal themselves', () => {
     const unreadable = new Map([['modules/a/issues/050-lock.md', 1]])
     const r = rig(paths(2), { unreadable })
     await r.engine.start()
+    const rescansAtStart = r.calls.filter((c) => c === 'rescan').length // a cold start is a full rescan (ticket 47)
     r.disk.set('modules/a/issues/050-lock.md', '# lock\n')
     await r.engine.applyChangeSet({ changed: ['modules/a/issues/050-lock.md'], removed: [], rescan: false })
     expect(Object.keys(r.engine.current()!.files)).toContain('modules/a/issues/050-lock.md')
-    expect(r.calls).not.toContain('rescan')
+    expect(r.calls.filter((c) => c === 'rescan')).toHaveLength(rescansAtStart)
     expect(r.calls.filter((c) => c === 'read:1')).toHaveLength(2) // the read and its one retry
   })
 
@@ -366,14 +367,14 @@ describe('failures heal themselves', () => {
     r.disk.set('modules/a/issues/060-lock.md', '# lock' + String.fromCharCode(10))
     await r.engine.rescan() // read + its retry both fail
     expect(Object.keys(r.engine.current()!.files)).not.toContain('modules/a/issues/060-lock.md')
-    expect(r.calls.filter((c) => c === 'rescan')).toHaveLength(1)
+    expect(r.calls.filter((c) => c === 'rescan')).toHaveLength(2)
     const late = r.timers.filter((t) => t.live && t.ms === LATE_RETRY_MS)
     expect(late).toHaveLength(1)
     late[0].fn()
     await r.engine.flushSave()
     await new Promise((res) => setTimeout(res, 10))
     expect(Object.keys(r.engine.current()!.files)).toContain('modules/a/issues/060-lock.md')
-    expect(r.calls.filter((c) => c === 'rescan')).toHaveLength(1)
+    expect(r.calls.filter((c) => c === 'rescan')).toHaveLength(2)
   })
 
   it('dispose(false) skips the final save', async () => {

@@ -40,6 +40,8 @@ export interface Index {
   spaces: string[]
   /** the name of the space at the docs folder itself (the repo folder's name); '' when the caller gave none */
   rootName: string
+  /** the map file names this index was built with (ticket 47) */
+  mapFiles: string[]
   /** "<space> <num padded to 2>" -> path */
   tickets: Record<string, string>
   edges: Edge[]
@@ -50,7 +52,7 @@ export interface Index {
 export interface DocRecord {
   path: string
   mtime: number
-  /** ticket: **\/issues/NN-*.md under modules/<space>/; map: map.md; else doc */
+  /** ticket: **\/issues/NN-*.md under modules/<space>/; map: a map file (map.md, or another listed name beside tickets, ticket 47); else doc */
   kind: 'ticket' | 'map' | 'doc'
   /** modules/<space>/...; null for handoffs/ and patterns/ */
   space: string | null
@@ -71,6 +73,8 @@ export interface DocRecord {
   items: Item[]
   links: Link[]
   map: { kanban: boolean; issuesDir: string } | null
+  /** Ticket 47: set for a file whose name is in the map list: what it holds as a map. crossFile decides on every pass whether it is one. null otherwise. */
+  mapForm: { meta: MapMeta; fmLines: Record<string, number>; kanban: boolean; diagnostics: Diagnostic[] } | null
   hasMermaid: boolean
   /** the status as written, when the frontmatter's status is not one Folio knows (it then reads `unknown`) */
   statusRaw: string | null
@@ -191,7 +195,10 @@ const PERSONS: readonly Person[] = ['owner', 'client', 'dba', 'infra', 'ops']
 const STATUSES: readonly Status[] = [
   'open', 'in-progress', 'blocked', 'needs-verification', 'in-review', 'done', 'dropped', 'superseded', 'unknown',
 ]
-const MAP_STATUSES = ['charted', 'active', 'closed', 'superseded'] as const
+/** Ticket 47: the file names that can be a space's map, in order of precedence. Only map.md is a map on its own; any other name needs tickets in issues/ beside it. */
+export const DEFAULT_MAP_FILES: readonly string[] = ['map.md', 'README.md']
+const ALWAYS_MAP = 'map.md'
+const MAP_STATUSES =['charted', 'active', 'closed', 'superseded'] as const
 const TYPES = ['build', 'decision', 'grilling', 'task', 'bug', 'spike', 'verify']
 
 /** "5", "05", "005" -> "05"; "100" stays "100". */
@@ -847,13 +854,16 @@ function fmMapMeta(fm: Frontmatter, diag: FmDiag): MapMeta {
  * `rootName` names the space at the docs folder itself (the repo folder's name); the parser has no
  * file system, so the caller says it. Without it, a ticket straight under the docs folder is not a ticket.
  * A space that is not under modules/ is settled for non-ticket files in the cross-file pass.
+ * Ticket 47: a file whose name is in `mapFiles` carries `mapForm`; alone, only map.md is read as a map
+ * (any other name needs the tickets beside it, which only the cross-file pass can see).
  */
-export function parseFile(file: SourceFile, rootName = ''): DocRecord {
+export function parseFile(file: SourceFile, rootName = '', mapFiles: readonly string[] = DEFAULT_MAP_FILES): DocRecord {
   const { path, text } = file
   const ts = ticketSpace(path, rootName)
   const space = ts?.space ?? SPACE_PATH.exec(path)?.[1] ?? null
   const base = path.split('/').pop()!
-  const kind: DocRecord['kind'] = ts ? 'ticket' : base === 'map.md' ? 'map' : 'doc'
+  const candidate = !ts && mapFiles.some((n) => n.toLowerCase() === base.toLowerCase())
+  const kind: DocRecord['kind'] = ts ? 'ticket' : 'doc'
   const num = ts ? ts.num : null
   const key = ts && num ? `${ts.space} ${pad2(num)}` : null
 
@@ -891,15 +901,20 @@ export function parseFile(file: SourceFile, rootName = ''): DocRecord {
       const { legacyRule: _r, warnings: _w, lines: _l, ...rest } = lg
       meta = rest
     }
-  } else if (kind === 'map') {
-    meta = fm ? fmMapMeta(fm.data, diagAt) : { status: null, ado: null, superseded_by: null }
-    if (fm) fmLines = fm.keyLines
+  }
+  let mapForm: DocRecord['mapForm'] = null
+  if (candidate) {
+    const mapDiags: Diagnostic[] = []
+    const mapMeta = fm
+      ? fmMapMeta(fm.data, (c, m, k) => mapDiags.push({ path, line: fm.keyLines[k] ?? 1, code: c, level: 'error', message: m }))
+      : { status: null, ado: null, superseded_by: null }
+    mapForm = { meta: mapMeta, fmLines: fm ? fm.keyLines : {}, kanban: /<!--\s*tickets:begin\b[^>]*\bview=kanban\b/.test(text), diagnostics: mapDiags }
   }
 
   const h1 = scan.headings.find((h) => h.level === 1)
   const title = h1 ? h1.text.replace(/^\d{2,}\s*[—–-]\s*/, '') : base.replace(/\.md$/i, '')
 
-  return {
+  const rec: DocRecord = {
     path,
     mtime: file.mtime,
     kind,
@@ -914,13 +929,26 @@ export function parseFile(file: SourceFile, rootName = ''): DocRecord {
     headings: scan.headings,
     items: scan.items,
     links: scan.links,
-    map: kind === 'map' ? { kanban: /<!--\s*tickets:begin\b[^>]*\bview=kanban\b/.test(text), issuesDir: dirname(path) === '' ? 'issues' : `${dirname(path)}/issues` } : null,
+    map: null,
+    mapForm,
     hasMermaid: scan.hasMermaid,
     statusRaw: fm && meta && 'type' in meta && meta.status === 'unknown' ? strOrNull(fm.data.status) : null,
     board: boardScan.board,
     diagnostics,
     fmLines,
   }
+  return rec.mapForm && base.toLowerCase() === ALWAYS_MAP ? asMap(rec, true) : rec
+}
+
+const issuesDirOf = (p: string) => (dirname(p) === '' ? 'issues' : `${dirname(p)}/issues`)
+
+/** Ticket 47: a map-file candidate as a map or as a plain doc. Idempotent from either state. */
+function asMap(rec: DocRecord, isMap: boolean): DocRecord {
+  const f = rec.mapForm!
+  const own = rec.diagnostics.filter((d) => !f.diagnostics.some((m) => m.code === d.code && m.line === d.line && m.message === d.message))
+  return isMap
+    ? { ...rec, kind: 'map', meta: f.meta, fmLines: f.fmLines, map: { kanban: f.kanban, issuesDir: issuesDirOf(rec.path) }, diagnostics: [...own, ...f.diagnostics] }
+    : { ...rec, kind: 'doc', meta: null, fmLines: {}, map: null, diagnostics: own }
 }
 
 // ---- references and links (section 2.4 to 2.6) --------------------------------
@@ -960,13 +988,19 @@ function knownSpaceName(name: string, index: Index): boolean {
   return /^[a-z0-9-]+$/.test(name) || index.spaces.includes(name)
 }
 
-/** The map of a space: modules/<space>/map.md, else the shortest map.md path of that space. */
+/**
+ * The map of a space: modules/<space>/map.md when it is a map, else the map of that space in the shallowest
+ * folder (so a top-level README.md beats a nested a/map.md), then the shortest path, then sort order.
+ */
 function mapOfSpace(space: string, index: Index): string | null {
   const modular = `modules/${space}/map.md`
-  if (index.files[modular]) return modular
+  if (fileAt(index, modular)?.kind === 'map') return modular
   let best: string | null = null
-  for (const rec of Object.values(index.files)) {
-    if (rec.kind === 'map' && rec.space === space && (best === null || rec.path.length < best.length)) best = rec.path
+  const depth = (p: string) => p.split('/').length
+  for (const p of Object.keys(index.files).sort()) {
+    const rec = index.files[p]
+    if (rec.kind !== 'map' || rec.space !== space) continue
+    if (best === null || depth(p) < depth(best) || (depth(p) === depth(best) && p.length < best.length)) best = p
   }
   return best
 }
@@ -1121,26 +1155,27 @@ export function scanText(text: string, fromPath: string, index: Index): TextRef[
 
 // ---- the index (build, update, cross-file pass) --------------------------------
 
-const EMPTY_INDEX: Index = { version: 1, files: {}, spaces: [], rootName: '', tickets: {}, edges: [], diagnostics: [] }
+const EMPTY_INDEX: Index = { version: 1, files: {}, spaces: [], rootName: '', mapFiles: [...DEFAULT_MAP_FILES], tickets: {}, edges: [], diagnostics: [] }
 
-/** `rootName` is the repo folder's name: the space of tickets and maps at the docs folder itself. */
-export function buildIndex(files: Iterable<SourceFile>, rootName = ''): Index {
-  return updateIndex({ ...EMPTY_INDEX, rootName }, [...files], [])
+/** `rootName` is the repo folder's name: the space of tickets and maps at the docs folder itself. `mapFiles` are the map file names (ticket 47). */
+export function buildIndex(files: Iterable<SourceFile>, rootName = '', mapFiles: readonly string[] = DEFAULT_MAP_FILES): Index {
+  return updateIndex({ ...EMPTY_INDEX, rootName, mapFiles: [...mapFiles] }, [...files], [])
 }
 
 /** Re-parses only `changed`, drops `removed`, then reruns the cross-file pass in full. */
 export function updateIndex(index: Index, changed: SourceFile[], removed: string[]): Index {
+  const names = index.mapFiles ?? DEFAULT_MAP_FILES // an index cached before ticket 47 has no list
   const parsed: Record<string, DocRecord> = { ...index.files }
   for (const p of removed) delete parsed[p]
   for (const f of changed) {
     if (isHidden(f.path)) delete parsed[f.path]
-    else parsed[f.path] = parseFile(f, index.rootName)
+    else parsed[f.path] = parseFile(f, index.rootName, names)
   }
-  return crossFile(parsed, index.rootName ?? '')
+  return crossFile(parsed, index.rootName ?? '', names)
 }
 
 /**
- * The folders that count as a space outside modules/: one that holds a map.md or an issues/ folder.
+ * The folders that count as a space outside modules/: one that holds a map (map.md) or an issues/ folder.
  * '' is the docs folder itself. Only files that modules/ does not already place are looked at.
  */
 function spaceDirs(parsed: Record<string, DocRecord>): Set<string> {
@@ -1149,7 +1184,7 @@ function spaceDirs(parsed: Record<string, DocRecord>): Set<string> {
     if (p.startsWith('modules/') || CROSS_CUTTING.test(p)) continue
     const segs = p.split('/')
     segs.pop()
-    if (p.endsWith('/map.md') || p === 'map.md') dirs.add(segs.join('/'))
+    if (parsed[p].kind === 'map') dirs.add(segs.join('/'))
     segs.forEach((seg, i) => {
       if (seg === 'issues') dirs.add(segs.slice(0, i).join('/'))
     })
@@ -1157,8 +1192,20 @@ function spaceDirs(parsed: Record<string, DocRecord>): Set<string> {
   return dirs
 }
 
-function crossFile(parsed: Record<string, DocRecord>, rootName: string): Index {
+function crossFile(parsed: Record<string, DocRecord>, rootName: string, mapFiles: readonly string[]): Index {
   const paths = Object.keys(parsed).sort()
+  // Ticket 47: the map of each folder. map.md always counts; any other listed name only with tickets in issues/ beside it.
+  const ticketDirs = new Set(paths.filter((p) => parsed[p].kind === 'ticket').map(dirname))
+  const win = new Map<string, { path: string; rank: number }>()
+  for (const p of paths) {
+    if (!parsed[p].mapForm) continue
+    const base = p.split('/').pop()!.toLowerCase()
+    if (base !== ALWAYS_MAP && !ticketDirs.has(issuesDirOf(p))) continue
+    const rank = mapFiles.findIndex((n) => n.toLowerCase() === base)
+    const w = win.get(dirname(p))
+    if (!w || rank < w.rank) win.set(dirname(p), { path: p, rank })
+  }
+  for (const p of paths) if (parsed[p].mapForm) parsed[p] = asMap(parsed[p], win.get(dirname(p))?.path === p)
   // A file outside modules/ that is not a ticket belongs to the nearest folder above it that is a space.
   const dirs = spaceDirs(parsed)
   const modular = new Set<string>()
@@ -1204,7 +1251,7 @@ function crossFile(parsed: Record<string, DocRecord>, rootName: string): Index {
       } else tickets[rec.key] = p
     }
   }
-  const index: Index = { version: 1, files: {}, spaces: [...spaces].sort(), rootName, tickets, edges: [], diagnostics }
+  const index: Index = { version: 1, files: {}, spaces: [...spaces].sort(), rootName, mapFiles: [...mapFiles], tickets, edges: [], diagnostics }
 
   // The records are shared with the previous index, so work on copies of the parts we fill in.
   for (const p of paths) index.files[p] = { ...parsed[p] }

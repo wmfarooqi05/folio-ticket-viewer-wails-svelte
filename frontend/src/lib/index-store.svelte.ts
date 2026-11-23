@@ -5,7 +5,10 @@
 import * as api from './api'
 import { createIndexEngine, type IndexEngine, type StartTimings } from './index-engine'
 import { live as liveState } from './live.svelte'
-import { buildIndex, rootNameFor, updateIndex, type Index } from './parser'
+import { buildIndex, DEFAULT_MAP_FILES, rootNameFor, updateIndex, type Index } from './parser'
+
+/** The cache key: the parser version and the map file names, so a changed list rebuilds the index (ticket 47). */
+export const cacheKey = (version: string, names: readonly string[]) => `${version}+maps=${JSON.stringify(names)}`
 
 class IndexStore {
   /** The only index. Replaced, never mutated. */
@@ -25,6 +28,8 @@ class IndexStore {
   #engine: IndexEngine | null = null
   /** The space of the docs folder itself: the repo folder's name (what the parser cannot know). */
   #rootName = ''
+  /** The map file names, read when start() runs; rescan() keeps them (ticket 47). */
+  #mapFiles: string[] = [...DEFAULT_MAP_FILES]
   #gen = 0 // bumped by every start(); an older engine can no longer write here
   #unsubscribe: (() => void) | null = null
   #changed = new Set<string>()
@@ -42,7 +47,16 @@ class IndexStore {
   /** Warm or cold start, then live refresh. Safe to call again after a root change. */
   async start(): Promise<StartTimings> {
     await this.#readRootName()
+    await this.#readMapFiles()
     return this.#start()
+  }
+
+  async #readMapFiles() {
+    try {
+      this.#mapFiles = await api.getMapFiles()
+    } catch {
+      this.#mapFiles = [...DEFAULT_MAP_FILES]
+    }
   }
 
   async #readRootName() {
@@ -58,6 +72,7 @@ class IndexStore {
     this.stop(false) // a newer generation follows: the old engine must not save its index
     this.index = null
     this.tooLarge = {}
+    const names = this.#mapFiles
     const gen = ++this.#gen
     const live = () => gen === this.#gen
     this.#engine = createIndexEngine(
@@ -68,8 +83,8 @@ class IndexStore {
         rescan: async () => normalise(await api.rescan()),
         readBatch: api.readBatch,
         updateIndex,
-        emptyIndex: () => buildIndex([], this.#rootName),
-        parserVersion: __PARSER_VERSION__,
+        emptyIndex: () => buildIndex([], this.#rootName, names),
+        parserVersion: cacheKey(__PARSER_VERSION__, names),
         now: () => performance.now(),
         sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
         log: (m) => console.info(m),

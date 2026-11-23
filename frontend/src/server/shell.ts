@@ -4,6 +4,7 @@
 import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { vscodeUrl } from '../lib/external'
+import { DEFAULT_MAP_FILES } from '../lib/parser'
 import type { Roots } from './docs'
 import { resolveMarkdown, skipDir } from './paths'
 import * as S from './settings'
@@ -25,6 +26,41 @@ export function evidenceRootError(p: string): string {
   if (p === '') return ''
   if (!path.isAbsolute(p)) return 'the evidence folder must be a full path, for example U:\\Evidence'
   return S.rootShapeError(p)
+}
+
+/** settings.json key for the map file names (ticket 47): an extra key, written only when not the default,
+ * so a default file stays what the frozen Go app writes. */
+export const MAP_FILES_KEY = 'mapFiles'
+export const MAX_MAP_FILES = 10
+export const MAX_MAP_NAME = 100
+
+/** The names as the setting keeps them: trimmed, a repeat in any case dropped (the first stays). */
+export function normaliseMapFiles(names: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const n of names) {
+    const t = n.trim()
+    if (t === '' || seen.has(t.toLowerCase())) continue
+    seen.add(t.toLowerCase())
+    out.push(t)
+  }
+  return out
+}
+
+/** "" when `names` may be the map file list, else why not. */
+export function mapFilesError(names: unknown): string {
+  if (!Array.isArray(names) || !names.every((n) => typeof n === 'string')) return 'must be a list of file names'
+  const list = normaliseMapFiles(names as string[])
+  if (list.length === 0) return 'list at least one file name'
+  if (list.length > MAX_MAP_FILES) return `at most ${MAX_MAP_FILES} names`
+  for (const n of list) {
+    if (n.length > MAX_MAP_NAME) return `"${n}" is too long`
+    if (/[/\\\u0000-\u001f\u007f]/.test(n)) return `"${n}" must be a file name, not a path`
+    if (/[,<>:"|?*]/.test(n)) return `"${n}" has a character a file name can't have`
+    if (n.startsWith('.')) return `"${n}" must not start with a dot`
+    if (!/^.+\.md$/i.test(n)) return `"${n}" must end in .md`
+  }
+  return ''
 }
 
 export interface ConfigPatch {
@@ -280,6 +316,10 @@ export class ShellService {
       if (err) throw new Error(`--evidence ${evidenceOverride}: ${err}`)
       this.evidenceOverride = abs
     }
+    if (MAP_FILES_KEY in this.extra) {
+      const err = mapFilesError(this.extra[MAP_FILES_KEY])
+      if (err) this.loadWarnings.push(`settings: ${file}: ${MAP_FILES_KEY}: ${err}; using the default`)
+    }
   }
 
   private effective(): S.Settings {
@@ -330,6 +370,27 @@ export class ShellService {
     this.saved = base
     this.extra = extra
     return this.getEvidence()
+  }
+
+  /** The map file names in effect: the saved list, else the default (ticket 47). */
+  getMapFiles(): string[] {
+    const v = this.extra[MAP_FILES_KEY]
+    return mapFilesError(v) === '' ? normaliseMapFiles(v as string[]) : [...DEFAULT_MAP_FILES]
+  }
+
+  /** Saves the map file names. The default list is not written: the key is removed instead. */
+  setMapFiles(names: unknown): string[] {
+    const err = mapFilesError(names)
+    if (err) throw new Error(`map files: ${err}`)
+    const list = normaliseMapFiles(names as string[])
+    const base = this.fresh(['window', 'sidebarWidth', 'panelWidth', 'sidebarCollapsed'])
+    const extra = { ...this.extra }
+    if (list.length === DEFAULT_MAP_FILES.length && list.every((n, i) => n === DEFAULT_MAP_FILES[i])) delete extra[MAP_FILES_KEY]
+    else extra[MAP_FILES_KEY] = list
+    S.save(this.file, base, extra)
+    this.saved = base
+    this.extra = extra
+    return this.getMapFiles()
   }
 
   /** Picks up hand edits to settings.json, keeping the UI state held in memory. */

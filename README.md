@@ -88,18 +88,18 @@ For development, from the repo root: `npm run web -- --docs fixtures\docs` (or `
 
 ## Docs layouts
 
-A **space** is a folder that holds a `map.md` or an `issues/` folder, and a ticket is `issues/NN-*.md` under a space. Ticket keys are `<space> NN`, and refs, map links and `blocked_by` resolve inside the space.
+A **space** is a folder that holds a map (`map.md`, or `README.md` when tickets sit in `issues/` beside it) or an `issues/` folder, and a ticket is `issues/NN-*.md` under a space. Ticket keys are `<space> NN`, and refs, map links and `blocked_by` resolve inside the space. The map file names can be changed in Settings > Docs folder > **Map files** (web mode; saved on this computer as `mapFiles`, only when not the default). `map.md` always counts; any other name counts only with an `issues/` folder of tickets beside it, and the first name in the list wins.
 
 - `docs/modules/<space>/...` gives the space `<space>`, as before.
 - `docs/map.md` plus `docs/issues/NN-*.md` (this repo) is one space named after the repo folder, for example `ticket_ui`. Settings picks the root **Whole docs folder (`.`)** for it, and so does the first run when it finds no `modules`, `handoffs` or `patterns`.
 - A mix works too: `modules/<x>/` spaces beside a top-level `issues/` folder, with the root `.`. Under `.` the usual skips apply: `_` folders, dot folders and `node_modules`. `handoffs/` and `patterns/` belong to no space.
-- When spaces are nested, the nearest folder with a `map.md` or `issues/` wins.
+- When spaces are nested, the nearest folder with a map or `issues/` wins.
 
 ## Settings
 
 Open them with the gear in the header or Ctrl+,. The dialog has four sections; Save stays disabled until something changes, Esc closes, Enter saves.
 
-- **Docs folder:** the repo root (with the picker), the docs folder name (default `docs`), and the docs roots to index (default `modules`, `handoffs`, `patterns`). The roots are chips: **Whole docs folder (.)**, the usual three, and every top-level folder of the docs folder that holds a `.md`, each with a found or missing dot. A small box adds any other relative folder. The last scan time is shown too.
+- **Docs folder:** the repo root (with the picker), the docs folder name (default `docs`), and the docs roots to index (default `modules`, `handoffs`, `patterns`). The roots are chips: **Whole docs folder (.)**, the usual three, and every top-level folder of the docs folder that holds a `.md`, each with a found or missing dot. A small box adds any other relative folder. The last scan time is shown too. Web mode also has **Evidence folder** and **Map files** here (the names that can be a folder's map, default `map.md, README.md`).
 - **Links:** the Azure DevOps work item and pull request URL templates (`https://` with an `{id}`), with a live preview.
 - **Appearance:** System, Light or Dark, and **Show memory use** (off by default; desktop app only, hidden in web mode).
 - **Data:** **Clear data**, see [Clear data](#clear-data).

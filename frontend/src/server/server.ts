@@ -91,6 +91,8 @@ export async function start(opts: Options): Promise<Running> {
     getConfig: () => shell.getConfig(),
     setConfig: ([p]) => shell.setConfig(p),
     docsFromCommandLine: () => shell.docsFromCommandLine(),
+    getMapFiles: () => shell.getMapFiles(),
+    setMapFiles: ([n]) => shell.setMapFiles(n),
     getEvidence: () => shell.getEvidence(),
     setEvidence: ([p]) => shell.setEvidence(str(p)),
     evidenceFiles: ([p]) => listEvidence(evidence, str(p)),

@@ -228,3 +228,10 @@ export function normalizeRoot(r: string): string {
   }
   return out.length === 0 ? WHOLE_ROOT : out.join('/')
 }
+
+/** The Map files field: "map.md, README.md" -> the list (ticket 47). The server validates it. */
+export const parseMapFiles = (s: string): string[] =>
+  s
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean)

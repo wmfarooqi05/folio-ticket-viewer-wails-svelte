@@ -27,6 +27,6 @@ export async function readDocsRoot(docsRoot: string, roots = ['modules', 'handof
 /** The docs folder's own space is named like the app names it: repo folder, or the docs folder when it is not "docs". */
 export const rootNameOf = (docsRoot: string): string => rootNameFor(dirname(resolve(docsRoot)), basename(resolve(docsRoot)))
 
-export async function buildIndexFromDisk(docsRoot: string, roots?: string[]): Promise<Index> {
-  return buildIndex(await readDocsRoot(docsRoot, roots), rootNameOf(docsRoot))
+export async function buildIndexFromDisk(docsRoot: string, roots?: string[], mapFiles?: readonly string[]): Promise<Index> {
+  return buildIndex(await readDocsRoot(docsRoot, roots), rootNameOf(docsRoot), mapFiles)
 }

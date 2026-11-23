@@ -626,7 +626,7 @@
 </div>
 
 {#if settingsOpen && config}
-  <SettingsDialog {config} scan={scanInfo} onclose={() => (settingsOpen = false)} onsaved={settingsSaved} />
+  <SettingsDialog {config} scan={scanInfo} onclose={() => (settingsOpen = false)} onsaved={settingsSaved} onmapfiles={() => void indexStore.start().catch(fail)} />
 {/if}
 
 {#if toast}
