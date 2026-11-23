@@ -369,7 +369,12 @@ export class DocsService {
       await unlink(file).catch(() => {})
       return null
     }
-    if (env.parserVersion !== parserVersion || env.docsRoot !== normRoot(r.docs) || !sameList(env.roots ?? [], r.roots)) return null
+    if (env.parserVersion !== parserVersion || env.docsRoot !== normRoot(r.docs) || !sameList(env.roots ?? [], r.roots)) {
+      // a miss: stamps from an earlier start must not make the next scan a diff against an index we do not have
+      this.stamps = new Map()
+      this.announced = new Map()
+      return null
+    }
     this.stamps = new Map(Object.entries(env.stamps ?? {}).map(([p, v]) => [p, { mtime: v[0], size: v[1], ino: v[2] ?? -1 }]))
     this.announced = new Map()
     return env.index

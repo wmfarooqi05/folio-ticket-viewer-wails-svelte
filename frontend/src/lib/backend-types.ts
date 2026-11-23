@@ -80,6 +80,9 @@ export interface Backend {
   getEvidence(): Promise<EvidenceRoot>
   setEvidence(path: string): Promise<EvidenceRoot>
   evidenceFiles(ticketPath: string): Promise<EvidenceList>
+  /** Web mode only (ticket 47): the file names that can be a folder's map, in order. The desktop app keeps the default. */
+  getMapFiles(): Promise<string[]>
+  setMapFiles(names: string[]): Promise<string[]>
   /** `onState`: web mode reports whether the event stream is connected (ticket 41's "Mirror live") */
   onDocsChanged(handler: (cs: ChangeSet) => void, onState?: (connected: boolean) => void): () => void
 

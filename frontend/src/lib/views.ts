@@ -180,11 +180,11 @@ export function questionSpaces(rows: QuestionRow[]): number {
   return new Set(rows.map((r) => r.rec.space)).size
 }
 
-/** "Where" label: the ticket key, or "space · map.md" for a map. */
+/** "Where" label: the ticket key, or "space · map.md" (or "space · README.md") for a map. */
 export function questionWhere(rec: DocRecord): string {
   if (rec.key) return rec.key
   // A nested map shows its path inside the space: "space · step2b/map.md"
-  // inside the space's folder: modules/<space>/ or, for a space found by its map.md or issues/, <space>/
+  // inside the space's folder: modules/<space>/ or, for a space found by its map file or issues/, <space>/
   const prefixes = [`modules/${rec.space}/`, `${rec.space}/`]
   const prefix = rec.space ? prefixes.find((p) => rec.path.startsWith(p)) : undefined
   const rel = prefix ? rec.path.slice(prefix.length) : rec.path

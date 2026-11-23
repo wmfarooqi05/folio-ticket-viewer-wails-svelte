@@ -30,8 +30,11 @@ Examples:
 
 Options:
   <folder>, --docs <path>
-                  the repo root or its docs folder: one that holds modules/, handoffs/ or patterns/,
-                  or any docs folder with a map.md or an issues/ folder (then the whole docs folder is read)
+                  any local folder. A repo root or docs folder with modules/, handoffs/ or patterns/
+                  is read by those; one with a map.md or an issues/ folder is read whole. Any other
+                  folder opens too: its docs/ when that holds Markdown, else the folder itself, read
+                  whole. A drive root is refused. A folder's map (board, graph) is its map.md, or its
+                  README.md when an issues/ folder of tickets sits beside it; Settings can change the names
   --evidence <folder>
                   the folder agents stage evidence in (screenshots, videos). Folio shows a ticket's
                   evidence files only from inside this folder. For this run only; Settings can save one

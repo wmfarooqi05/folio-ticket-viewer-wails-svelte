@@ -12,7 +12,7 @@
 
   interface Props {
     index: Index
-    /** path of the open map.md */
+    /** path of the open map file */
     path: string
     onselect: (path: string) => void
     /** the rendered map document (Doc mode) */

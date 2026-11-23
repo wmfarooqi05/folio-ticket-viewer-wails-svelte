@@ -7,6 +7,7 @@
   import { checkPath, isNetworkPath, noRootsText, pickRoot } from '../lib/folder'
   import { docsRootPath } from '../lib/path'
   import EvidenceField from './EvidenceField.svelte'
+  import MapFilesField from './MapFilesField.svelte'
   import {
     SECTIONS,
     THEMES,
@@ -30,11 +31,14 @@
     scan,
     onclose,
     onsaved,
+    onmapfiles,
   }: {
     config: Config
     scan: { count: number; walkMs: number } | null
     onclose: () => void
     onsaved: (cfg: Config, rescan: boolean) => void
+    /** the map file names were saved (ticket 47): the index is rebuilt with them */
+    onmapfiles?: () => void
   } = $props()
 
   const saved: Draft = untrack(() => draftFrom(config))
@@ -468,6 +472,7 @@
             {/each}
             {#if sec === 'folder' && api.isWeb}
               <EvidenceField />
+              <MapFilesField onchanged={onmapfiles} />
             {/if}
             {#if sec === 'data'}
               <div>

@@ -7,6 +7,7 @@ Each entry has a **Security** line. It names every publicly known vulnerability 
 ## Unreleased
 
 - **Open any folder** (ticket 46): `folio <folder>`, `--docs` and the path box open any local folder. Folio reads its `docs/` when that has Markdown, else the folder itself, and says so in the sidebar; a folder with no Markdown opens empty. Non-folders, network paths and drive roots are still refused.
+- **Map files** (ticket 47): a folder's `README.md` is its map (board, graph) when an `issues/` folder of tickets sits beside it. `map.md` still always is, and wins when both are there. Names match in any case. A README.md beside issues/ becomes its space's map, so refs like `x#q1` point at it. Settings › Docs folder › Map files (web mode only) changes the list; it is saved on this computer only.
 - **Security:** no vulnerabilities fixed.
 
 ## 0.1.2 — 2026-11-22

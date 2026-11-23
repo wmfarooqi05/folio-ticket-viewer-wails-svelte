@@ -7,6 +7,7 @@ import { MemoryService } from '../../bindings/github.com/wmfarooqi05/folio-ticke
 import { ShellService } from '../../bindings/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/shell'
 import type { ChangeSet } from '../../bindings/github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte/internal/docs'
 import type { Backend } from './backend-types'
+import { DEFAULT_MAP_FILES } from './parser'
 
 export const isWeb = false
 
@@ -37,6 +38,10 @@ export const backend: Backend = {
     throw new Error('the evidence folder needs web mode')
   },
   evidenceFiles: async () => ({ root: '', folder: null, reachable: true, files: [] }),
+  getMapFiles: async () => [...DEFAULT_MAP_FILES],
+  setMapFiles: async () => {
+    throw new Error('map files need web mode')
+  },
   onDocsChanged: (handler, onState) => {
     onState?.(true) // Wails events need no connection
     return Events.On('docs:changed', (e) => handler(e.data as ChangeSet))

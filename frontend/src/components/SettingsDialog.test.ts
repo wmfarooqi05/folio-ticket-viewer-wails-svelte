@@ -10,6 +10,8 @@ vi.mock('../lib/api', () => ({
   docsFromCommandLine: async () => null,
   getEvidence: async () => ({ root: '', fromCommandLine: false, reachable: false }),
   setEvidence: async () => ({ root: '', fromCommandLine: false, reachable: false }),
+  getMapFiles: async () => ['map.md', 'README.md'],
+  setMapFiles: async (n: string[]) => n,
   setConfig: async () => ({}),
   clearData: async () => ({}),
 }))

@@ -8,7 +8,7 @@
 
   interface Props {
     index: Index
-    /** path of the map.md */
+    /** path of the map file */
     mapPath: string
     onselect: (path: string) => void
   }

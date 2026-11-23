@@ -83,6 +83,10 @@ export const getEvidence = (): Promise<EvidenceRoot> => backend.getEvidence()
 export const setEvidence = (path: string): Promise<EvidenceRoot> => backend.setEvidence(path)
 /** A ticket's evidence files and whether each is served. */
 export const evidenceFiles = (ticketPath: string): Promise<EvidenceList> => backend.evidenceFiles(ticketPath)
+/** The file names that can be a folder's map, in order of precedence (ticket 47). */
+export const getMapFiles = (): Promise<string[]> => backend.getMapFiles()
+/** Saves the map file names; resolves to the list now in effect. */
+export const setMapFiles = (names: string[]): Promise<string[]> => backend.setMapFiles(names)
 /** The URL the browser loads an evidence file from: by ticket and index, never by path. */
 export const evidenceUrl = (ticketPath: string, index: number): string =>
   `/evidence/${ticketPath.split('/').map(encodeURIComponent).join('/')}/${index}`
