@@ -104,6 +104,24 @@ export function parseArgs(argv: string[]): Args {
   return a
 }
 
+/**
+ * Ticket 48: on Windows, a folder typed with a trailing backslash inside quotes ("C:\my folder\", or
+ * 'C:\my folder\' through npm) reaches Node as `C:\my folder"`: the backslash escapes the closing quote,
+ * and every argument after it is swallowed into the same one (`C:\my folder" --no-open --port 4100`).
+ * No Windows path or folio option can hold a `"`, so an argument with one is cut there: the part before
+ * is the value, and the rest is split on spaces into the arguments that were typed. Other systems, where
+ * `"` is a legal file name character, keep argv as it is.
+ */
+export function repairArgv(argv: string[], platform: NodeJS.Platform = process.platform): string[] {
+  if (platform !== 'win32') return argv
+  return argv.flatMap((a) => {
+    const i = a.indexOf('"')
+    if (i < 0) return [a]
+    const rest = a.slice(i).replace(/"/g, ' ').trim()
+    return [...(i > 0 ? [a.slice(0, i)] : []), ...(rest ? rest.split(/\s+/) : [])]
+  })
+}
+
 /** The only URL shape that is ever handed to the OS: loopback, a port, and an optional token of safe characters. */
 export const isSafeUrl = (url: string) => /^http:\/\/127\.0\.0\.1:\d+\/(\?token=[\w-]+)?$/.test(url)
 
@@ -171,7 +189,7 @@ export function openApp(url: string, deps: AppDeps = realDeps): 'edge' | 'browse
 export async function main(argv: string[], version = ''): Promise<void> {
   let args: Args
   try {
-    args = parseArgs(argv)
+    args = parseArgs(repairArgv(argv))
   } catch (e) {
     console.error(`folio: ${(e as Error).message}\n\n${HELP}`)
     process.exit(2)
