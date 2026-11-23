@@ -44,6 +44,8 @@ function rig(initial: string[] = [], opts: { cache?: Index | null; delivered?: b
     },
     async rescan() {
       calls.push('rescan')
+      // a start with no cache walks with rescan (ticket 47), so the gate holds it too
+      if (scanGate) await scanGate
       delivered = new Map()
       return scanInfo()
     },
