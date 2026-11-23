@@ -1,7 +1,7 @@
 // The app-level calls, ported from internal/shell/service.go: config, the folder checks and the
 // vscode:// link. The native dialog, "open external" and "open settings file" have no
 // server side: the browser does those itself.
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { vscodeUrl } from '../lib/external'
 import type { Roots } from './docs'
@@ -159,12 +159,26 @@ const joinRoots = (roots: string[]) => roots.map(rootLabel).join(' · ')
 /** What CheckDocs says when none of the asked-for roots exist (it has no auto-detect). */
 export const expectsRootsMessage = (roots: string[]) => 'expects ' + joinRoots(roots) + ' inside the folder'
 
-/** What a folder with none of the roots (and no map.md or issues/ folder) is told. The same sentence as Go's ExpectsMessage. */
-export const expectsMessage = (roots: string[]) => 'expects ' + joinRoots(roots) + ', or a map.md or issues/ folder, inside the folder'
+/** What a drive root (C:\ or /) is told: the walk and the recursive watcher have no total cap (ticket 46). */
+export const DRIVE_ROOT_MESSAGE = 'a whole drive is too big to read; pick a folder inside it'
+
+/** A drive root, or a link (junction, symlink) that leads to one. A path that reaches the network is not resolved here. */
+function isDriveRoot(abs: string): boolean {
+  if (path.parse(abs).root === abs) return true
+  if (S.pathReachesNetwork(abs)) return false
+  try {
+    const real = realpathSync(abs)
+    return path.parse(real).root === real
+  } catch {
+    return false
+  }
+}
 
 /**
  * The pure part of CheckRoot: a repo root that contains docs/<root>, or the docs folder itself. A docs folder with
  * none of the roots but a map.md or an issues/ folder is accepted whole, and "." is suggested (ticket 25).
+ * Any other local folder opens too (ticket 46): its docs/ when that holds Markdown, else the folder itself, read
+ * whole. Only a non-folder, a network path and a drive root are refused.
  */
 export function inspectRoot(abs: string, roots: string[]): RootCheck {
   if (roots.length === 0) roots = S.DEFAULT_DOCS_ROOTS
@@ -172,13 +186,14 @@ export function inspectRoot(abs: string, roots: string[]): RootCheck {
   // issues/ folder, and suggest what matches (the usual roots, or ".").
   const redetect = roots.some(S.isWholeRoot)
   if (redetect) roots = S.DEFAULT_DOCS_ROOTS
-  const fail: RootCheck = { ok: false, repoRoot: '', docsDir: '', found: [], missing: [...roots], message: expectsMessage(roots), suggested: [], folders: [] }
+  const fail: RootCheck = { ok: false, repoRoot: '', docsDir: '', found: [], missing: [...roots], message: '', suggested: [], folders: [] }
   // Web mode has no native folder dialog, so no network folder is ever "picked": always refused,
   // and before any file-system call (a stat on a UNC path starts SMB with the user's credentials).
   const shape = S.rootShapeError(abs)
   if (shape) return { ...fail, message: shape }
   if (!isDir(abs)) return { ...fail, message: 'that is not a folder' }
   abs = clean(abs)
+  if (isDriveRoot(abs)) return { ...fail, message: DRIVE_ROOT_MESSAGE }
   const candidates = [
     { docs: path.join(abs, S.DEFAULT_DOCS_DIR), repoRoot: abs, docsDir: S.DEFAULT_DOCS_DIR },
     { docs: abs, repoRoot: path.dirname(abs), docsDir: path.basename(abs) },
@@ -190,7 +205,17 @@ export function inspectRoot(abs: string, roots: string[]): RootCheck {
       return { ok: true, repoRoot: c.repoRoot, docsDir: c.docsDir, found: [S.WHOLE_DOCS_ROOT], missing: [...roots], message: '', suggested: [S.WHOLE_DOCS_ROOT], folders: topFolders(c.docs) }
     }
   }
-  return fail
+  // A custom saved list (say ['specs']) must not hide a known layout: look for the usual roots too.
+  if (!redetect) {
+    for (const c of candidates) {
+      const p = probe(c.docs, S.DEFAULT_DOCS_ROOTS)
+      if (p.found.length > 0) return { ok: true, repoRoot: c.repoRoot, docsDir: c.docsDir, ...p, message: '', suggested: [...S.DEFAULT_DOCS_ROOTS], folders: topFolders(c.docs) }
+    }
+  }
+  // ticket 46: any local folder opens, read whole ("."). The frozen Go app still refuses this.
+  const sub = path.join(abs, S.DEFAULT_DOCS_DIR)
+  const c = hasMarkdown(sub) ? { docs: sub, repoRoot: abs, docsDir: S.DEFAULT_DOCS_DIR } : { docs: abs, repoRoot: path.dirname(abs), docsDir: path.basename(abs) }
+  return { ok: true, repoRoot: c.repoRoot, docsDir: c.docsDir, found: hasMarkdown(c.docs) ? [S.WHOLE_DOCS_ROOT] : [], missing: [...roots], message: '', suggested: [S.WHOLE_DOCS_ROOT], folders: topFolders(c.docs) }
 }
 
 /** The pure part of CheckDocs: which roots exist under repoRoot/docsDir. OK means at least one. */

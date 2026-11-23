@@ -97,3 +97,16 @@ describe('Settings docs roots', () => {
     expect(chips()).toHaveLength(before)
   })
 })
+
+describe('the typed folder box (ticket 46)', () => {
+  it('starts with the folder that is open, so a whole-read folder is not widened to its parent', async () => {
+    app = mount(SettingsDialog, {
+      target: document.body,
+      props: { config: { ...(config as object), repoRoot: 'C:/Users/me', docsDir: 'notes' } as never, scan: null, onclose: () => {}, onsaved: () => {} },
+    })
+    flushSync()
+    await vi.advanceTimersByTimeAsync(300)
+    flushSync()
+    expect(document.body.querySelector<HTMLInputElement>('input[aria-label="Path to the repo or its docs folder"]')?.value).toBe('C:/Users/me/notes')
+  })
+})

@@ -30,6 +30,8 @@
     onpanel?: (path: string, fragment: string | null) => void
     /** the side panel's "open in the middle", offered by the compact evidence summary */
     onpromote?: () => void
+    /** the folder has no Markdown at all: say so instead of "Select a document" (ticket 46) */
+    empty?: boolean
   }
   let {
     path,
@@ -43,6 +45,7 @@
     range = null,
     onpanel,
     onpromote,
+    empty = false,
   }: Props = $props()
 
   const rec = $derived(path && index ? (fileAt(index, path) ?? null) : null)
@@ -142,7 +145,7 @@
   {#if error}
     <p class="text-md text-s-block" role="alert">{error}</p>
   {:else if path === null}
-    <p class="text-md text-fg2">Select a document in the tree.</p>
+    <p class="text-md text-fg2">{empty ? 'No Markdown files in this folder.' : 'Select a document in the tree.'}</p>
   {:else}
     {#key path}
       <div class="animate-rise">

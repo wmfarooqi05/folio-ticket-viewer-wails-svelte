@@ -17,7 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { fixturesDocs, goDriver, nodeDriver, sandbox, type Driver, type Handle, type Sandbox } from './driver'
 
 const ROOTS = ['modules', 'handoffs', 'patterns']
-/** What both backends say about a folder with none of the roots and no map.md or issues/ folder (shell.ExpectsMessage in Go). */
+/** What the Go app says about a folder with none of the roots and no map.md or issues/ folder (shell.ExpectsMessage in Go). Go only since ticket 46: the Node server opens any folder. */
 const EXPECTS_MESSAGE = 'expects modules/ · handoffs/ · patterns/, or a map.md or issues/ folder, inside the folder'
 /** What both backends say about a network or device repo root (settings.NetworkRootMessage in Go). */
 const NETWORK_MESSAGE = String.raw`network and device paths (\\server\share, \\?\, \\.\) are not allowed as the repo root`
@@ -123,11 +123,17 @@ for (const d of drivers) {
       const docsCheck = await c.b.call('checkRoot', c.docs)
       expect(docsCheck).toMatchObject({ ok: true, repoRoot: c.repo, docsDir: 'docs' })
       const none = await c.b.call('checkRoot', empty)
-      expect(none.ok).toBe(false)
-      expect(none.message).toBe(EXPECTS_MESSAGE)
+      // ticket 46: Node deliberately diverges from the frozen Go app: it opens any local folder.
+      if (d.name === 'node') {
+        expect(none).toMatchObject({ ok: true, docsDir: 'empty', found: [], message: '' })
+        expect(list(none.suggested)).toEqual(['.'])
+      } else {
+        expect(none.ok).toBe(false)
+        expect(none.message).toBe(EXPECTS_MESSAGE)
+      }
       const notDir = await c.b.call('checkRoot', path.join(c.sb.dir, 'nope'))
       expect(notDir).toMatchObject({ ok: false, message: 'that is not a folder' })
-      record('checkRoot', norm([repoCheck, docsCheck, none, notDir], c))
+      record('checkRoot', norm([repoCheck, docsCheck, notDir], c))
     })
 
     t('checkDocs reports which roots exist and rejects roots that leave the folder', async (c) => {
@@ -252,17 +258,21 @@ for (const d of drivers) {
       },
     )
 
-    t('a saved "." is re-detected: it neither accepts any folder nor sticks to a modules repo', async (c) => {
+    t('a saved "." is re-detected: modules repos keep their roots (Go also refuses other folders)', async (c) => {
       const random = path.join(c.sb.dir, 'random')
       mkdirSync(path.join(random, 'docs', 'random'), { recursive: true })
       writeFileSync(path.join(random, 'docs', 'random', 'README.md'), '# r'+String.fromCharCode(10))
       await c.b.call('setConfig', { repoRoot: c.repo, docsRoots: ['.'] })
       const none = await c.b.call('checkRoot', random)
-      expect(none).toMatchObject({ ok: false, message: EXPECTS_MESSAGE })
+      // ticket 46: Node deliberately diverges from the frozen Go app: it opens any local folder, read whole.
+      if (d.name === 'node') {
+        expect(none).toMatchObject({ ok: true, message: '' })
+        expect(list(none.suggested)).toEqual(['.'])
+      } else expect(none).toMatchObject({ ok: false, message: EXPECTS_MESSAGE })
       const modular = await c.b.call('checkRoot', c.repo)
       expect(modular).toMatchObject({ ok: true, found: ROOTS })
       expect(list(modular.suggested)).toEqual(ROOTS)
-      record('redetect', norm([none, modular], c))
+      record('redetect', norm([modular], c))
     })
 
     t(

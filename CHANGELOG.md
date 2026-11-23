@@ -4,6 +4,11 @@ What changed for users in each release of [`folio-issues-kanban-viewer`](https:/
 
 Each entry has a **Security** line. It names every publicly known vulnerability fixed in that release, with its advisory or CVE, or says there were none.
 
+## Unreleased
+
+- **Open any folder** (ticket 46): `folio <folder>`, `--docs` and the path box open any local folder. Folio reads its `docs/` when that has Markdown, else the folder itself, and says so in the sidebar; a folder with no Markdown opens empty. Non-folders, network paths and drive roots are still refused.
+- **Security:** no vulnerabilities fixed.
+
 ## 0.1.2 — 2026-11-22
 
 Folio can now show the work of AI agents from ai-software-factory as it happens: a live board, a status for tickets waiting on your verification, and each ticket's screenshots and videos beside it. Nothing changes for ordinary tickets. It also adds `folio .`. The version is a patch number by the owner's choice; it adds features and breaks nothing.

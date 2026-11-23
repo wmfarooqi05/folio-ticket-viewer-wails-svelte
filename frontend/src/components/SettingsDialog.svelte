@@ -5,6 +5,7 @@
   import * as api from '../lib/api'
   import type { Config, RootCheck } from '../lib/api'
   import { checkPath, isNetworkPath, noRootsText, pickRoot } from '../lib/folder'
+  import { docsRootPath } from '../lib/path'
   import EvidenceField from './EvidenceField.svelte'
   import {
     SECTIONS,
@@ -126,7 +127,7 @@
   }
 
   // Web mode: no native dialog, so the folder is a typed path, checked like a picked one.
-  let typed = $state(untrack(() => config.repoRoot))
+  let typed = $state(untrack(() => docsRootPath(config.repoRoot, config.docsDir)))
   let cliFolder = $state<string | null>(null)
   onMount(() => {
     if (api.isWeb) void api.docsFromCommandLine().then((p) => (cliFolder = p)).catch(() => {})
@@ -138,7 +139,7 @@
         draft.repoRoot = res.repoRoot
         draft.docsDir = res.docsDir
         if (res.docsRoots) draft.docsRoots = res.docsRoots
-        typed = res.repoRoot
+        typed = docsRootPath(res.repoRoot, res.docsDir)
       } else if (res.kind === 'no-roots') {
         if (res.refused) saveError = res.message // a network or device path: web mode has no dialog to pick it in
         else draft.repoRoot = res.picked // shows the "No roots" warning
