@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { edgePaths, isSafeUrl, openApp, parseArgs, type AppDeps } from './cli'
+import { edgePaths, isSafeUrl, openApp, parseArgs, repairArgv, type AppDeps } from './cli'
+
+describe('repairArgv (ticket 48: a quoted folder that ends in a backslash)', () => {
+  const dir = String.raw`C:\Users\me\Lockbox and Cash Payment`
+  it('drops the stray quote Windows leaves after "C:\\my folder\\"', () => {
+    expect(repairArgv(['--docs', dir + '"'], 'win32')).toEqual(['--docs', dir])
+    expect(repairArgv([dir + '"'], 'win32')).toEqual([dir])
+  })
+  it('gives back the arguments the escaped quote swallowed', () => {
+    expect(repairArgv(['--docs', dir + '" --no-open --port 7463'], 'win32')).toEqual(['--docs', dir, '--no-open', '--port', '7463'])
+    expect(parseArgs(repairArgv(['--docs', dir + '" --no-open --port 7463'], 'win32'))).toMatchObject({ docs: dir, open: false, port: 7463 })
+  })
+  it('leaves normal arguments alone', () => {
+    const argv = ['--docs', String.raw`C:\a b\c`, '--port', '0', '.']
+    expect(repairArgv(argv, 'win32')).toEqual(argv)
+  })
+  it('keeps argv as it is on other systems, where " is a legal file name character', () => {
+    expect(repairArgv(['/tmp/odd"', '--app'], 'linux')).toEqual(['/tmp/odd"', '--app'])
+    expect(repairArgv(['/tmp/odd"'], 'darwin')).toEqual(['/tmp/odd"'])
+  })
+})
 
 describe('isSafeUrl (the only thing that reaches the OS launcher)', () => {
   it('accepts the printed link, with or without a token', () => {

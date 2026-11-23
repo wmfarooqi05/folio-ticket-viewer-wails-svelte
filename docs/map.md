@@ -94,6 +94,7 @@ Reached when:
 | 45 | [Allow the evidence folder from the panel](issues/45-allow-evidence-folder.md) | build | — | — | in-review — built; one click checked | — |
 | 46 | [Open any folder](issues/46-open-any-folder.md) | build | — | — | in-review — built | — |
 | 47 | [Map files: map.md or README.md, set in Settings](issues/47-map-files.md) | build | — | — | in-review — built | — |
+| 48 | [A quoted folder that ends in a backslash](issues/48-quoted-folder-backslash.md) | bug | — | — | in-review — fixed | — |
 <!-- tickets:end -->
 
 ## Decisions so far

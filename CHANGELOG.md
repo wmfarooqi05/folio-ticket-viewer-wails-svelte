@@ -4,10 +4,13 @@ What changed for users in each release of [`folio-issues-kanban-viewer`](https:/
 
 Each entry has a **Security** line. It names every publicly known vulnerability fixed in that release, with its advisory or CVE, or says there were none.
 
-## Unreleased
+## 0.1.3 — 2026-11-23
+
+Folio now opens any local folder, not only one laid out the Folio way, and a folder's `README.md` can be its board when tickets sit beside it. Nothing changes for folders Folio already opened. The version is a patch number by the owner's choice; it adds features and breaks nothing. One small change in matching: `Map.md` or `MAP.md` now counts as a map too, since names match in any case.
 
 - **Open any folder** (ticket 46): `folio <folder>`, `--docs` and the path box open any local folder. Folio reads its `docs/` when that has Markdown, else the folder itself, and says so in the sidebar; a folder with no Markdown opens empty. Non-folders, network paths and drive roots are still refused.
 - **Map files** (ticket 47): a folder's `README.md` is its map (board, graph) when an `issues/` folder of tickets sits beside it. `map.md` still always is, and wins when both are there. Names match in any case. A README.md beside issues/ becomes its space's map, so refs like `x#q1` point at it. Settings › Docs folder › Map files (web mode only) changes the list; it is saved on this computer only.
+- **Fixed** (ticket 48): on Windows, a quoted folder that ends in a backslash, such as `'C:\my folder\'`, failed with "that is not a folder", and any option after it was lost. Windows reads `\"` as a literal quote; Folio now drops it and keeps the options.
 - **Security:** no vulnerabilities fixed.
 
 ## 0.1.2 — 2026-11-22
