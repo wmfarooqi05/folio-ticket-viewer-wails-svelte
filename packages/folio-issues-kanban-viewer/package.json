@@ -1,6 +1,6 @@
 {
   "name": "folio-issues-kanban-viewer",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Read-only viewer for Markdown tickets and issues, with a kanban board. Runs a local web server and opens your browser. No dependencies.",
   "keywords": ["markdown", "markdown-viewer", "tickets", "issues", "kanban", "viewer", "cli", "npx"],
   "homepage": "https://github.com/wmfarooqi05/folio-ticket-viewer-wails-svelte#readme",
