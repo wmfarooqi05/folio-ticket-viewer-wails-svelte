@@ -18,7 +18,7 @@
   import { live } from './lib/live.svelte'
   import * as panelStack from './lib/panel'
   import { Layout } from './lib/layout.svelte'
-  import { checkPath, isNetworkPath, noRootsText, pickRoot } from './lib/folder'
+  import { anyFolderNote, checkPath, isNetworkPath, noRootsText, pickRoot } from './lib/folder'
   import { docsRootPath, splitPath } from './lib/path'
   import { MEMORY_TIP, formatMemory } from './lib/memory'
   import Icon from './lib/icons/Icon.svelte'
@@ -94,6 +94,8 @@
   }
 
   const files = $derived(index ? Object.values(index.files) : [])
+  // ticket 46: a folder with none of the usual layout is read whole; say so
+  const layoutNote = $derived(config && index ? anyFolderNote(config.docsRoots ?? [], files) : null)
   const crumb = $derived(
     view ? [view === 'waiting' ? 'Waiting on' : 'Open questions'] : selected ? selected.split('/') : [],
   )
@@ -222,7 +224,7 @@
   function changeFolder() {
     if (!api.isWeb) return void applyFolder()
     if (!config) return
-    folderBoxValue = config.repoRoot
+    folderBoxValue = docsRootPath(config.repoRoot, config.docsDir)
     folderNotice = null
     folderBoxOpen = true
   }
@@ -358,7 +360,7 @@
 </script>
 
 {#snippet docView()}
-  <DocView path={selected} {text} error={docError} {index} {config} {fragment} onnavigate={select} onpanel={openInPanel} />
+  <DocView path={selected} {text} error={docError} {index} {config} {fragment} onnavigate={select} onpanel={openInPanel} empty={!!index && files.length === 0} />
 {/snippet}
 
 <svelte:window onkeydown={onwindowkeydown} />
@@ -440,6 +442,16 @@
               Network folder: Folio reads it over the network with your Windows sign-in. It is forgotten when Folio closes; choose it
               again next time.
             </span>
+          </div>
+        {/if}
+        {#if layoutNote}
+          <!-- a folder with no modules/, map.md or issues/ (ticket 46): every Markdown file is shown -->
+          <div
+            class="mx-8 mb-8 flex items-start gap-8 rounded-md border border-[color-mix(in_oklab,var(--s-rev)_45%,transparent)] bg-[color-mix(in_oklab,var(--s-rev)_10%,transparent)] px-10 py-8 text-xs"
+            role="note"
+          >
+            <span class="mt-4 size-7 shrink-0 rounded-full bg-s-rev"></span>
+            <span class="min-w-0 flex-1">{layoutNote}</span>
           </div>
         {/if}
         {#if folderNotice}

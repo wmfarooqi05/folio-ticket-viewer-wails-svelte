@@ -53,5 +53,10 @@ export async function pickRoot(deps: PickApi = api): Promise<PickResult> {
 /** What a folder lacks, for "This folder has ...": no Markdown at all when the whole docs folder was asked for. */
 export const noRootsText = (roots: string[]): string => (roots.includes('.') ? 'no Markdown files' : 'none of ' + rootsLabel(roots))
 
-export const rootsLabel = (roots: string[]) => roots.map((r) => (r === '.' ? 'the docs folder itself' : r + '/')).join(' · ')
+/** The sidebar note for a folder read whole with no map.md and no issues/ folder among its files (ticket 46). */
+export const ANY_FOLDER_NOTE = 'No modules/, map.md or issues/ here, so every Markdown file is shown.'
+export const anyFolderNote = (roots: string[], files: { path: string; kind: string }[]): string | null =>
+  roots.includes('.') && files.length > 0 && !files.some((f) => f.kind === 'map' || f.path.split('/').includes('issues')) ? ANY_FOLDER_NOTE : null
+
+export const rootsLabel =(roots: string[]) => roots.map((r) => (r === '.' ? 'the docs folder itself' : r + '/')).join(' · ')
 

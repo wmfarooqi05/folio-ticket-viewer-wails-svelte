@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkPath, isNetworkPath, pickRoot, rootsLabel, unquotePath, type PickApi } from './folder'
+import { ANY_FOLDER_NOTE, anyFolderNote, checkPath, isNetworkPath, pickRoot, rootsLabel, unquotePath, type PickApi } from './folder'
 
 const fake = (picked: string, check: Partial<Awaited<ReturnType<PickApi['checkRoot']>>>): PickApi => ({
   pickFolder: async () => picked,
@@ -72,4 +72,13 @@ describe('checkPath (the typed path of web mode)', () => {
     const r = await pickRoot(fake('E:\repo', { ok: true, repoRoot: 'E:\repo', docsDir: 'docs', suggested: ['.'] }))
     expect(r).toEqual({ kind: 'ok', repoRoot: 'E:\repo', docsDir: 'docs', docsRoots: ['.'] })
   })
+})
+
+describe('anyFolderNote (ticket 46)', () => {
+  const doc = { path: 'notes/a.md', kind: 'doc' }
+  it('notes a folder read whole with no map.md and no issues/', () => expect(anyFolderNote(['.'], [doc])).toBe(ANY_FOLDER_NOTE))
+  it('is silent when a map.md is there, even with no tickets yet', () => expect(anyFolderNote(['.'], [doc, { path: 'map.md', kind: 'map' }])).toBeNull())
+  it('is silent when a file sits in an issues/ folder', () => expect(anyFolderNote(['.'], [{ path: 'issues/readme.md', kind: 'doc' }])).toBeNull())
+  it('is silent for the usual roots', () => expect(anyFolderNote(['modules', 'handoffs', 'patterns'], [doc])).toBeNull())
+  it('is silent for an empty folder', () => expect(anyFolderNote(['.'], [])).toBeNull())
 })
